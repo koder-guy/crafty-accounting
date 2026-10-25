@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "api",
+      "runtimeExecutable": "/bin/sh",
+      "runtimeArgs": ["-c", "cd server && PATH=/opt/homebrew/opt/node@22/bin:$PATH npx tsx watch --env-file=../.env src/index.ts"],
+      "port": 3000
+    },
+    {
+      "name": "web",
+      "runtimeExecutable": "/bin/sh",
+      "runtimeArgs": ["-c", "PATH=/opt/homebrew/opt/node@22/bin:$PATH npm run dev -w client"],
+      "port": 5173
+    }
+  ]
+}

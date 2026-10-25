@@ -1,0 +1,27 @@
+{
+  "name": "crafty-accounting",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Self-hosted bookkeeping for a UK sole trader, structured for HMRC Making Tax Digital",
+  "workspaces": [
+    "shared",
+    "server",
+    "client"
+  ],
+  "scripts": {
+    "dev": "concurrently -k -n server,client -c magenta,cyan \"npm run dev -w server\" \"npm run dev -w client\"",
+    "build": "npm run build -w client && npm run build -w server",
+    "start": "node server/dist/index.js",
+    "test": "vitest run",
+    "typecheck": "tsc -p shared --noEmit && tsc -p server --noEmit && tsc -p client --noEmit"
+  },
+  "devDependencies": {
+    "concurrently": "^10.0.6",
+    "typescript": "^5.9.3",
+    "vitest": "^5.0.5"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

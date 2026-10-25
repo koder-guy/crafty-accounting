@@ -1,0 +1,17 @@
+services:
+  crafty-accounting:
+    build: .
+    image: crafty-accounting:latest
+    container_name: crafty-accounting
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATA_DIR: /data
+      PORT: 3000
+    ports:
+      - "${HOST_PORT:-8080}:3000"
+    volumes:
+      - crafty-data:/data
+
+volumes:
+  crafty-data:
