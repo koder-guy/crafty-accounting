@@ -5,6 +5,7 @@ import {
   ArrowUpRight,
   CalendarDays,
   FileSpreadsheet,
+  FileText,
   LogOut,
   Menu,
   Settings,
@@ -129,6 +130,7 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
           count={active?.expenseCount}
         />
         <NavItem to="/mtd" icon={<FileSpreadsheet className="size-5 text-muted" aria-hidden />} label="MTD Quarterly" />
+        <NavItem to="/year-end" icon={<FileText className="size-5 text-muted" aria-hidden />} label="Year-end Summary" />
         <NavItem to="/settings" icon={<Settings className="size-5 text-muted" aria-hidden />} label="Settings" />
       </nav>
       <div className="border-t border-line px-5 py-4 text-xs font-semibold text-ink/80">
@@ -164,9 +166,9 @@ export function Layout() {
   useEffect(() => setMenuOpen(false), [location.pathname]);
 
   return (
-    <div className="min-h-screen lg:grid lg:grid-cols-[300px_1fr]">
+    <div className="min-h-screen lg:grid lg:grid-cols-[300px_1fr] print:block">
       {/* Mobile top bar */}
-      <div className="sticky top-0 z-30 flex items-center justify-between border-b border-line bg-sidebar/95 px-4 py-3 backdrop-blur lg:hidden">
+      <div className="sticky top-0 z-30 flex items-center justify-between border-b border-line bg-sidebar/95 px-4 py-3 backdrop-blur lg:hidden print:hidden">
         <Brand />
         <div className="flex items-center gap-1">
           <SignOutButton compact />
@@ -187,7 +189,7 @@ export function Layout() {
         </div>
       )}
 
-      <aside className="sticky top-0 hidden h-screen border-r border-line bg-sidebar lg:block">
+      <aside className="sticky top-0 hidden h-screen border-r border-line bg-sidebar lg:block print:hidden">
         <Sidebar />
       </aside>
       <main className="min-w-0">

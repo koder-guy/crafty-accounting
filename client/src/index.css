@@ -52,6 +52,39 @@
   }
 }
 
+/* Printing (and Save as PDF) uses a light version of the theme. */
+@media print {
+  :root {
+    --color-page: #ffffff;
+    --color-sidebar: #ffffff;
+    --color-surface: #ffffff;
+    --color-surface-2: #f3f4f6;
+    --color-line: #d4d4d8;
+    --color-line-strong: #a1a1aa;
+    --color-ink: #111827;
+    --color-muted: #4b5563;
+    --color-faint: #6b7280;
+    --color-accent-soft: #4338ca;
+    --color-in-soft: #4338ca;
+    --color-out-soft: #b91c1c;
+    --color-warn: #92400e;
+    --color-warn-bg: #fef3c7;
+    --color-ok: #047857;
+  }
+  html {
+    color-scheme: light;
+  }
+  .text-white,
+  .text-amber-100,
+  .text-red-200,
+  .text-emerald-100 {
+    color: var(--color-ink) !important;
+  }
+  @page {
+    margin: 14mm;
+  }
+}
+
 @utility card {
   @apply rounded-[var(--radius-card)] border border-line bg-surface;
 }

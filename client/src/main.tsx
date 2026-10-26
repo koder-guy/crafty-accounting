@@ -16,6 +16,7 @@ import { OutgoingList } from './pages/OutgoingList';
 import { ExpenseForm } from './pages/ExpenseForm';
 import { ExpenseView } from './pages/ExpenseView';
 import { MtdQuarterly } from './pages/MtdQuarterly';
+import { YearEndSummary } from './pages/YearEndSummary';
 import { SettingsLayout } from './pages/settings/SettingsLayout';
 import { TaxYearsSettings } from './pages/settings/TaxYearsSettings';
 import { CustomCategories } from './pages/settings/CustomCategories';
@@ -48,6 +49,7 @@ function App() {
         <Route path="outgoing/:id" element={<ExpenseView />} />
         <Route path="outgoing/:id/edit" element={<ExpenseForm />} />
         <Route path="mtd" element={<MtdQuarterly />} />
+        <Route path="year-end" element={<YearEndSummary />} />
         <Route path="settings" element={<SettingsLayout />}>
           <Route index element={<Navigate to="tax-years" replace />} />
           <Route path="tax-years" element={<TaxYearsSettings />} />

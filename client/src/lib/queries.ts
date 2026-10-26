@@ -8,6 +8,7 @@ import type {
   TaxYear,
   TaxYearsResponse,
   TransactionFilters,
+  YearEndSummaryResponse,
 } from '@crafty/shared';
 import { api, toQuery } from './api';
 
@@ -220,6 +221,15 @@ export function useMtdSubmission(taxYearId: number) {
     clear: useMutation({ mutationFn: (quarter: number) => api.delete(path(quarter)), onSuccess }),
   };
 }
+
+// ---- Reports ----
+
+export const useYearEndSummary = (taxYearId: number | undefined) =>
+  useQuery({
+    queryKey: ['mtd', 'year-end', taxYearId],
+    queryFn: () => api.get<YearEndSummaryResponse>(`/reports/year-end${toQuery({ taxYearId })}`),
+    enabled: taxYearId !== undefined,
+  });
 
 // ---- Dashboard ----
 

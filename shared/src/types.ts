@@ -2,6 +2,7 @@
 import type { CategoryType } from './categories';
 import type { PaymentMethod } from './schemas';
 import type { MtdPeriodSummary, MtdQuarter } from './mtd';
+import type { SelfAssessmentSummary } from './selfAssessment';
 
 export interface TaxYear {
   id: number;
@@ -124,6 +125,13 @@ export interface MtdQuarterSummary extends MtdQuarter {
 export interface MtdQuartersResponse {
   taxYear: TaxYear;
   quarters: MtdQuarterSummary[];
+}
+
+export interface YearEndSummaryResponse {
+  taxYear: TaxYear;
+  /** Online filing and payment deadline (31 January after the tax year). */
+  filingDeadline: string;
+  summary: SelfAssessmentSummary;
 }
 
 export interface ApiErrorBody {

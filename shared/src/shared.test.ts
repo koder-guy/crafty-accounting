@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildMtdPeriodSummary,
+  buildSelfAssessmentSummary,
   expenseInputSchema,
   formatGBP,
   isDateInTaxYear,
@@ -138,6 +139,74 @@ describe('MTD quarters', () => {
       periodExpenses: { adminCosts: 10.01 },
       periodDisallowableExpenses: { adminCostsDisallowable: 10.01 },
     });
+  });
+});
+
+describe('Self Assessment (SA103S) summary', () => {
+  const box = (s: ReturnType<typeof buildSelfAssessmentSummary>, n: string) =>
+    [...s.incomeBoxes, ...s.expenseBoxes].find((b) => b.box === n)!.amountPence;
+
+  it('puts allowable amounts in the right boxes and works out profit', () => {
+    const s = buildSelfAssessmentSummary(
+      buildMtdPeriodSummary(
+        [
+          { hmrcCode: 'turnover', amountPence: 1_200_000 },
+          { hmrcCode: 'other', amountPence: 20_000 },
+        ],
+        [
+          { hmrcCode: 'costOfGoods', amountPence: 300_000, disallowable: false },
+          { hmrcCode: 'adminCosts', amountPence: 6_000, disallowable: false },
+          { hmrcCode: 'adminCosts', amountPence: 4_000, disallowable: true },
+          { hmrcCode: 'financeCharges', amountPence: 1_500, disallowable: false },
+          { hmrcCode: 'interestOnBankOtherLoans', amountPence: 2_500, disallowable: false },
+          { hmrcCode: 'advertisingCosts', amountPence: 5_000, disallowable: false },
+          { hmrcCode: 'businessEntertainmentCosts', amountPence: 9_000, disallowable: false },
+          { hmrcCode: 'depreciation', amountPence: 7_000, disallowable: false },
+        ],
+      ),
+    );
+    expect(box(s, '9')).toBe(1_200_000);
+    expect(box(s, '10')).toBe(20_000);
+    expect(box(s, '11')).toBe(300_000);
+    expect(box(s, '17')).toBe(4_000);
+    expect(box(s, '18')).toBe(6_000);
+    expect(box(s, '19')).toBe(5_000);
+    expect(s.totalAllowableExpensesPence).toBe(315_000);
+    expect(s.netProfitPence).toBe(905_000);
+    expect(s.netLossPence).toBe(0);
+    expect(s.disallowable).toEqual([{ hmrcCode: 'adminCosts', amountPence: 4_000 }]);
+    expect(s.notAllowable.map((e) => [e.hmrcCode, e.amountPence])).toEqual([
+      ['businessEntertainmentCosts', 9_000],
+      ['depreciation', 7_000],
+    ]);
+    expect(s.tradingAllowance.better).toBe('expenses');
+  });
+
+  it('reports a loss and recommends the trading allowance when it is better', () => {
+    const loss = buildSelfAssessmentSummary(
+      buildMtdPeriodSummary([{ hmrcCode: 'turnover', amountPence: 50_000 }], [
+        { hmrcCode: 'costOfGoods', amountPence: 80_000, disallowable: false },
+      ]),
+    );
+    expect(loss.netLossPence).toBe(30_000);
+    expect(loss.tradingAllowance).toMatchObject({ better: 'same', incomeWithinAllowance: true });
+
+    const small = buildSelfAssessmentSummary(
+      buildMtdPeriodSummary([{ hmrcCode: 'turnover', amountPence: 300_000 }], [
+        { hmrcCode: 'costOfGoods', amountPence: 40_000, disallowable: false },
+      ]),
+    );
+    expect(small.tradingAllowance).toMatchObject({
+      profitWithExpensesPence: 260_000,
+      profitWithAllowancePence: 200_000,
+      better: 'allowance',
+      incomeWithinAllowance: false,
+    });
+  });
+
+  it('flags turnover too high for the short form', () => {
+    const big = buildSelfAssessmentSummary(buildMtdPeriodSummary([{ hmrcCode: 'turnover', amountPence: 9_000_000 }], []));
+    expect(big.turnoverOverShortFormLimit).toBe(true);
   });
 });
 

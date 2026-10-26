@@ -21,7 +21,7 @@ export function PageHeader({ title, subtitle, actions }: { title: string; subtit
             ))}
         </p>
       </div>
-      <div className={`flex flex-wrap items-center gap-2 ${actions ? '' : 'max-lg:hidden'}`}>
+      <div className={`flex flex-wrap items-center gap-2 print:hidden ${actions ? '' : 'max-lg:hidden'}`}>
         {actions}
         <div className="hidden items-center gap-2 lg:flex">
           {actions && <span className="mx-1 h-6 w-px bg-line" aria-hidden />}

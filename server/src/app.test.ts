@@ -445,6 +445,32 @@ describe('MTD quarters', () => {
   });
 });
 
+describe('year-end summary', () => {
+  it('gives SA103S figures that agree with the MTD totals, including custom categories', async () => {
+    const yearId = await createYear();
+    const filament = (await agent.post('/api/categories').send({ name: 'Filament', mapsToCategoryId: cat('costOfGoods') })).body;
+    await agent.post('/api/incomes').send(income(yearId, { amountPence: 120000 })).expect(201);
+    await agent.post('/api/incomes').send(income(yearId, { amountPence: 5000, categoryId: cat('other'), date: '2026-01-10' })).expect(201);
+    await agent.post('/api/expenses').send(expense(yearId)).expect(201);
+    await agent
+      .post('/api/expenses')
+      .send(expense(yearId, { totalPence: 2500, lineItems: [{ description: 'PLA', amountPence: 2500, categoryId: filament.id }] }))
+      .expect(201);
+
+    const { body } = await agent.get('/api/reports/year-end').query({ taxYearId: yearId }).expect(200);
+    expect(body.filingDeadline).toBe('2027-01-31');
+    const boxes = Object.fromEntries(
+      [...body.summary.incomeBoxes, ...body.summary.expenseBoxes].map((b: { box: string; amountPence: number }) => [b.box, b.amountPence]),
+    );
+    expect(boxes).toMatchObject({ '9': 120000, '10': 5000, '11': 5500, '18': 550, '19': 0 });
+    expect(body.summary.totalAllowableExpensesPence).toBe(6050);
+    expect(body.summary.disallowable).toEqual([{ hmrcCode: 'otherExpenses', amountPence: 1000 }]);
+
+    const quarters = (await agent.get('/api/mtd/quarters').query({ taxYearId: yearId })).body.quarters;
+    expect(body.summary.netProfitPence).toBe(quarters[3].cumulative.totals.netProfitPence);
+  });
+});
+
 describe('backup and restore', () => {
   async function seed() {
     const yearId = await createYear();
