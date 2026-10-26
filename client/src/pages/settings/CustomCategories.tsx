@@ -152,7 +152,7 @@ export function CustomCategories() {
                       <tr key={c.id} className={editing?.id === c.id ? 'bg-surface-2/40' : ''}>
                         <td className="px-4 py-3 font-medium text-ink sm:pl-6">{c.name}</td>
                         <td className="px-4 py-3">
-                          <Badge tone={c.type === 'INCOME' ? 'accent' : 'out'}>{c.type === 'INCOME' ? 'Income' : 'Expense'}</Badge>
+                          <Badge tone={c.type === 'INCOME' ? 'ok' : 'out'}>{c.type === 'INCOME' ? 'Income' : 'Expense'}</Badge>
                         </td>
                         <td className="px-4 py-3 text-muted">
                           {standardFor(c)?.name} <span className="ml-1 font-mono text-xs text-faint">{c.hmrcCode}</span>
