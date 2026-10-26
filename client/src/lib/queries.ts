@@ -152,6 +152,29 @@ export function useDeleteTransaction(kind: Kind) {
   return useMutation({ mutationFn: (id: number) => api.delete(`/${kind}/${id}`), onSuccess: invalidate });
 }
 
+// ---- UI state ----
+
+const EXPANDED_KEY = ['ui', 'outgoing-expanded'];
+
+/**
+ * Which Outgoing rows are expanded. Kept in the query cache (never garbage
+ * collected) so it survives moving between sections; it's cleared on sign-in
+ * and sign-out with the rest of the cache, and on a page refresh.
+ */
+export function useExpandedOutgoingRows() {
+  const qc = useQueryClient();
+  const { data: ids } = useQuery({
+    queryKey: EXPANDED_KEY,
+    queryFn: () => [] as number[],
+    initialData: [] as number[],
+    staleTime: Infinity,
+    gcTime: Infinity,
+  });
+  const toggle = (id: number) =>
+    qc.setQueryData<number[]>(EXPANDED_KEY, (prev = []) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  return { isExpanded: (id: number) => ids.includes(id), toggle };
+}
+
 // ---- MTD ----
 
 export const useMtdQuarters = (taxYearId: number | undefined) =>

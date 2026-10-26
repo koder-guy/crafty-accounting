@@ -15,7 +15,7 @@ import {
   useTransactionFilters,
 } from '../components/transactions';
 import { Alert, Badge, ButtonLink, Card, CardHeader, EmptyState, PaymentBadge, Spinner } from '../components/ui';
-import { exportCsvUrl, useActiveTaxYear, useCategories, useDeleteTransaction, useExpenses } from '../lib/queries';
+import { exportCsvUrl, useActiveTaxYear, useCategories, useDeleteTransaction, useExpandedOutgoingRows, useExpenses } from '../lib/queries';
 
 export function OutgoingList() {
   const { taxYear, isLoading: yearLoading } = useActiveTaxYear();
@@ -23,14 +23,7 @@ export function OutgoingList() {
   const { data: categories = [] } = useCategories();
   const { data, isLoading, error } = useExpenses(filterState.filters);
   const remove = useDeleteTransaction('expenses');
-  const [expanded, setExpanded] = useState<Set<number>>(() => new Set());
-  const toggleRow = (id: number) =>
-    setExpanded((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
+  const { isExpanded, toggle: toggleRow } = useExpandedOutgoingRows();
   const [toDelete, setToDelete] = useState<Expense | null>(null);
   const navigate = useNavigate();
 
@@ -113,7 +106,7 @@ export function OutgoingList() {
                   </thead>
                   <tbody className="divide-y divide-line">
                     {sorted.map((row) => {
-                      const open = expanded.has(row.id);
+                      const open = isExpanded(row.id);
                       return (
                         <Fragment key={row.id}>
                           <tr
