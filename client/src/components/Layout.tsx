@@ -87,7 +87,7 @@ function NavItem({
       className={({ isActive }) =>
         `flex items-center gap-3 rounded-xl border px-4 py-3 text-[15px] transition-colors ${
           isActive
-            ? 'border-white/80 bg-surface font-medium text-accent-soft'
+            ? 'border-white/30 bg-surface font-medium text-accent-soft'
             : 'border-transparent text-ink/90 hover:bg-surface hover:text-white'
         }`
       }
