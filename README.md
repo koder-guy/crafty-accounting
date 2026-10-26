@@ -9,6 +9,7 @@ Self-hosted bookkeeping for a UK sole trader, built for selling at craft fairs a
 - **Dashboard**: totals, a monthly chart, a breakdown by HMRC category, and key dates.
 - **MTD Quarterly**: the four standard update periods for each tax year, with deadlines and status. It shows each quarter's figures and the year-to-date figures per MTD field, can export the figures as a JSON file for MTD bridging software, and records when each quarter was submitted.
 - **Year-end Summary**: the figures for each box of the Self Assessment self-employment (short) pages (SA103S), on the cash basis, with net profit or loss, a list of disallowable amounts left off the form, and a trading allowance comparison. Print it or save it as a PDF from the page.
+  - **Note:** the dashboard's net profit counts business entertaining and depreciation as ordinary expenses, while the Year-end Summary leaves them out because HMRC never allows them. The two figures only differ if you record expenses in either of those categories; use the Year-end Summary figure for your return.
 - **Custom categories** (Settings): your own category names, such as "Printer filament", each mapped to a standard MTD category. They're grouped under that category in every dropdown and count towards its MTD figures. Deleting a category that's in use moves its transactions to the MTD category it maps to, so MTD totals don't change.
 - **Backups** (Settings): download a `.sql` dump or a full `.zip` (database plus documents), and restore from either.
 - **Sign-in**: a single password.
