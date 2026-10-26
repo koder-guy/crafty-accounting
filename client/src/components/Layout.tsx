@@ -104,7 +104,6 @@ function NavItem({
 
 function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const { data } = useTaxYears();
-  const logout = useLogout();
   const active = data?.taxYears.find((y) => y.id === data.activeTaxYearId);
 
   return (
@@ -134,23 +133,30 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
         <NavItem to="/tax-years" icon={<Layers className="size-5 text-muted" aria-hidden />} label="Tax Years Management" />
         <NavItem to="/settings" icon={<Settings className="size-5 text-muted" aria-hidden />} label="Settings" />
       </nav>
-      <div className="flex items-end justify-between gap-2 border-t border-line px-5 py-4">
-        <div className="text-xs leading-relaxed">
-          <div className="font-semibold text-ink/80">
-            {APP_NAME} v{APP_VERSION}
-          </div>
-          <div className="text-faint">SQLite database</div>
-        </div>
-        <button
-          type="button"
-          onClick={() => logout.mutate()}
-          className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs text-muted hover:bg-surface-2 hover:text-ink"
-        >
-          <LogOut className="size-3.5" aria-hidden />
-          Sign out
-        </button>
+      <div className="border-t border-line px-5 py-4 text-xs font-semibold text-ink/80">
+        {APP_NAME} v{APP_VERSION}
       </div>
     </div>
+  );
+}
+
+/** Sign out: top right of the page header on desktop, in the top bar on phones. */
+export function SignOutButton({ compact = false }: { compact?: boolean }) {
+  const logout = useLogout();
+  return (
+    <button
+      type="button"
+      onClick={() => logout.mutate()}
+      disabled={logout.isPending}
+      aria-label="Sign out"
+      title="Sign out"
+      className={`inline-flex items-center gap-2 rounded-lg text-sm text-muted transition-colors hover:bg-surface hover:text-ink ${
+        compact ? 'p-2' : 'border border-line-strong px-3.5 py-2'
+      }`}
+    >
+      <LogOut className={compact ? 'size-5' : 'size-4'} aria-hidden />
+      {!compact && 'Sign out'}
+    </button>
   );
 }
 
@@ -164,15 +170,18 @@ export function Layout() {
       {/* Mobile top bar */}
       <div className="sticky top-0 z-30 flex items-center justify-between border-b border-line bg-sidebar/95 px-4 py-3 backdrop-blur lg:hidden">
         <Brand />
-        <button
-          type="button"
-          onClick={() => setMenuOpen((v) => !v)}
-          aria-expanded={menuOpen}
-          aria-label={menuOpen ? 'Close menu' : 'Open menu'}
-          className="rounded-lg p-2 text-muted hover:bg-surface hover:text-ink"
-        >
-          {menuOpen ? <X className="size-6" /> : <Menu className="size-6" />}
-        </button>
+        <div className="flex items-center gap-1">
+          <SignOutButton compact />
+          <button
+            type="button"
+            onClick={() => setMenuOpen((v) => !v)}
+            aria-expanded={menuOpen}
+            aria-label={menuOpen ? 'Close menu' : 'Open menu'}
+            className="rounded-lg p-2 text-muted hover:bg-surface hover:text-ink"
+          >
+            {menuOpen ? <X className="size-6" /> : <Menu className="size-6" />}
+          </button>
+        </div>
       </div>
       {menuOpen && (
         <div className="fixed inset-x-0 top-[69px] bottom-0 z-20 bg-sidebar lg:hidden">
