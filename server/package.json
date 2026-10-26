@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch --env-file-if-exists=../.env src/index.ts",
-    "build": "tsup"
+    "build": "tsup",
+    "seed": "tsx --env-file-if-exists=../.env src/seed.ts"
   },
   "dependencies": {
     "archiver": "^7.0.1",

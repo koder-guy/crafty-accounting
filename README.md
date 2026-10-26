@@ -41,6 +41,18 @@ To update to a new version, pull or copy the new code and run `docker compose up
 
 Set `TRUST_PROXY=true` and `COOKIE_SECURE=true` in `.env` so the session cookie is only sent over HTTPS and sign-in rate limiting sees real client addresses.
 
+### Sample data for testing
+
+To fill an empty install with realistic test data, run:
+
+```bash
+docker compose exec crafty-accounting node server/dist/seed.js
+```
+
+It loads last tax year in full and this tax year up to today, with craft fair takings, Etsy payouts, purchases with line items (some disallowable), sample PDF attachments and recorded MTD submissions for past quarters.
+
+It refuses to run if any tax years already exist. Adding `--reset` first **deletes all tax years, transactions and documents**, then loads the sample data. Don't use it on real books.
+
 ## Configuration
 
 | Variable | Default | Purpose |
@@ -91,6 +103,12 @@ npm run dev
 ```
 
 The API runs on port 3000 and the Vite client on <http://localhost:5173>, which proxies `/api` to it. If port 3000 is in use, start the server with a different `PORT` and the client with `API_URL=http://localhost:<port>`.
+
+To load sample data into the local database (`server/data`), run the following. Add `-- --reset` to replace existing data.
+
+```bash
+npm run seed
+```
 
 ```bash
 npm test

@@ -14,7 +14,8 @@
     "build": "npm run build -w client && npm run build -w server",
     "start": "node server/dist/index.js",
     "test": "vitest run",
-    "typecheck": "tsc -p shared --noEmit && tsc -p server --noEmit && tsc -p client --noEmit"
+    "typecheck": "tsc -p shared --noEmit && tsc -p server --noEmit && tsc -p client --noEmit",
+    "seed": "npm run seed -w server --"
   },
   "devDependencies": {
     "concurrently": "^10.0.6",

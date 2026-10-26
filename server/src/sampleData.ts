@@ -1,0 +1,329 @@
+// Generates realistic sample data for testing: two tax years of craft-fair
+// sales and purchases, some attached PDFs and recorded MTD submissions.
+// The output is deterministic for a given "today" so test runs are repeatable.
+import fs from 'node:fs';
+import path from 'node:path';
+import {
+  mtdQuarters,
+  taxYearFromStartYear,
+  taxYearStartYearForDate,
+  todayIso,
+} from '@crafty/shared';
+import { setSetting, type Db } from './db';
+
+export interface SampleDataResult {
+  taxYears: number;
+  incomes: number;
+  expenses: number;
+  documents: number;
+  submissions: number;
+}
+
+const FAIRS = [
+  'Abingdon Market',
+  'Oxford Town Hall Craft Fair',
+  'Wallingford Makers Market',
+  'Witney Artisan Market',
+  'Thame Craft Show',
+  'Banbury Spring Fair',
+  'Henley Christmas Fair',
+  'Didcot Makers Day',
+];
+
+type Line = { description: string; code: string; min: number; max: number; disallowable?: boolean };
+interface Purchase {
+  supplier: string;
+  lines: Line[];
+  orderNumber?: boolean;
+  payment?: 'cash' | 'card' | 'bank_transfer';
+}
+
+const PURCHASES: Purchase[] = [
+  {
+    supplier: 'Bead World Ltd',
+    orderNumber: true,
+    lines: [
+      { description: 'Glass beads', code: 'costOfGoods', min: 1200, max: 6500 },
+      { description: 'Silver findings', code: 'costOfGoods', min: 800, max: 4200 },
+      { description: 'Postage', code: 'adminCosts', min: 295, max: 650 },
+    ],
+  },
+  {
+    supplier: 'Hobbycraft',
+    lines: [
+      { description: 'Yarn', code: 'costOfGoods', min: 900, max: 4800 },
+      { description: 'Fabric', code: 'costOfGoods', min: 1100, max: 3900 },
+      { description: 'Personal craft kit', code: 'otherExpenses', min: 1500, max: 2500, disallowable: true },
+    ],
+  },
+  {
+    supplier: 'Cotton Reel Supplies',
+    orderNumber: true,
+    payment: 'bank_transfer',
+    lines: [
+      { description: 'Cotton thread bundle', code: 'costOfGoods', min: 1500, max: 5200 },
+      { description: 'Gift boxes and packaging', code: 'costOfGoods', min: 700, max: 2400 },
+    ],
+  },
+  {
+    supplier: 'Shell Garage',
+    lines: [
+      { description: 'Fuel to craft fair', code: 'carVanTravelExpenses', min: 2500, max: 6000 },
+      { description: 'Snacks', code: 'otherExpenses', min: 250, max: 800, disallowable: true },
+    ],
+  },
+  {
+    supplier: 'Vistaprint',
+    orderNumber: true,
+    lines: [
+      { description: 'Business cards', code: 'advertisingCosts', min: 1500, max: 3500 },
+      { description: 'Pull-up banner', code: 'advertisingCosts', min: 4000, max: 8500 },
+    ],
+  },
+  {
+    supplier: 'EE Mobile',
+    payment: 'bank_transfer',
+    lines: [
+      { description: 'Phone bill – business use', code: 'adminCosts', min: 1200, max: 1800 },
+      { description: 'Phone bill – personal use', code: 'adminCosts', min: 800, max: 1200, disallowable: true },
+    ],
+  },
+  {
+    supplier: 'Square',
+    lines: [{ description: 'Card processing fees', code: 'financeCharges', min: 350, max: 1900 }],
+  },
+  {
+    supplier: 'Etsy',
+    lines: [
+      { description: 'Listing and transaction fees', code: 'financeCharges', min: 400, max: 2200 },
+      { description: 'Etsy Ads', code: 'advertisingCosts', min: 500, max: 1500 },
+    ],
+  },
+  {
+    supplier: 'Screwfix',
+    lines: [
+      { description: 'Display stand repair parts', code: 'maintenanceCosts', min: 800, max: 3000 },
+      { description: 'Gazebo weights', code: 'otherExpenses', min: 1500, max: 2800 },
+    ],
+  },
+];
+
+const YEARLY: Purchase[] = [
+  {
+    supplier: 'Policy Expert',
+    payment: 'bank_transfer',
+    lines: [{ description: 'Public and product liability insurance', code: 'premisesRunningCosts', min: 9500, max: 13500 }],
+  },
+  {
+    supplier: 'Smith & Co Accountants',
+    payment: 'bank_transfer',
+    lines: [{ description: 'Self Assessment preparation', code: 'professionalFees', min: 15000, max: 25000 }],
+  },
+];
+
+/** Small deterministic PRNG (mulberry32). */
+function random(seed: number) {
+  let a = seed >>> 0;
+  const next = () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+  return {
+    next,
+    int: (min: number, max: number) => min + Math.floor(next() * (max - min + 1)),
+    pick: <T>(items: T[]) => items[Math.floor(next() * items.length)],
+    chance: (p: number) => next() < p,
+  };
+}
+
+const iso = (d: Date) => d.toISOString().slice(0, 10);
+const addDays = (date: string, days: number) => {
+  const d = new Date(`${date}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return iso(d);
+};
+
+/** Saturdays from start to end (inclusive). */
+function saturdays(start: string, end: string): string[] {
+  const out: string[] = [];
+  const d = new Date(`${start}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + ((6 - d.getUTCDay() + 7) % 7));
+  while (iso(d) <= end) {
+    out.push(iso(d));
+    d.setUTCDate(d.getUTCDate() + 7);
+  }
+  return out;
+}
+
+/** A minimal one-page PDF with a line of text. */
+function samplePdf(title: string): Buffer {
+  const text = title.replace(/[()\\]/g, '');
+  const stream = `BT /F1 14 Tf 40 140 Td (${text}) Tj ET`;
+  const objects = [
+    '<< /Type /Catalog /Pages 2 0 R >>',
+    '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 420 200] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>',
+    `<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`,
+    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
+  ];
+  let pdf = '%PDF-1.4\n';
+  const offsets: number[] = [];
+  objects.forEach((body, i) => {
+    offsets.push(pdf.length);
+    pdf += `${i + 1} 0 obj\n${body}\nendobj\n`;
+  });
+  const xref = pdf.length;
+  pdf += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
+  for (const offset of offsets) pdf += `${String(offset).padStart(10, '0')} 00000 n \n`;
+  pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
+  return Buffer.from(pdf, 'latin1');
+}
+
+export function hasData(db: Db): boolean {
+  return db.prepare('SELECT 1 FROM tax_years LIMIT 1').get() !== undefined;
+}
+
+/** Removes every tax year (and with it all transactions and submissions) and all documents. */
+export function clearData(db: Db, uploadsDir: string): void {
+  db.transaction(() => {
+    db.prepare('DELETE FROM tax_years').run();
+    db.prepare("DELETE FROM settings WHERE key = 'active_tax_year_id'").run();
+  })();
+  for (const name of fs.readdirSync(uploadsDir)) fs.rmSync(path.join(uploadsDir, name), { force: true });
+}
+
+export function generateSampleData(db: Db, uploadsDir: string, today = todayIso()): SampleDataResult {
+  if (hasData(db)) throw new Error('The database already has data. Use --reset to replace it.');
+  const rnd = random(20260406);
+  const result: SampleDataResult = { taxYears: 0, incomes: 0, expenses: 0, documents: 0, submissions: 0 };
+
+  const category = new Map(
+    (db.prepare('SELECT id, hmrc_code FROM categories').all() as { id: number; hmrc_code: string }[]).map((c) => [
+      c.hmrc_code,
+      c.id,
+    ]),
+  );
+  const insertYear = db.prepare('INSERT INTO tax_years (label, start_date, end_date) VALUES (?, ?, ?)');
+  const insertIncome = db.prepare(
+    `INSERT INTO incomes (tax_year_id, date, description, reference, payment_method, amount_pence, category_id, notes, document_filename)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  );
+  const insertExpense = db.prepare(
+    `INSERT INTO expenses (tax_year_id, date, supplier, invoice_number, order_number, description, payment_method, total_pence, notes, document_filename)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  );
+  const insertLine = db.prepare(
+    `INSERT INTO expense_line_items (expense_id, description, amount_pence, category_id, disallowable, sort_order)
+     VALUES (?, ?, ?, ?, ?, ?)`,
+  );
+  const insertSubmission = db.prepare('INSERT INTO mtd_submissions (tax_year_id, quarter, submitted_on, reference) VALUES (?, ?, ?, ?)');
+
+  const attach = (name: string, title: string): string | null => {
+    const file = path.join(uploadsDir, name);
+    if (fs.existsSync(file)) return null;
+    fs.writeFileSync(file, samplePdf(title));
+    result.documents++;
+    return name;
+  };
+
+  const addExpense = (yearId: number, date: string, purchase: Purchase, extraLine?: Line) => {
+    const lines = [...purchase.lines.filter((l, i) => i === 0 || rnd.chance(l.disallowable ? 0.35 : 0.6))];
+    if (extraLine) lines.push(extraLine);
+    const amounts = lines.map((l) => rnd.int(l.min, l.max));
+    const total = amounts.reduce((a, b) => a + b, 0);
+    const invoice = rnd.chance(0.7) ? `INV-${rnd.int(10000, 99999)}` : null;
+    const order = purchase.orderNumber ? `ORD-${rnd.int(100000, 999999)}` : null;
+    const doc =
+      invoice && rnd.chance(0.35) ? attach(`${date} ${purchase.supplier} ${invoice}.pdf`, `${purchase.supplier} invoice ${invoice}`) : null;
+    const { lastInsertRowid } = insertExpense.run(
+      yearId,
+      date,
+      purchase.supplier,
+      invoice,
+      order,
+      null,
+      purchase.payment ?? 'card',
+      total,
+      null,
+      doc,
+    );
+    lines.forEach((l, i) => insertLine.run(lastInsertRowid, l.description, amounts[i], category.get(l.code), l.disallowable ? 1 : 0, i));
+    result.expenses++;
+  };
+
+  const currentStart = taxYearStartYearForDate(today);
+  let currentYearId = 0;
+
+  db.transaction(() => {
+    for (const startYear of [currentStart - 1, currentStart]) {
+      const year = taxYearFromStartYear(startYear);
+      const yearId = Number(insertYear.run(year.label, year.startDate, year.endDate).lastInsertRowid);
+      currentYearId = yearId;
+      result.taxYears++;
+      const end = year.endDate < today ? year.endDate : today;
+      if (end < year.startDate) continue;
+
+      // Craft fairs on about two Saturdays a month: card and cash takings.
+      for (const date of saturdays(year.startDate, end)) {
+        if (!rnd.chance(0.5)) continue;
+        const fair = rnd.pick(FAIRS);
+        const busy = /Christmas/.test(fair) || date.slice(5, 7) === '12' ? 1.8 : 1;
+        const card = Math.round(rnd.int(6000, 42000) * busy);
+        const doc = rnd.chance(0.3) ? attach(`${date} ${fair} Square payout.pdf`, `Square payout ${fair} ${date}`) : null;
+        insertIncome.run(yearId, date, `${fair} – card sales`, `SQ-${rnd.int(100000, 999999)}`, 'card', card, category.get('turnover'), null, doc);
+        insertIncome.run(yearId, date, `${fair} – cash sales`, null, 'cash', Math.round(rnd.int(2500, 16000) * busy), category.get('turnover'), null, null);
+        result.incomes += 2;
+        const feeDate = addDays(date, -rnd.int(7, 30));
+        addExpense(yearId, feeDate < year.startDate ? date : feeDate, {
+          supplier: fair,
+          payment: 'bank_transfer',
+          lines: [{ description: 'Stall fee', code: 'premisesRunningCosts', min: 2500, max: 6500 }],
+        });
+        if (rnd.chance(0.6)) addExpense(yearId, date, PURCHASES[3]);
+      }
+
+      // Monthly Etsy payouts, purchases and bills.
+      for (let m = 0; m < 12; m++) {
+        const monthStart = addDays(year.startDate, Math.round(m * 30.4));
+        if (monthStart > end) break;
+        const payoutDate = addDays(monthStart, rnd.int(0, 27));
+        if (payoutDate <= end) {
+          const doc = rnd.chance(0.5) ? attach(`${payoutDate} Etsy payout.pdf`, `Etsy payout ${payoutDate}`) : null;
+          insertIncome.run(yearId, payoutDate, 'Etsy payout', `ETSY-${rnd.int(1000000, 9999999)}`, 'bank_transfer', rnd.int(3500, 19000), category.get('turnover'), null, doc);
+          result.incomes++;
+        }
+        for (let i = rnd.int(1, 3); i > 0; i--) {
+          const date = addDays(monthStart, rnd.int(0, 27));
+          if (date <= end) addExpense(yearId, date, rnd.pick(PURCHASES.filter((p) => p.supplier !== 'Shell Garage')));
+        }
+      }
+
+      // Occasional other income and yearly bills.
+      for (const offset of [95, 250]) {
+        const date = addDays(year.startDate, offset);
+        if (date <= end) {
+          insertIncome.run(yearId, date, 'Beading workshop – teaching fee', null, 'bank_transfer', rnd.int(6000, 15000), category.get('other'), 'Taught at the village hall', null);
+          result.incomes++;
+        }
+      }
+      YEARLY.forEach((purchase, i) => {
+        const date = addDays(year.startDate, 20 + i * 220);
+        if (date <= end) addExpense(yearId, date, purchase);
+      });
+
+      // Record submissions for quarters whose deadline has passed.
+      for (const q of mtdQuarters(startYear)) {
+        if (q.deadline >= today) continue;
+        const submittedOn = addDays(q.deadline, -rnd.int(2, 25));
+        insertSubmission.run(yearId, q.quarter, submittedOn, `MTD-${year.label}-Q${q.quarter}`);
+        result.submissions++;
+      }
+    }
+    setSetting(db, 'active_tax_year_id', String(currentYearId));
+  })();
+
+  return result;
+}

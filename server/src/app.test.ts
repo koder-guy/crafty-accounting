@@ -8,6 +8,7 @@ import { createApp } from './app';
 import { loadConfig } from './config';
 import { createContext, type AppContext } from './context';
 import { documentNameProblem } from './documents';
+import { clearData, generateSampleData } from './sampleData';
 
 const PASSWORD = 'test-password';
 const PDF = Buffer.from('%PDF-1.4\n%test\n');
@@ -416,6 +417,58 @@ describe('backup and restore', () => {
     const smuggled = dump.replace(/(INSERT INTO "tax_years"[^\n]*;)/, "$1 ATTACH DATABASE '/tmp/x.db' AS x;");
     await agent.post('/api/restore').attach('file', Buffer.from(smuggled), 'backup.sql').expect(400);
     expect((await agent.get('/api/tax-years')).body.taxYears).toHaveLength(1);
+  });
+});
+
+describe('sample data', () => {
+  const uploads = () => path.join(dataDir, 'uploads');
+
+  it('generates consistent data that the API and backups accept', async () => {
+    const result = generateSampleData(ctx.db, uploads(), '2026-10-26');
+    expect(result.taxYears).toBe(2);
+    expect(result.incomes).toBeGreaterThan(40);
+    expect(result.expenses).toBeGreaterThan(40);
+    expect(result.documents).toBeGreaterThan(5);
+    expect(result.submissions).toBe(5);
+
+    const mismatched = ctx.db
+      .prepare(
+        `SELECT COUNT(*) AS n FROM expenses e
+         WHERE e.total_pence != (SELECT SUM(amount_pence) FROM expense_line_items WHERE expense_id = e.id)`,
+      )
+      .get() as { n: number };
+    expect(mismatched.n).toBe(0);
+    const outOfYear = ctx.db
+      .prepare(
+        `SELECT COUNT(*) AS n FROM (
+           SELECT date, tax_year_id FROM incomes UNION ALL SELECT date, tax_year_id FROM expenses
+         ) t JOIN tax_years y ON y.id = t.tax_year_id
+         WHERE t.date < y.start_date OR t.date > y.end_date OR t.date > '2026-10-26'`,
+      )
+      .get() as { n: number };
+    expect(outOfYear.n).toBe(0);
+    const docs = ctx.db
+      .prepare(
+        `SELECT document_filename AS name FROM incomes WHERE document_filename IS NOT NULL
+         UNION ALL SELECT document_filename FROM expenses WHERE document_filename IS NOT NULL`,
+      )
+      .all() as { name: string }[];
+    expect(docs).toHaveLength(result.documents);
+    for (const { name } of docs) expect(fs.existsSync(path.join(uploads(), name))).toBe(true);
+
+    const { body } = await agent.get('/api/tax-years').expect(200);
+    expect(body.taxYears.map((y: { label: string }) => y.label)).toEqual(['2026-27', '2025-26']);
+    await agent.get('/api/dashboard').query({ taxYearId: body.activeTaxYearId }).expect(200);
+    const dump = (await agent.get('/api/backup.sql').expect(200)).text;
+    await agent.post('/api/restore').attach('file', Buffer.from(dump), 'backup.sql').expect(200);
+  });
+
+  it('refuses to overwrite existing data, and clears it on request', () => {
+    generateSampleData(ctx.db, uploads(), '2026-10-26');
+    expect(() => generateSampleData(ctx.db, uploads(), '2026-10-26')).toThrow(/already has data/);
+    clearData(ctx.db, uploads());
+    expect(fs.readdirSync(uploads())).toHaveLength(0);
+    expect(generateSampleData(ctx.db, uploads(), '2026-10-26').taxYears).toBe(2);
   });
 });
 
