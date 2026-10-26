@@ -353,14 +353,18 @@ export function DocumentField({
           </Button>
         )}
         {!file && current && (
-          <Button
+          // Same box as the Replace label beside it.
+          <button
             type="button"
-            variant="ghost"
-            className={`px-3 py-1.5 ${remove ? '' : 'border-out! text-out-soft! hover:bg-out-bg! hover:text-red-300!'}`}
+            className={`rounded-md border px-3 py-1.5 text-sm transition-colors ${
+              remove
+                ? 'border-line-strong bg-surface text-ink hover:border-accent-soft/60'
+                : 'border-out bg-surface text-out-soft hover:bg-out-bg hover:text-red-300'
+            }`}
             onClick={() => onRemove(!remove)}
           >
             {remove ? 'Keep' : 'Remove'}
-          </Button>
+          </button>
         )}
       </div>
       {error && <p className="mt-1.5 text-xs text-out-soft">{error}</p>}
