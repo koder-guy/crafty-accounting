@@ -75,7 +75,7 @@ export function OutgoingList() {
                 )
               }
             />
-            <FilterBar filterState={filterState} categories={categories.filter((c) => c.type === 'EXPENSE')} />
+            <FilterBar filterState={filterState} categories={categories} type="EXPENSE" />
             {error ? (
               <div className="p-6">
                 <Alert>{error.message}</Alert>

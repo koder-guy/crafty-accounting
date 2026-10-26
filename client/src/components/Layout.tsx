@@ -4,11 +4,11 @@ import {
   ArrowDownRight,
   ArrowUpRight,
   CalendarDays,
-  DatabaseBackup,
   FileSpreadsheet,
   Layers,
   LogOut,
   Menu,
+  Settings,
   TrendingUp,
   Wallet,
   X,
@@ -132,7 +132,7 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
         />
         <NavItem to="/mtd" icon={<FileSpreadsheet className="size-5 text-muted" aria-hidden />} label="MTD Quarterly" />
         <NavItem to="/tax-years" icon={<Layers className="size-5 text-muted" aria-hidden />} label="Tax Years Management" />
-        <NavItem to="/backup" icon={<DatabaseBackup className="size-5 text-muted" aria-hidden />} label="Backup & Restore" />
+        <NavItem to="/settings" icon={<Settings className="size-5 text-muted" aria-hidden />} label="Settings" />
       </nav>
       <div className="flex items-end justify-between gap-2 border-t border-line px-5 py-4">
         <div className="text-xs leading-relaxed">

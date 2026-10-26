@@ -1,7 +1,7 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { BrowserRouter, Route, Routes } from 'react-router';
+import { BrowserRouter, Navigate, Route, Routes } from 'react-router';
 import './index.css';
 import { setUnauthorizedHandler } from './lib/api';
 import { useMe } from './lib/queries';
@@ -17,7 +17,9 @@ import { ExpenseForm } from './pages/ExpenseForm';
 import { ExpenseView } from './pages/ExpenseView';
 import { TaxYears } from './pages/TaxYears';
 import { MtdQuarterly } from './pages/MtdQuarterly';
-import { Backup } from './pages/Backup';
+import { SettingsLayout } from './pages/settings/SettingsLayout';
+import { CustomCategories } from './pages/settings/CustomCategories';
+import { BackupSettings } from './pages/settings/BackupSettings';
 import { NotFound } from './pages/NotFound';
 
 const queryClient = new QueryClient({
@@ -47,7 +49,12 @@ function App() {
         <Route path="outgoing/:id/edit" element={<ExpenseForm />} />
         <Route path="mtd" element={<MtdQuarterly />} />
         <Route path="tax-years" element={<TaxYears />} />
-        <Route path="backup" element={<Backup />} />
+        <Route path="settings" element={<SettingsLayout />}>
+          <Route index element={<Navigate to="categories" replace />} />
+          <Route path="categories" element={<CustomCategories />} />
+          <Route path="backup" element={<BackupSettings />} />
+        </Route>
+        <Route path="backup" element={<Navigate to="/settings/backup" replace />} />
         <Route path="*" element={<NotFound />} />
       </Route>
     </Routes>

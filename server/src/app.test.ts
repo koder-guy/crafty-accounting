@@ -84,6 +84,81 @@ describe('categories', () => {
   });
 });
 
+describe('custom categories', () => {
+  const create = (name: string, code: string) =>
+    agent.post('/api/categories').send({ name, mapsToCategoryId: cat(code) });
+
+  it('creates categories that take their type and MTD field from the standard one', async () => {
+    const { body } = await create('Printer filament', 'costOfGoods').expect(201);
+    expect(body).toMatchObject({ name: 'Printer filament', type: 'EXPENSE', hmrcCode: 'costOfGoods', isCustom: true, usageCount: 0 });
+    const income = (await create('Etsy sales', 'turnover').expect(201)).body;
+    expect(income.type).toBe('INCOME');
+    await create('printer FILAMENT', 'adminCosts').expect(409);
+    await create('Cost of goods bought for resale or goods used', 'costOfGoods').expect(409);
+    await agent.post('/api/categories').send({ name: 'Nested', mapsToCategoryId: body.id }).expect(422);
+  });
+
+  it('protects the standard categories', async () => {
+    await agent.put(`/api/categories/${cat('costOfGoods')}`).send({ name: 'Stock', mapsToCategoryId: cat('costOfGoods') }).expect(422);
+    await agent.delete(`/api/categories/${cat('costOfGoods')}`).expect(422);
+  });
+
+  it('can be used on transactions and counts towards its MTD field', async () => {
+    const yearId = await createYear();
+    const filament = (await create('Printer filament', 'costOfGoods').expect(201)).body;
+    const etsy = (await create('Etsy sales', 'turnover').expect(201)).body;
+    await agent.post('/api/incomes').send(income(yearId, { categoryId: etsy.id, amountPence: 5000 })).expect(201);
+    await agent.post('/api/incomes').send(income(yearId, { amountPence: 1000 })).expect(201);
+    await agent
+      .post('/api/expenses')
+      .send(expense(yearId, { totalPence: 2500, lineItems: [{ description: 'PLA', amountPence: 2500, categoryId: filament.id }] }))
+      .expect(201);
+    await agent.post('/api/incomes').send(income(yearId, { categoryId: filament.id })).expect(422);
+
+    const { body } = await agent.get('/api/mtd/quarters').query({ taxYearId: yearId }).expect(200);
+    expect(body.quarters[0].period.periodIncome).toEqual({ turnover: 6000 });
+    expect(body.quarters[0].period.periodExpenses).toEqual({ costOfGoods: 2500 });
+    const dash = (await agent.get('/api/dashboard').query({ taxYearId: yearId }).expect(200)).body;
+    expect(dash.expensesByCategory.map((c: { name: string }) => c.name)).toEqual(['Printer filament']);
+  });
+
+  it('renames freely but only remaps unused categories', async () => {
+    const yearId = await createYear();
+    const filament = (await create('Filament', 'costOfGoods').expect(201)).body;
+    await agent.put(`/api/categories/${filament.id}`).send({ name: 'Printer filament', mapsToCategoryId: cat('adminCosts') }).expect(200);
+    await agent.put(`/api/categories/${filament.id}`).send({ name: 'Printer filament', mapsToCategoryId: cat('costOfGoods') }).expect(200);
+    await agent
+      .post('/api/expenses')
+      .send(expense(yearId, { totalPence: 2500, lineItems: [{ description: 'PLA', amountPence: 2500, categoryId: filament.id }] }))
+      .expect(201);
+    await agent.put(`/api/categories/${filament.id}`).send({ name: 'Filament (PLA)', mapsToCategoryId: cat('costOfGoods') }).expect(200);
+    await agent.put(`/api/categories/${filament.id}`).send({ name: 'Filament (PLA)', mapsToCategoryId: cat('adminCosts') }).expect(409);
+  });
+
+  it('deletes a used category by moving its transactions to the standard category', async () => {
+    const yearId = await createYear();
+    const filament = (await create('Printer filament', 'costOfGoods').expect(201)).body;
+    const etsy = (await create('Etsy sales', 'turnover').expect(201)).body;
+    await agent.post('/api/incomes').send(income(yearId, { categoryId: etsy.id })).expect(201);
+    const exp = (
+      await agent
+        .post('/api/expenses')
+        .send(expense(yearId, { totalPence: 2500, lineItems: [{ description: 'PLA', amountPence: 2500, categoryId: filament.id }] }))
+        .expect(201)
+    ).body;
+    const before = (await agent.get('/api/mtd/quarters').query({ taxYearId: yearId })).body.quarters[0].period;
+
+    const del = (await agent.delete(`/api/categories/${filament.id}`).expect(200)).body;
+    expect(del).toMatchObject({ incomes: 0, lineItems: 1, reassignedTo: { hmrcCode: 'costOfGoods', isCustom: false } });
+    expect((await agent.delete(`/api/categories/${etsy.id}`).expect(200)).body.incomes).toBe(1);
+
+    expect((await agent.get(`/api/expenses/${exp.id}`)).body.lineItems[0].categoryId).toBe(cat('costOfGoods'));
+    const after = (await agent.get('/api/mtd/quarters').query({ taxYearId: yearId })).body.quarters[0].period;
+    expect(after).toEqual(before);
+    expect((await agent.get('/api/categories')).body.some((c: { isCustom: boolean }) => c.isCustom)).toBe(false);
+  });
+});
+
 describe('tax years', () => {
   it('creates UK tax years, rejects duplicates and makes the first one active', async () => {
     const id = await createYear(2025);
@@ -469,6 +544,10 @@ describe('sample data', () => {
       .all() as { name: string }[];
     expect(docs).toHaveLength(result.documents);
     for (const { name } of docs) expect(fs.existsSync(path.join(uploads(), name))).toBe(true);
+
+    const customs = (await agent.get('/api/categories')).body.filter((c: { isCustom: boolean }) => c.isCustom);
+    expect(customs.map((c: { name: string }) => c.name).sort()).toEqual(['Beads', 'Etsy sales', 'Printer filament', 'Stall fees']);
+    for (const c of customs) expect(c.usageCount).toBeGreaterThan(0);
 
     const { body } = await agent.get('/api/tax-years').expect(200);
     expect(body.taxYears.map((y: { label: string }) => y.label)).toEqual(['2026-27', '2025-26']);

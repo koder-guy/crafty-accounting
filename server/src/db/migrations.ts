@@ -32,8 +32,11 @@ CREATE TABLE categories (
   name TEXT NOT NULL,
   hmrc_code TEXT NOT NULL,
   sort_order INTEGER NOT NULL DEFAULT 0,
-  UNIQUE (type, hmrc_code)
+  is_custom INTEGER NOT NULL DEFAULT 0 CHECK (is_custom IN (0, 1))
 );
+
+CREATE UNIQUE INDEX idx_categories_standard ON categories (type, hmrc_code) WHERE is_custom = 0;
+CREATE UNIQUE INDEX idx_categories_name ON categories (type, name COLLATE NOCASE);
 
 CREATE TABLE incomes (
   id INTEGER PRIMARY KEY AUTOINCREMENT,

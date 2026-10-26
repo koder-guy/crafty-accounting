@@ -1,10 +1,10 @@
 import { useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { DatabaseBackup, Download, FileArchive, FileCode, Upload } from 'lucide-react';
-import { ConfirmDialog } from '../components/ConfirmDialog';
-import { PageBody, PageHeader } from '../components/PageHeader';
-import { Alert, Button, Card, CardHeader } from '../components/ui';
-import { api } from '../lib/api';
+import { ConfirmDialog } from '../../components/ConfirmDialog';
+import { Alert, Button, Card, CardHeader } from '../../components/ui';
+import { api } from '../../lib/api';
+import { SettingsHeading } from './SettingsLayout';
 
 function DownloadTile({ href, icon, title, children }: { href: string; icon: React.ReactNode; title: string; children: React.ReactNode }) {
   return (
@@ -25,7 +25,7 @@ function DownloadTile({ href, icon, title, children }: { href: string; icon: Rea
   );
 }
 
-export function Backup() {
+export function BackupSettings() {
   const qc = useQueryClient();
   const inputRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
@@ -46,8 +46,8 @@ export function Backup() {
 
   return (
     <>
-      <PageHeader title="Backup & Restore" subtitle="Download a copy of your books, or restore from an earlier backup." />
-      <PageBody>
+      <div className="space-y-6">
+        <SettingsHeading title="Backup and restore" description="Download a copy of your books, or restore from an earlier backup." />
         <Card>
           <CardHeader icon={<DatabaseBackup className="size-5 text-accent-soft" />} title="Download a backup" />
           <div className="grid gap-4 px-5 pb-6 sm:px-6 lg:grid-cols-2">
@@ -93,7 +93,7 @@ export function Backup() {
             {done && <Alert tone="success">Backup restored.</Alert>}
           </div>
         </Card>
-      </PageBody>
+      </div>
 
       <ConfirmDialog
         open={confirming}

@@ -53,15 +53,40 @@ export function currentTaxYearStartYear(): number {
 
 // ---- Categories ----
 
-const mapCategory = (row: Row): Category => ({ id: row.id, type: row.type, name: row.name, hmrcCode: row.hmrc_code });
+const CATEGORY_SELECT = `
+  SELECT c.*,
+    (SELECT COUNT(*) FROM incomes i WHERE i.category_id = c.id)
+      + (SELECT COUNT(*) FROM expense_line_items li WHERE li.category_id = c.id) AS usage_count
+  FROM categories c`;
 
+const mapCategory = (row: Row): Category => ({
+  id: row.id,
+  type: row.type,
+  name: row.name,
+  hmrcCode: row.hmrc_code,
+  isCustom: row.is_custom === 1,
+  usageCount: row.usage_count,
+});
+
+/** Standard categories in HMRC order, then custom ones alphabetically. */
 export function listCategories(db: Db): Category[] {
-  return (db.prepare('SELECT * FROM categories ORDER BY sort_order').all() as Row[]).map(mapCategory);
+  return (
+    db.prepare(`${CATEGORY_SELECT} ORDER BY c.is_custom, c.sort_order, c.name COLLATE NOCASE`).all() as Row[]
+  ).map(mapCategory);
 }
 
 export function getCategory(db: Db, id: number): Category | null {
-  const row = db.prepare('SELECT * FROM categories WHERE id = ?').get(id) as Row | undefined;
+  const row = db.prepare(`${CATEGORY_SELECT} WHERE c.id = ?`).get(id) as Row | undefined;
   return row ? mapCategory(row) : null;
+}
+
+/** The standard category a custom one maps to (or the category itself if standard). */
+export function standardCategoryFor(db: Db, category: Category): Category {
+  if (!category.isCustom) return category;
+  const row = db
+    .prepare(`${CATEGORY_SELECT} WHERE c.is_custom = 0 AND c.type = ? AND c.hmrc_code = ?`)
+    .get(category.type, category.hmrcCode) as Row;
+  return mapCategory(row);
 }
 
 // ---- Filters ----

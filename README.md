@@ -8,7 +8,8 @@ Self-hosted bookkeeping for a UK sole trader, built for selling at craft fairs a
 - **Lists**: search, filter and sort, then export the filtered rows to CSV.
 - **Dashboard**: totals, a monthly chart, a breakdown by HMRC category, and key dates.
 - **MTD Quarterly**: the four standard update periods for each tax year, with deadlines and status. It shows each quarter's figures and the year-to-date figures per MTD field, can export the figures as a JSON file for MTD bridging software, and records when each quarter was submitted.
-- **Backups**: download a `.sql` dump or a full `.zip` (database plus documents), and restore from either.
+- **Custom categories** (Settings): your own category names, such as "Printer filament", each mapped to a standard MTD category. They're grouped under that category in every dropdown and count towards its MTD figures. Deleting a category that's in use moves its transactions to the MTD category it maps to, so MTD totals don't change.
+- **Backups** (Settings): download a `.sql` dump or a full `.zip` (database plus documents), and restore from either.
 - **Sign-in**: a single password.
 
 ## Run with Docker Compose
@@ -49,7 +50,7 @@ To fill an empty install with realistic test data, run:
 docker compose exec crafty-accounting node server/dist/seed.js
 ```
 
-It loads last tax year in full and this tax year up to today, with craft fair takings, Etsy payouts, purchases with line items (some disallowable), sample PDF attachments and recorded MTD submissions for past quarters.
+It loads last tax year in full and this tax year up to today, with craft fair takings, Etsy payouts, purchases with line items (some disallowable), a few custom categories, sample PDF attachments and recorded MTD submissions for past quarters.
 
 It refuses to run if any tax years already exist. Adding `--reset` first **deletes all tax years, transactions and documents**, then loads the sample data. Don't use it on real books.
 
@@ -68,7 +69,7 @@ It refuses to run if any tax years already exist. Adding `--reset` first **delet
 
 ## Backups
 
-Use **Backup & Restore** in the app:
+Use **Settings → Backup and restore** in the app:
 
 - **Full backup (.zip)** contains `backup.sql` plus every document in `uploads/`. Restoring it replaces the database and all documents.
 - **Database only (.sql)** is a plain-text SQL dump with one statement per line. Restoring it replaces the database and leaves the documents folder alone.

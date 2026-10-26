@@ -74,7 +74,7 @@ export function IncomingList() {
                 )
               }
             />
-            <FilterBar filterState={filterState} categories={categories.filter((c) => c.type === 'INCOME')} />
+            <FilterBar filterState={filterState} categories={categories} type="INCOME" />
             {error ? (
               <div className="p-6">
                 <Alert>{error.message}</Alert>

@@ -30,7 +30,8 @@ const FAIRS = [
   'Didcot Makers Day',
 ];
 
-type Line = { description: string; code: string; min: number; max: number; disallowable?: boolean };
+/** `custom` names one of CUSTOM_CATEGORIES; otherwise the standard category for `code` is used. */
+type Line = { description: string; code: string; custom?: string; min: number; max: number; disallowable?: boolean };
 interface Purchase {
   supplier: string;
   lines: Line[];
@@ -38,12 +39,19 @@ interface Purchase {
   payment?: 'cash' | 'card' | 'bank_transfer';
 }
 
+const CUSTOM_CATEGORIES = [
+  { name: 'Beads', code: 'costOfGoods', type: 'EXPENSE' },
+  { name: 'Printer filament', code: 'costOfGoods', type: 'EXPENSE' },
+  { name: 'Stall fees', code: 'premisesRunningCosts', type: 'EXPENSE' },
+  { name: 'Etsy sales', code: 'turnover', type: 'INCOME' },
+] as const;
+
 const PURCHASES: Purchase[] = [
   {
     supplier: 'Bead World Ltd',
     orderNumber: true,
     lines: [
-      { description: 'Glass beads', code: 'costOfGoods', min: 1200, max: 6500 },
+      { description: 'Glass beads', code: 'costOfGoods', custom: 'Beads', min: 1200, max: 6500 },
       { description: 'Silver findings', code: 'costOfGoods', min: 800, max: 4200 },
       { description: 'Postage', code: 'adminCosts', min: 295, max: 650 },
     ],
@@ -63,6 +71,15 @@ const PURCHASES: Purchase[] = [
     lines: [
       { description: 'Cotton thread bundle', code: 'costOfGoods', min: 1500, max: 5200 },
       { description: 'Gift boxes and packaging', code: 'costOfGoods', min: 700, max: 2400 },
+    ],
+  },
+  {
+    supplier: 'Prusa Research',
+    orderNumber: true,
+    lines: [
+      { description: 'PLA filament 1kg', code: 'costOfGoods', custom: 'Printer filament', min: 2200, max: 6600 },
+      { description: 'PETG filament 1kg', code: 'costOfGoods', custom: 'Printer filament', min: 2500, max: 5000 },
+      { description: 'Shipping', code: 'adminCosts', min: 495, max: 995 },
     ],
   },
   {
@@ -201,11 +218,16 @@ export function generateSampleData(db: Db, uploadsDir: string, today = todayIso(
   const result: SampleDataResult = { taxYears: 0, incomes: 0, expenses: 0, documents: 0, submissions: 0 };
 
   const category = new Map(
-    (db.prepare('SELECT id, hmrc_code FROM categories').all() as { id: number; hmrc_code: string }[]).map((c) => [
-      c.hmrc_code,
-      c.id,
-    ]),
+    (db.prepare('SELECT id, hmrc_code FROM categories WHERE is_custom = 0').all() as { id: number; hmrc_code: string }[]).map(
+      (c) => [c.hmrc_code, c.id],
+    ),
   );
+  const custom = new Map<string, number>();
+  const insertCategory = db.prepare(
+    "INSERT INTO categories (type, name, hmrc_code, sort_order, is_custom) VALUES (?, ?, ?, 1000, 1) ON CONFLICT DO NOTHING",
+  );
+  const findCategory = db.prepare('SELECT id FROM categories WHERE is_custom = 1 AND type = ? AND name = ? COLLATE NOCASE');
+  const lineCategory = (l: Line) => (l.custom ? custom.get(l.custom) : category.get(l.code));
   const insertYear = db.prepare('INSERT INTO tax_years (label, start_date, end_date) VALUES (?, ?, ?)');
   const insertIncome = db.prepare(
     `INSERT INTO incomes (tax_year_id, date, description, reference, payment_method, amount_pence, category_id, notes, document_filename)
@@ -250,7 +272,7 @@ export function generateSampleData(db: Db, uploadsDir: string, today = todayIso(
       null,
       doc,
     );
-    lines.forEach((l, i) => insertLine.run(lastInsertRowid, l.description, amounts[i], category.get(l.code), l.disallowable ? 1 : 0, i));
+    lines.forEach((l, i) => insertLine.run(lastInsertRowid, l.description, amounts[i], lineCategory(l), l.disallowable ? 1 : 0, i));
     result.expenses++;
   };
 
@@ -258,6 +280,10 @@ export function generateSampleData(db: Db, uploadsDir: string, today = todayIso(
   let currentYearId = 0;
 
   db.transaction(() => {
+    for (const c of CUSTOM_CATEGORIES) {
+      insertCategory.run(c.type, c.name, c.code);
+      custom.set(c.name, (findCategory.get(c.type, c.name) as { id: number }).id);
+    }
     for (const startYear of [currentStart - 1, currentStart]) {
       const year = taxYearFromStartYear(startYear);
       const yearId = Number(insertYear.run(year.label, year.startDate, year.endDate).lastInsertRowid);
@@ -280,7 +306,7 @@ export function generateSampleData(db: Db, uploadsDir: string, today = todayIso(
         addExpense(yearId, feeDate < year.startDate ? date : feeDate, {
           supplier: fair,
           payment: 'bank_transfer',
-          lines: [{ description: 'Stall fee', code: 'premisesRunningCosts', min: 2500, max: 6500 }],
+          lines: [{ description: 'Stall fee', code: 'premisesRunningCosts', custom: 'Stall fees', min: 2500, max: 6500 }],
         });
         if (rnd.chance(0.6)) addExpense(yearId, date, PURCHASES[3]);
       }
@@ -292,7 +318,7 @@ export function generateSampleData(db: Db, uploadsDir: string, today = todayIso(
         const payoutDate = addDays(monthStart, rnd.int(0, 27));
         if (payoutDate <= end) {
           const doc = rnd.chance(0.5) ? attach(`${payoutDate} Etsy payout.pdf`, `Etsy payout ${payoutDate}`) : null;
-          insertIncome.run(yearId, payoutDate, 'Etsy payout', `ETSY-${rnd.int(1000000, 9999999)}`, 'bank_transfer', rnd.int(3500, 19000), category.get('turnover'), null, doc);
+          insertIncome.run(yearId, payoutDate, 'Etsy payout', `ETSY-${rnd.int(1000000, 9999999)}`, 'bank_transfer', rnd.int(3500, 19000), custom.get('Etsy sales'), null, doc);
           result.incomes++;
         }
         for (let i = rnd.int(1, 3); i > 0; i--) {

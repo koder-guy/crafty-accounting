@@ -134,10 +134,10 @@ function FiguresTable({ summary, categories }: { summary: MtdPeriodSummary; cate
         </thead>
         <tbody className="divide-y divide-line">
           {section('Income')}
-          {categories.filter((c) => c.type === 'INCOME').map((c) => row(c, summary.periodIncome[c.hmrcCode] ?? 0))}
+          {categories.filter((c) => c.type === 'INCOME' && !c.isCustom).map((c) => row(c, summary.periodIncome[c.hmrcCode] ?? 0))}
           {section('Expenses')}
           {categories
-            .filter((c) => c.type === 'EXPENSE')
+            .filter((c) => c.type === 'EXPENSE' && !c.isCustom)
             .map((c) =>
               row(c, summary.periodExpenses[c.hmrcCode] ?? 0, summary.periodDisallowableExpenses[`${c.hmrcCode}Disallowable`] ?? 0),
             )}

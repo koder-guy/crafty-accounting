@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { useNavigate, useParams } from 'react-router';
 import { isDateInTaxYear, parsePoundsToPence, penceToPounds, todayIso, type Income, type PaymentMethod } from '@crafty/shared';
+import { CategoryOptions } from '../components/CategoryOptions';
 import { BackLink, dateInYear, yearRangeHint } from '../components/FormShell';
 import { NoTaxYear } from '../components/NoTaxYear';
 import { PageBody, PageHeader } from '../components/PageHeader';
@@ -74,7 +75,7 @@ export function IncomeForm() {
         reference: '',
         paymentMethod: '',
         amount: '',
-        categoryId: String(incomeCategories.find((c) => c.hmrcCode === 'turnover')?.id ?? ''),
+        categoryId: String(incomeCategories.find((c) => !c.isCustom && c.hmrcCode === 'turnover')?.id ?? ''),
         notes: '',
       });
     }
@@ -185,11 +186,7 @@ export function IncomeForm() {
               <Field label="Category" htmlFor="categoryId" error={errors.categoryId?.message}>
                 <select id="categoryId" className="field" {...register('categoryId', { required: 'Choose a category' })}>
                   <option value="">Choose…</option>
-                  {incomeCategories.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                  ))}
+                  <CategoryOptions categories={categories} type="INCOME" />
                 </select>
               </Field>
               <Field label="Payment method" htmlFor="paymentMethod" error={errors.paymentMethod?.message}>

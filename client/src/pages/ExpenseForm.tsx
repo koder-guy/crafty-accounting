@@ -11,6 +11,7 @@ import {
   type ExpenseWithLineItems,
   type PaymentMethod,
 } from '@crafty/shared';
+import { CategoryOptions } from '../components/CategoryOptions';
 import { BackLink, dateInYear, yearRangeHint } from '../components/FormShell';
 import { NoTaxYear } from '../components/NoTaxYear';
 import { PageBody, PageHeader } from '../components/PageHeader';
@@ -56,7 +57,7 @@ export function ExpenseForm() {
   const { taxYear: activeYear, isLoading: yearLoading } = useActiveTaxYear();
   const { data: categories = [] } = useCategories();
   const expenseCategories = categories.filter((c) => c.type === 'EXPENSE');
-  const defaultCategory = String(expenseCategories.find((c) => c.hmrcCode === 'costOfGoods')?.id ?? '');
+  const defaultCategory = String(expenseCategories.find((c) => !c.isCustom && c.hmrcCode === 'costOfGoods')?.id ?? '');
   const save = useSaveTransaction<ExpenseWithLineItems>('expenses');
 
   const taxYear = id ? (years?.taxYears.find((y) => y.id === existing?.taxYearId) ?? null) : activeYear;
@@ -306,11 +307,7 @@ export function ExpenseForm() {
                             {...register(`lineItems.${index}.categoryId`, { required: 'Choose a category' })}
                           >
                             <option value="">Choose…</option>
-                            {expenseCategories.map((c) => (
-                              <option key={c.id} value={c.id}>
-                                {c.name}
-                              </option>
-                            ))}
+                            <CategoryOptions categories={categories} type="EXPENSE" />
                           </select>
                           {lineErrors?.categoryId && <p className="mt-1 text-xs text-out-soft">{lineErrors.categoryId.message}</p>}
                         </td>

@@ -84,6 +84,29 @@ export function useTaxYearMutations() {
 export const useCategories = () =>
   useQuery({ queryKey: ['categories'], queryFn: () => api.get<Category[]>('/categories'), staleTime: Infinity });
 
+export function useCategoryMutations() {
+  const qc = useQueryClient();
+  // Category names and usage appear on transactions and the dashboard too.
+  const onSuccess = () => {
+    qc.invalidateQueries({ queryKey: ['categories'] });
+    qc.invalidateQueries({ queryKey: ['incomes'] });
+    qc.invalidateQueries({ queryKey: ['expenses'] });
+    qc.invalidateQueries({ queryKey: ['dashboard'] });
+  };
+  type Input = { name: string; mapsToCategoryId: number };
+  return {
+    create: useMutation({ mutationFn: (input: Input) => api.post<Category>('/categories', input), onSuccess }),
+    update: useMutation({
+      mutationFn: ({ id, ...input }: Input & { id: number }) => api.put<Category>(`/categories/${id}`, input),
+      onSuccess,
+    }),
+    remove: useMutation({
+      mutationFn: (id: number) => api.delete<{ incomes: number; lineItems: number; reassignedTo: Category }>(`/categories/${id}`),
+      onSuccess,
+    }),
+  };
+}
+
 // ---- Transactions ----
 
 type Kind = 'incomes' | 'expenses';

@@ -6,11 +6,13 @@ import {
   PAYMENT_METHOD_LABELS,
   PAYMENT_METHODS,
   type Category,
+  type CategoryType,
   type PaymentMethod,
   type TaxYear,
   type TransactionFilters,
 } from '@crafty/shared';
 import { documentUrl } from '../lib/api';
+import { CategoryOptions } from './CategoryOptions';
 import { Button, IconButton } from './ui';
 
 // ---- Filters (kept in the URL so they survive navigation) ----
@@ -51,9 +53,11 @@ export function useTransactionFilters(taxYear: TaxYear | null) {
 export function FilterBar({
   filterState,
   categories,
+  type,
 }: {
   filterState: ReturnType<typeof useTransactionFilters>;
   categories: Category[];
+  type: CategoryType;
 }) {
   const { get, set } = filterState;
   const [search, setSearch] = useState(get('search'));
@@ -74,11 +78,7 @@ export function FilterBar({
     <div className="flex flex-col gap-3 border-b border-line px-5 pb-5 sm:flex-row sm:justify-end sm:px-6">
       <FilterSelect label="Category" className="sm:w-72" value={get('categoryId')} onChange={(v) => set('categoryId', v)}>
         <option value="">All categories</option>
-        {categories.map((c) => (
-          <option key={c.id} value={c.id}>
-            {c.name}
-          </option>
-        ))}
+        <CategoryOptions categories={categories} type={type} />
       </FilterSelect>
       <FilterSelect label="Payment method" className="sm:w-44" value={get('paymentMethod')} onChange={(v) => set('paymentMethod', v)}>
         <option value="">All payment types</option>

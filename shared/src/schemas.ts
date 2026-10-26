@@ -102,6 +102,12 @@ export const transactionFiltersSchema = z.object({
 type ParsedFilters = z.infer<typeof transactionFiltersSchema>;
 export type TransactionFilters = Pick<ParsedFilters, 'taxYearId'> & Partial<Omit<ParsedFilters, 'taxYearId'>>;
 
+export const customCategorySchema = z.object({
+  name: z.string().trim().min(1, 'Enter a name').max(60, 'Keep the name under 60 characters'),
+  /** The standard MTD category this one maps to; it also sets income/expense. */
+  mapsToCategoryId: id,
+});
+
 export const mtdSubmissionSchema = z.object({
   submittedOn: isoDate,
   reference: optionalText(100),

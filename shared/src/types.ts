@@ -23,6 +23,10 @@ export interface Category {
   type: CategoryType;
   name: string;
   hmrcCode: string;
+  /** User-defined name that maps onto one of the standard MTD categories. */
+  isCustom: boolean;
+  /** Incoming transactions plus outgoing line items using this category. */
+  usageCount: number;
 }
 
 export interface Income {

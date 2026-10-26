@@ -28,9 +28,9 @@ export function schemaVersion(db: Db): number {
 /** Inserts the standard categories, refreshing names if HMRC wording changes. */
 export function seedCategories(db: Db): void {
   const upsert = db.prepare(`
-    INSERT INTO categories (type, name, hmrc_code, sort_order)
-    VALUES (@type, @name, @hmrcCode, @sortOrder)
-    ON CONFLICT (type, hmrc_code) DO UPDATE SET name = excluded.name, sort_order = excluded.sort_order
+    INSERT INTO categories (type, name, hmrc_code, sort_order, is_custom)
+    VALUES (@type, @name, @hmrcCode, @sortOrder, 0)
+    ON CONFLICT (type, hmrc_code) WHERE is_custom = 0 DO UPDATE SET name = excluded.name, sort_order = excluded.sort_order
   `);
   db.transaction(() => {
     ALL_CATEGORIES.forEach((category, sortOrder) => upsert.run({ ...category, sortOrder }));

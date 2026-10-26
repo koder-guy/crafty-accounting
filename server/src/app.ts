@@ -4,9 +4,9 @@ import express from 'express';
 import cookieSession from 'cookie-session';
 import type { AppContext } from './context';
 import { errorHandler, HttpError } from './http';
-import { listCategories } from './repo';
 import { authRouter, requireAuth } from './routes/auth';
 import { backupRouter } from './routes/backup';
+import { categoriesRouter } from './routes/categories';
 import { dashboardRouter } from './routes/dashboard';
 import { documentsRouter } from './routes/documents';
 import { mtdRouter } from './routes/mtd';
@@ -48,9 +48,7 @@ export function createApp(ctx: AppContext) {
 
   app.use('/api', requireAuth);
   app.use('/api/tax-years', taxYearsRouter(ctx));
-  app.get('/api/categories', (_req, res) => {
-    res.json(listCategories(ctx.db));
-  });
+  app.use('/api/categories', categoriesRouter(ctx));
   app.use('/api/incomes', incomesRouter(ctx));
   app.use('/api/expenses', expensesRouter(ctx));
   app.use('/api/documents', documentsRouter(ctx));
