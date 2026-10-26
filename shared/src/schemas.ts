@@ -60,7 +60,7 @@ export const expenseInputSchema = z
   .object({
     taxYearId: id,
     date: isoDate,
-    supplier: z.string().trim().min(1, 'Supplier is required').max(200),
+    supplier: z.string().trim().min(1, 'Payee is required').max(200),
     invoiceNumber: optionalText(100),
     orderNumber: optionalText(100),
     description: optionalText(500),

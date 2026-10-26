@@ -58,7 +58,7 @@ export function ExpenseView() {
               </div>
               <dl className="divide-y divide-line">
                 <DetailRow label="Date">{formatDisplayDate(expense.date)}</DetailRow>
-                <DetailRow label="Supplier">{expense.supplier}</DetailRow>
+                <DetailRow label="Payee">{expense.supplier}</DetailRow>
                 <DetailRow label="Invoice number">{expense.invoiceNumber}</DetailRow>
                 <DetailRow label="Order number">{expense.orderNumber}</DetailRow>
                 <DetailRow label="Description">{expense.description}</DetailRow>

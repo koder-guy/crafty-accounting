@@ -95,7 +95,7 @@ export function OutgoingList() {
                         <span className="sr-only">Show line items</span>
                       </th>
                       <SortTh label="Date" sortKey="date" sort={sort} onSort={toggle} />
-                      <SortTh label="Supplier" sortKey="supplier" sort={sort} onSort={toggle} />
+                      <SortTh label="Payee" sortKey="supplier" sort={sort} onSort={toggle} />
                       <SortTh label="Categories" sortKey="category" sort={sort} onSort={toggle} />
                       <SortTh label="Method" sortKey="method" sort={sort} onSort={toggle} />
                       <SortTh label="Amount" sortKey="amount" sort={sort} onSort={toggle} align="right" />

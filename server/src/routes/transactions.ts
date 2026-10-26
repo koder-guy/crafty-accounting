@@ -171,7 +171,7 @@ export function expensesRouter(ctx: AppContext): Router {
       e.notes,
     ]);
     const csv = toCsv(
-      ['Date', 'Supplier', 'Invoice number', 'Order number', 'Description', 'Payment method', 'Amount (GBP)', 'Disallowable (GBP)', 'Document', 'Notes'],
+      ['Date', 'Payee', 'Invoice number', 'Order number', 'Description', 'Payment method', 'Amount (GBP)', 'Disallowable (GBP)', 'Document', 'Notes'],
       rows,
     );
     res.attachment(csvFilename('outgoing', getTaxYear(ctx.db, filters.taxYearId))).type('text/csv').send(csv);

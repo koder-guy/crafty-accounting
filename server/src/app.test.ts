@@ -334,7 +334,7 @@ describe('expenses', () => {
     const csv = await agent.get('/api/expenses/export.csv').query({ taxYearId: yearId }).expect(200);
     const lines = csv.text.trim().split('\r\n');
     expect(lines).toHaveLength(2);
-    expect(lines[0]).toContain('Supplier');
+    expect(lines[0]).toContain('Payee');
     expect(lines[1]).toContain('45.50');
     expect(csv.text).not.toContain('Glass beads');
   });

@@ -221,12 +221,12 @@ export function ExpenseForm() {
                   {...register('date', { validate: dateInYear(taxYear) })}
                 />
               </Field>
-              <Field label="Supplier" htmlFor="supplier" error={errors.supplier?.message}>
+              <Field label="Payee" htmlFor="supplier" error={errors.supplier?.message}>
                 <input
                   id="supplier"
                   className="field"
                   placeholder="Bead World Ltd"
-                  {...register('supplier', { required: 'Supplier is required', maxLength: 200 })}
+                  {...register('supplier', { required: 'Payee is required', maxLength: 200 })}
                 />
               </Field>
               <Field label="Invoice number" htmlFor="invoiceNumber" hint="Optional">
