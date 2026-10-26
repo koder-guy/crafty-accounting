@@ -78,6 +78,24 @@ describe('auth', () => {
   });
 });
 
+describe('HTTPS behind a proxy', () => {
+  it('sends secure cookies and HSTS when the proxy says the request was HTTPS', async () => {
+    const proxied = request(
+      createApp({ ...ctx, config: { ...ctx.config, cookieSecure: true, trustProxy: true } }),
+    );
+    const res = await proxied
+      .post('/api/auth/login')
+      .set('X-Forwarded-Proto', 'https')
+      .send({ password: PASSWORD })
+      .expect(200);
+    expect(res.headers['strict-transport-security']).toBe('max-age=15552000');
+    expect(String(res.headers['set-cookie'])).toMatch(/;\s*secure/i);
+
+    const plain = await request(createApp(ctx)).get('/api/health').expect(200);
+    expect(plain.headers['strict-transport-security']).toBeUndefined();
+  });
+});
+
 describe('categories', () => {
   it('seeds the standard MTD categories', () => {
     expect(categories.filter((c) => c.type === 'INCOME').map((c) => c.hmrcCode)).toEqual(['turnover', 'other']);

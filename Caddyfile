@@ -1,0 +1,15 @@
+# HTTPS front end for Crafty Accounting (used by docker-compose.yml).
+# Settings come from .env:
+#   SITE_ADDRESS  the address(es) you browse to, comma separated,
+#                 e.g. "crafty.local, 192.168.1.50" or "accounts.example.co.uk"
+#   TLS_ISSUER    "internal" for a private certificate from Caddy's own
+#                 certificate authority (home network), or your email address
+#                 to get a free Let's Encrypt certificate for a public domain.
+# Plain http:// requests are redirected to https:// automatically.
+
+{$SITE_ADDRESS:localhost} {
+	tls {$TLS_ISSUER:internal}
+	encode zstd gzip
+	header -Server
+	reverse_proxy crafty-accounting:3000
+}

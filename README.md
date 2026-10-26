@@ -22,7 +22,10 @@ On the Linux host:
 cp .env.example .env
 ```
 
-Edit `.env` and set `ADMIN_PASSWORD` (and ideally `SESSION_SECRET`, made with `openssl rand -hex 32`).
+Edit `.env`:
+
+- Set `ADMIN_PASSWORD`, and ideally `SESSION_SECRET` (made with `openssl rand -hex 32`).
+- Set `SITE_ADDRESS` to the address(es) you'll use to reach the server, for example `crafty.local, 192.168.1.50`. See **HTTPS** below.
 
 Create the folder for automatic backups and let the container's user (UID 1000) write to it. If you can, point `BACKUP_HOST_DIR` in `.env` at another disk or a NAS share instead of `./backups`:
 
@@ -36,7 +39,10 @@ Then start it:
 docker compose up -d --build
 ```
 
-The app is at `http://<host>:8080`. To use a different port, set `HOST_PORT` in `.env` or in the shell.
+The app is at `https://<SITE_ADDRESS>`, and plain `http://` redirects there. Docker Compose runs two containers:
+
+- `crafty-accounting`: the app. It isn't reachable directly.
+- `crafty-caddy`: [Caddy](https://caddyserver.com), which provides HTTPS and passes requests on to the app.
 
 All data lives in the `crafty-data` Docker volume, mounted at `/data`:
 
@@ -48,9 +54,37 @@ All data lives in the `crafty-data` Docker volume, mounted at `/data`:
 
 To update to a new version, pull or copy the new code and run `docker compose up -d --build` again. Database migrations run automatically on start.
 
-### Behind a reverse proxy (HTTPS)
+### HTTPS
 
-Set `TRUST_PROXY=true` and `COOKIE_SECURE=true` in `.env` so the session cookie is only sent over HTTPS and sign-in rate limiting sees real client addresses.
+All traffic is encrypted. Caddy gets the certificate in one of two ways, chosen by `TLS_ISSUER` in `.env`:
+
+**Home network (`TLS_ISSUER=internal`, the default).** Caddy creates its own private certificate authority and issues certificates for every address in `SITE_ADDRESS`, such as a name like `crafty.local` or the server's IP address. Browsers don't know this authority yet, so each device needs to trust it once:
+
+1. Copy the certificate out of the container, on the server:
+
+   ```bash
+   docker compose cp caddy:/data/caddy/pki/authorities/local/root.crt ./crafty-root.crt
+   ```
+
+2. Install `crafty-root.crt` on each device that uses the app:
+   - **Mac:** double-click it, add it to the System keychain, then open it in Keychain Access and set **Trust → When using this certificate** to **Always Trust**.
+   - **Windows:** double-click it, choose **Install Certificate → Local Machine**, and put it in **Trusted Root Certification Authorities**.
+   - **iPhone/iPad:** send it to the device (e.g. by AirDrop or email), install the profile in **Settings → General → VPN & Device Management**, then turn it on in **Settings → General → About → Certificate Trust Settings**.
+   - **Android:** **Settings → Security → Encryption & credentials → Install a certificate → CA certificate**. The wording varies by phone.
+
+The authority is valid for 10 years and is kept in the `caddy-data` volume. Caddy renews the site certificates itself. If you remove that volume, a new authority is created and you'll need to trust it again.
+
+**Public domain (`TLS_ISSUER=you@example.com`).** If you reach the app from the internet using your own domain:
+
+1. Point the domain (e.g. `accounts.example.co.uk`) at your home IP.
+2. Forward ports 80 and 443 on your router to the server.
+3. Set `SITE_ADDRESS` to the domain and `TLS_ISSUER` to your email address.
+
+Caddy then gets a free Let's Encrypt certificate and renews it automatically, and there's nothing to install on your devices. Use a strong `ADMIN_PASSWORD` if the app is reachable from the internet.
+
+If ports 80 and 443 are already used on the server, change `HTTP_PORT` and `HTTPS_PORT`. The address then needs the port, e.g. `https://crafty.local:8443`. Let's Encrypt needs 80 and 443 to be reachable from outside, so for a public domain forward those router ports to whichever ports you've chosen.
+
+After changing these settings, run `docker compose up -d` to apply them.
 
 ### Sample data for testing
 
@@ -71,10 +105,12 @@ It refuses to run if any tax years already exist. Adding `--reset` first **delet
 | `ADMIN_PASSWORD` | *(required)* | Sign-in password |
 | `SESSION_SECRET` | generated | Signs the session cookie. If empty, one is generated and kept in the data folder. |
 | `PORT` | `3000` | Port inside the container |
-| `HOST_PORT` | `8080` | Port published by Docker Compose |
+| `SITE_ADDRESS` | `localhost` | Docker: address(es) for HTTPS, comma separated |
+| `TLS_ISSUER` | `internal` | Docker: `internal` for a private certificate, or your email address for Let's Encrypt |
+| `HTTP_PORT` / `HTTPS_PORT` | `80` / `443` | Docker: ports Caddy listens on |
 | `MAX_UPLOAD_MB` | `20` | Largest document you can attach |
-| `COOKIE_SECURE` | `false` | `true` when served over HTTPS |
-| `TRUST_PROXY` | `false` | `true` behind a reverse proxy |
+| `COOKIE_SECURE` | `false` (`true` in Docker) | Only send the session cookie over HTTPS |
+| `TRUST_PROXY` | `false` (`true` in Docker) | Trust the reverse proxy's forwarded headers |
 | `DATA_DIR` | `./data` (`/data` in Docker) | Database and uploads location |
 | `BACKUP_HOST_DIR` | `./backups` | Docker Compose: the host folder for automatic backups |
 | `BACKUP_DIR` | `DATA_DIR/backups` (`/backups` in Docker) | Where automatic backups are written |

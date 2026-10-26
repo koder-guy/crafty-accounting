@@ -10,12 +10,37 @@ services:
       BACKUP_DIR: /backups
       PORT: 3000
       TZ: ${TZ:-Europe/London}
-    ports:
-      - "${HOST_PORT:-8080}:3000"
+      # Always served over HTTPS through Caddy below.
+      COOKIE_SECURE: "true"
+      TRUST_PROXY: "true"
+    # Not published on the host: only Caddy talks to the app.
+    expose:
+      - "3000"
     volumes:
       - crafty-data:/data
       # Automatic backups go to a folder on the host, ideally another disk or a NAS share.
       - ${BACKUP_HOST_DIR:-./backups}:/backups
 
+  caddy:
+    image: caddy:2.11-alpine
+    container_name: crafty-caddy
+    restart: unless-stopped
+    depends_on:
+      - crafty-accounting
+    environment:
+      SITE_ADDRESS: ${SITE_ADDRESS:-localhost}
+      TLS_ISSUER: ${TLS_ISSUER:-internal}
+    ports:
+      - "${HTTP_PORT:-80}:80"
+      - "${HTTPS_PORT:-443}:443"
+      - "${HTTPS_PORT:-443}:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # Certificates (including the private certificate authority) live here.
+      - caddy-data:/data
+      - caddy-config:/config
+
 volumes:
   crafty-data:
+  caddy-data:
+  caddy-config:

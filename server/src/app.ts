@@ -23,6 +23,8 @@ export function createApp(ctx: AppContext) {
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('Referrer-Policy', 'same-origin');
     res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+    // Over HTTPS (e.g. via Caddy), tell browsers to keep using HTTPS for six months.
+    if (req.secure) res.setHeader('Strict-Transport-Security', 'max-age=15552000');
     // Remove any uploaded temp file the handler didn't consume (e.g. on a validation error).
     res.on('finish', () => {
       if (req.file) fs.rm(req.file.path, { force: true }, () => {});
