@@ -356,7 +356,7 @@ export function DocumentField({
           <Button
             type="button"
             variant="ghost"
-            className={`px-2 py-1.5 ${remove ? '' : 'text-out-soft! hover:bg-out-bg! hover:text-red-300!'}`}
+            className={`px-3 py-1.5 ${remove ? '' : 'border-out! text-out-soft! hover:bg-out-bg! hover:text-red-300!'}`}
             onClick={() => onRemove(!remove)}
           >
             {remove ? 'Keep' : 'Remove'}
