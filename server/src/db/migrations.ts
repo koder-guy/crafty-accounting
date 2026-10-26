@@ -57,6 +57,7 @@ CREATE TABLE expenses (
   date TEXT NOT NULL,
   supplier TEXT NOT NULL,
   invoice_number TEXT,
+  order_number TEXT,
   description TEXT,
   payment_method TEXT NOT NULL CHECK (payment_method IN ('cash', 'card', 'bank_transfer')),
   total_pence INTEGER NOT NULL CHECK (total_pence > 0),
@@ -80,10 +81,6 @@ CREATE INDEX idx_incomes_year_date ON incomes (tax_year_id, date);
 CREATE INDEX idx_expenses_year_date ON expenses (tax_year_id, date);
 CREATE INDEX idx_line_items_expense ON expense_line_items (expense_id);
 `,
-  },
-  {
-    version: 2,
-    sql: `ALTER TABLE expenses ADD COLUMN order_number TEXT;`,
   },
 ];
 
