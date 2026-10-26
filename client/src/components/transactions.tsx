@@ -243,9 +243,10 @@ export function DocDownloadLink({ filename }: { filename: string | null }) {
       download={filename}
       title={`Download ${filename}`}
       aria-label={`Download ${filename}`}
-      className="-m-1 inline-flex shrink-0 rounded p-1 text-accent-soft transition-colors hover:bg-accent-bg hover:text-white"
+      // Same box and hover as the row's action icons; the negative margin keeps the row height unchanged.
+      className="-my-2 inline-flex size-8 shrink-0 items-center justify-center rounded-md text-accent-soft transition-colors hover:bg-accent-bg hover:text-accent-soft"
     >
-      <Paperclip className="size-3.5" aria-hidden />
+      <Paperclip className="size-4" aria-hidden />
     </a>
   );
 }
