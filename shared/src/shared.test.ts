@@ -132,7 +132,8 @@ describe('MTD quarters', () => {
       [{ hmrcCode: 'turnover', amountPence: 51805 }],
       [{ hmrcCode: 'adminCosts', amountPence: 1001, disallowable: true }],
     );
-    expect(mtdPayload(summary)).toEqual({
+    expect(mtdPayload(summary, '2025-04-06', '2025-07-05')).toEqual({
+      periodDates: { periodStartDate: '2025-04-06', periodEndDate: '2025-07-05' },
       periodIncome: { turnover: 518.05 },
       periodExpenses: { adminCosts: 10.01 },
       periodDisallowableExpenses: { adminCostsDisallowable: 10.01 },

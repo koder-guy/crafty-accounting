@@ -73,11 +73,15 @@ export function penceToMtdAmount(pence: number): number {
   return Math.round(pence) / 100;
 }
 
-/** MTD-shaped figures in pounds, as an API payload would carry them. */
-export function mtdPayload(summary: MtdPeriodSummary) {
+/**
+ * MTD-shaped figures in pounds, laid out like the body of HMRC's cumulative
+ * period summary request, for exporting to MTD bridging software as a file.
+ */
+export function mtdPayload(summary: MtdPeriodSummary, periodStartDate: string, periodEndDate: string) {
   const toPounds = (values: Record<string, number>) =>
     Object.fromEntries(Object.entries(values).map(([key, pence]) => [key, penceToMtdAmount(pence)]));
   return {
+    periodDates: { periodStartDate, periodEndDate },
     periodIncome: toPounds(summary.periodIncome),
     periodExpenses: toPounds(summary.periodExpenses),
     periodDisallowableExpenses: toPounds(summary.periodDisallowableExpenses),

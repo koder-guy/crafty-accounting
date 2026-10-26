@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { CalendarCheck, ClipboardCopy, FileSpreadsheet, Info } from 'lucide-react';
+import { CalendarCheck, FileDown, FileSpreadsheet, Info } from 'lucide-react';
 import {
   formatDisplayDate,
   formatGBP,
@@ -26,30 +26,16 @@ const STATUS: Record<MtdQuarterStatus, { label: string; tone: BadgeTone }> = {
 
 const shortDate = (iso: string) => formatDisplayDate(iso).replace(/ \d{4}$/, '');
 
-/**
- * Copies text to the clipboard. The Clipboard API only exists on HTTPS or
- * localhost, so a self-hosted http:// address falls back to execCommand.
- */
-async function copyText(text: string): Promise<boolean> {
-  try {
-    await navigator.clipboard.writeText(text);
-    return true;
-  } catch {
-    const area = document.createElement('textarea');
-    area.value = text;
-    area.setAttribute('readonly', '');
-    area.style.position = 'fixed';
-    area.style.opacity = '0';
-    document.body.appendChild(area);
-    area.select();
-    try {
-      return document.execCommand('copy');
-    } catch {
-      return false;
-    } finally {
-      area.remove();
-    }
-  }
+/** Saves JSON as a downloaded file. */
+function downloadJson(data: unknown, filename: string) {
+  const url = URL.createObjectURL(new Blob([`${JSON.stringify(data, null, 2)}\n`], { type: 'application/json' }));
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 /** The quarter containing today, or the nearest end of the year. */
@@ -233,7 +219,6 @@ export function MtdQuarterly() {
   const { data: categories = [] } = useCategories();
   const [selected, setSelected] = useState<number | null>(null);
   const [view, setView] = useState<'cumulative' | 'period'>('cumulative');
-  const [copied, setCopied] = useState<string | null>(null);
   const today = todayIso();
 
   useEffect(() => setSelected(null), [taxYear?.id]);
@@ -243,11 +228,11 @@ export function MtdQuarterly() {
   const q = quarters.find((x) => x.quarter === current);
   const summary = q ? q[view] : null;
 
-  const copy = async () => {
-    if (!summary) return;
-    const ok = await copyText(JSON.stringify(mtdPayload(summary), null, 2));
-    setCopied(ok ? 'Copied' : 'Copy failed');
-    setTimeout(() => setCopied(null), 2000);
+  const exportJson = () => {
+    if (!q || !summary || !taxYear) return;
+    const from = view === 'cumulative' ? taxYear.startDate : q.startDate;
+    const basis = view === 'cumulative' ? 'year-to-date' : 'quarter-only';
+    downloadJson(mtdPayload(summary, from, q.endDate), `crafty-mtd-${taxYear.label}-Q${q.quarter}-${basis}.json`);
   };
 
   return (
@@ -266,8 +251,9 @@ export function MtdQuarterly() {
               <Info className="mt-0.5 size-4 shrink-0 text-accent-soft" aria-hidden />
               <p>
                 Making Tax Digital quarterly updates are <span className="text-ink">cumulative</span>: each one reports the tax year so
-                far. Use the year-to-date figures when entering an update in MTD software. Sending directly to HMRC isn't available yet,
-                so record each submission here to keep track.
+                far. To keep a digital link, use <span className="text-ink">Export to JSON</span> on the year-to-date figures and
+                import the file into your MTD bridging software rather than retyping or copying them. Sending directly to HMRC isn't
+                available yet, so record each submission here to keep track.
               </p>
             </div>
 
@@ -297,9 +283,9 @@ export function MtdQuarterly() {
                   </span>
                 }
                 action={
-                  <Button variant="ghost" onClick={copy} title="Copy the figures in MTD API format (pounds)">
-                    <ClipboardCopy className="size-4" aria-hidden />
-                    {copied ?? 'Copy as JSON'}
+                  <Button variant="ghost" onClick={exportJson} title="Download these figures as a JSON file in MTD API format (pounds)">
+                    <FileDown className="size-4" aria-hidden />
+                    Export to JSON
                   </Button>
                 }
               />
