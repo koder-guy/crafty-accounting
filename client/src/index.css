@@ -41,6 +41,11 @@
     outline: 2px solid var(--color-accent-soft);
     outline-offset: 2px;
   }
+  /* Native selects render slightly shorter than inputs; pin single-line fields to one height. */
+  input.field,
+  select.field {
+    height: 2.375rem;
+  }
   input[type='date']::-webkit-calendar-picker-indicator {
     filter: invert(0.7);
     cursor: pointer;
