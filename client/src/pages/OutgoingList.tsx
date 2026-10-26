@@ -6,7 +6,7 @@ import { ConfirmDialog } from '../components/ConfirmDialog';
 import { NoTaxYear } from '../components/NoTaxYear';
 import { PageBody, PageHeader } from '../components/PageHeader';
 import {
-  DocIndicator,
+  DocDownloadLink,
   ExportCsvButton,
   FilterBar,
   RowActions,
@@ -129,7 +129,7 @@ export function OutgoingList() {
                             <td className="max-w-xs px-4 py-3">
                               <div className="flex items-center gap-1.5 font-medium text-ink">
                                 <span className="truncate">{row.supplier}</span>
-                                <DocIndicator filename={row.documentFilename} />
+                                <DocDownloadLink filename={row.documentFilename} />
                               </div>
                               <div className="truncate text-xs text-muted">
                                 {[row.invoiceNumber, row.orderNumber, row.description].filter(Boolean).join(' · ') ||

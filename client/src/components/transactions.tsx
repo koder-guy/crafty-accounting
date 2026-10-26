@@ -234,6 +234,22 @@ export function DocIndicator({ filename }: { filename: string | null }) {
   return <Paperclip className="inline size-3.5 shrink-0 text-accent-soft" aria-label={`Document: ${filename}`} />;
 }
 
+/** Paperclip that downloads the attached document (for table rows that aren't links themselves). */
+export function DocDownloadLink({ filename }: { filename: string | null }) {
+  if (!filename) return null;
+  return (
+    <a
+      href={documentUrl(filename, true)}
+      download={filename}
+      title={`Download ${filename}`}
+      aria-label={`Download ${filename}`}
+      className="-m-1 inline-flex shrink-0 rounded p-1 text-accent-soft transition-colors hover:bg-accent-bg hover:text-white"
+    >
+      <Paperclip className="size-3.5" aria-hidden />
+    </a>
+  );
+}
+
 // ---- Payment method picker ----
 
 export function PaymentMethodOptions() {
