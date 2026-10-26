@@ -113,4 +113,10 @@ export const mtdSubmissionSchema = z.object({
   reference: optionalText(100),
 });
 
+export const autoBackupSettingsSchema = z.object({
+  enabled: z.boolean(),
+  time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Enter a time like 02:00'),
+  keep: z.number().int().min(1, 'Keep at least 1 backup').max(365, 'Keep at most 365 backups'),
+});
+
 export const loginSchema = z.object({ password: z.string().min(1, 'Enter the password') });

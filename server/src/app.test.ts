@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import request from 'supertest';
 import type { Category } from '@crafty/shared';
 import { createApp } from './app';
+import { isAutoBackupDue, nextAutoBackup, runAutoBackup } from './autoBackup';
 import { loadConfig } from './config';
 import { createContext, type AppContext } from './context';
 import { documentNameProblem } from './documents';
@@ -442,6 +443,87 @@ describe('MTD quarters', () => {
     await agent.put(`/api/mtd/quarters/${yearId}/2/submission`).send({ submittedOn: '2025-11-01' }).expect(200);
     await agent.delete(`/api/tax-years/${yearId}`).expect(200);
     expect((ctx.db.prepare('SELECT COUNT(*) AS n FROM mtd_submissions').get() as { n: number }).n).toBe(0);
+  });
+});
+
+describe('automatic backups', () => {
+  const backups = () => fs.readdirSync(path.join(dataDir, 'backups')).filter((n) => n.endsWith('.zip')).sort();
+  const at = (iso: string) => new Date(iso);
+
+  it('works out when a backup is due and when the next one runs', () => {
+    const s = { enabled: true, time: '02:00', keep: 30 };
+    expect(isAutoBackupDue(s, at('2026-10-27T01:59:00'), null)).toBe(false);
+    expect(isAutoBackupDue(s, at('2026-10-27T02:00:00'), null)).toBe(true);
+    expect(isAutoBackupDue(s, at('2026-10-27T09:00:00'), '2026-10-26')).toBe(true);
+    expect(isAutoBackupDue(s, at('2026-10-27T09:00:00'), '2026-10-27')).toBe(false);
+    expect(isAutoBackupDue({ ...s, enabled: false }, at('2026-10-27T09:00:00'), null)).toBe(false);
+    expect(new Date(nextAutoBackup(s, at('2026-10-27T01:00:00'), null)!).getHours()).toBe(2);
+    expect(new Date(nextAutoBackup(s, at('2026-10-27T09:00:00'), '2026-10-27')!).getDate()).toBe(28);
+    expect(nextAutoBackup({ ...s, enabled: false }, at('2026-10-27T09:00:00'), null)).toBeNull();
+  });
+
+  it('writes a zip, skips when nothing changed, and keeps only the newest', async () => {
+    const yearId = await createYear();
+    await agent.put('/api/backup/auto').send({ enabled: true, time: '02:00', keep: 2 }).expect(200);
+
+    expect((await runAutoBackup(ctx, { now: at('2026-10-25T02:00:00') })).status).toBe('created');
+    expect((await runAutoBackup(ctx, { now: at('2026-10-26T02:00:00') })).status).toBe('skipped');
+    await agent.post('/api/incomes').send(income(yearId)).expect(201);
+    expect((await runAutoBackup(ctx, { now: at('2026-10-27T02:00:00') })).status).toBe('created');
+    await agent.post('/api/incomes').send(income(yearId)).expect(201);
+    expect((await runAutoBackup(ctx, { now: at('2026-10-28T02:00:00') })).status).toBe('created');
+
+    expect(backups()).toEqual(['crafty-accounting-auto-2026-10-27-0200.zip', 'crafty-accounting-auto-2026-10-28-0200.zip']);
+    const { body } = await agent.get('/api/backup/auto').expect(200);
+    expect(body).toMatchObject({ enabled: true, time: '02:00', keep: 2, folderWritable: true });
+    expect(body.lastRun).toMatchObject({ status: 'created', file: 'crafty-accounting-auto-2026-10-28-0200.zip' });
+    expect(body.backups).toHaveLength(2);
+  });
+
+  it('backs up on demand, downloads files and restores from them', async () => {
+    const yearId = await createYear();
+    await agent.post('/api/incomes').send(income(yearId)).expect(201);
+    const { body } = await agent.post('/api/backup/auto/run').expect(200);
+    const name = body.backups[0].name;
+    const zip = await agent
+      .get(`/api/backup/auto/files/${name}`)
+      .buffer(true)
+      .parse((res, cb) => {
+        const chunks: Buffer[] = [];
+        res.on('data', (c: Buffer) => chunks.push(c));
+        res.on('end', () => cb(null, Buffer.concat(chunks)));
+      })
+      .expect(200);
+    await agent.get('/api/backup/auto/files/..%2Fcrafty.db').expect(404);
+    await agent.get('/api/backup/auto/files/other.zip').expect(404);
+
+    await agent.delete(`/api/tax-years/${yearId}`).expect(200);
+    await agent.post('/api/restore').attach('file', zip.body as Buffer, name).expect(200);
+    expect((await agent.get('/api/tax-years')).body.taxYears).toHaveLength(1);
+  });
+
+  it('validates settings and keeps them through a reset and a restore', async () => {
+    await agent.put('/api/backup/auto').send({ enabled: true, time: '25:00', keep: 30 }).expect(400);
+    await agent.put('/api/backup/auto').send({ enabled: true, time: '02:00', keep: 0 }).expect(400);
+    await agent.put('/api/backup/auto').send({ enabled: false, time: '23:30', keep: 7 }).expect(200);
+    const dump = (await agent.get('/api/backup.sql')).text;
+    await agent.put('/api/backup/auto').send({ enabled: true, time: '04:15', keep: 14 }).expect(200);
+
+    await agent.post('/api/restore').attach('file', Buffer.from(dump), 'backup.sql').expect(200);
+    expect((await agent.get('/api/backup/auto')).body).toMatchObject({ enabled: true, time: '04:15', keep: 14 });
+    await agent.post('/api/reset').send({ confirm: 'RESET' }).expect(200);
+    expect((await agent.get('/api/backup/auto')).body).toMatchObject({ enabled: true, time: '04:15', keep: 14 });
+  });
+
+  it('records a failure when the folder cannot be written', async () => {
+    ctx.paths.backupDir = path.join(dataDir, 'not-a-folder.txt', 'backups');
+    fs.writeFileSync(path.join(dataDir, 'not-a-folder.txt'), 'x');
+    const result = await runAutoBackup(ctx, { force: true });
+    expect(result.status).toBe('failed');
+    const { body } = await agent.get('/api/backup/auto').expect(200);
+    expect(body.folderWritable).toBe(false);
+    expect(body.lastRun.status).toBe('failed');
+    await agent.post('/api/backup/auto/run').expect(500);
   });
 });
 

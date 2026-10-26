@@ -134,6 +134,23 @@ export interface YearEndSummaryResponse {
   summary: SelfAssessmentSummary;
 }
 
+export interface AutoBackupStatus {
+  enabled: boolean;
+  time: string;
+  keep: number;
+  /** Folder on the server (inside the container for Docker). */
+  folder: string;
+  folderWritable: boolean;
+  nextRunAt: string | null;
+  lastRun: {
+    at: string;
+    status: 'created' | 'skipped' | 'failed';
+    file: string | null;
+    error: string | null;
+  } | null;
+  backups: { name: string; sizeBytes: number; createdAt: string }[];
+}
+
 export interface ApiErrorBody {
   error: string;
   details?: { path: string; message: string }[];

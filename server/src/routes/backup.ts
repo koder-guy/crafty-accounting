@@ -1,10 +1,23 @@
 import fs from 'node:fs';
+import path from 'node:path';
 import { Router } from 'express';
 import multer from 'multer';
+import { autoBackupSettingsSchema, type AutoBackupStatus } from '@crafty/shared';
+import {
+  backupDirWritable,
+  getAutoBackupSettings,
+  isAutoBackupName,
+  lastAutoBackup,
+  listAutoBackups,
+  nextAutoBackup,
+  runAutoBackup,
+  saveAutoBackupSettings,
+} from '../autoBackup';
 import type { AppContext } from '../context';
+import { getSetting } from '../db';
 import { dumpSql, extractZipBackup, resetToEmpty, restoreBackup, writeZipBackup } from '../backup';
 import { decodeUploadName } from '../documents';
-import { HttpError } from '../http';
+import { HttpError, parseWith } from '../http';
 
 const stamp = () => new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
 
@@ -42,6 +55,42 @@ export function backupRouter(ctx: AppContext): Router {
       fs.rmSync(file.path, { force: true });
       if (extractedUploads) fs.rmSync(extractedUploads, { recursive: true, force: true });
     }
+  });
+
+  // ---- Automatic backups ----
+
+  const autoStatus = (): AutoBackupStatus => {
+    const settings = getAutoBackupSettings(ctx.db);
+    return {
+      ...settings,
+      folder: ctx.paths.backupDir,
+      folderWritable: backupDirWritable(ctx.paths.backupDir),
+      nextRunAt: nextAutoBackup(settings, new Date(), getSetting(ctx.db, 'auto_backup_last_run_date')),
+      lastRun: lastAutoBackup(ctx.db),
+      backups: listAutoBackups(ctx.paths.backupDir),
+    };
+  };
+
+  router.get('/backup/auto', (_req, res) => {
+    res.json(autoStatus());
+  });
+
+  router.put('/backup/auto', (req, res) => {
+    saveAutoBackupSettings(ctx.db, parseWith(autoBackupSettingsSchema, req.body));
+    res.json(autoStatus());
+  });
+
+  router.post('/backup/auto/run', async (_req, res) => {
+    const result = await runAutoBackup(ctx, { force: true });
+    if (result.status === 'failed') throw new HttpError(500, `The backup failed: ${result.error}`);
+    res.json(autoStatus());
+  });
+
+  router.get('/backup/auto/files/:name', (req, res) => {
+    const name = req.params.name;
+    const file = path.join(ctx.paths.backupDir, name);
+    if (!isAutoBackupName(name) || !fs.existsSync(file)) throw new HttpError(404, 'Backup not found');
+    res.download(file, name);
   });
 
   router.post('/reset', (req, res) => {

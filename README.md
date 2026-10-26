@@ -22,7 +22,15 @@ On the Linux host:
 cp .env.example .env
 ```
 
-Edit `.env` and set `ADMIN_PASSWORD` (and ideally `SESSION_SECRET`, made with `openssl rand -hex 32`). Then:
+Edit `.env` and set `ADMIN_PASSWORD` (and ideally `SESSION_SECRET`, made with `openssl rand -hex 32`).
+
+Create the folder for automatic backups and let the container's user (UID 1000) write to it. If you can, point `BACKUP_HOST_DIR` in `.env` at another disk or a NAS share instead of `./backups`:
+
+```bash
+mkdir -p ./backups && sudo chown 1000:1000 ./backups
+```
+
+Then start it:
 
 ```bash
 docker compose up -d --build
@@ -68,8 +76,28 @@ It refuses to run if any tax years already exist. Adding `--reset` first **delet
 | `COOKIE_SECURE` | `false` | `true` when served over HTTPS |
 | `TRUST_PROXY` | `false` | `true` behind a reverse proxy |
 | `DATA_DIR` | `./data` (`/data` in Docker) | Database and uploads location |
+| `BACKUP_HOST_DIR` | `./backups` | Docker Compose: the host folder for automatic backups |
+| `BACKUP_DIR` | `DATA_DIR/backups` (`/backups` in Docker) | Where automatic backups are written |
+| `TZ` | `Europe/London` | Time zone for the daily backup time |
 
 ## Backups
+
+### Automatic backups
+
+Every day at 02:00 (UK time, set by `TZ`), the app writes a full `.zip` backup to the backup folder, `BACKUP_HOST_DIR` on the host (default `./backups`). Days with no changes are skipped, and only the newest 30 are kept. If the app was off at the scheduled time, it catches up when it next starts.
+
+In **Settings → Backup and restore → Automatic backups** you can:
+
+- switch it on or off, and change the time and how many backups to keep
+- see the last and next backup
+- use **Back up now**
+- download recent backups
+
+To restore one, use **Restore from a backup** with the downloaded file. If the folder can't be written to (usually a permissions issue, see above), the page says so.
+
+The backups live outside the Docker volume, so they survive the container or volume being removed. To protect against the server's disk failing, put the folder on a different disk or a NAS, or copy it somewhere else regularly.
+
+### Manual backups and restore
 
 Use **Settings → Backup and restore** in the app:
 
@@ -80,7 +108,7 @@ Use **Settings → Backup and restore** in the app:
 
 Before a restore replaces anything, the file is loaded into a separate database and checked: only `CREATE TABLE`, `CREATE INDEX` and `INSERT` statements are accepted, the expected tables must exist, and foreign-key and integrity checks must pass. Backups from older versions are migrated forward automatically.
 
-For automated off-site copies, you can also back up the Docker volume itself.
+You can also back up the Docker volume itself.
 
 ## MTD readiness
 

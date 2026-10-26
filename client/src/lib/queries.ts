@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import type {
+  AutoBackupStatus,
   Category,
   DashboardData,
   ExpenseWithLineItems,
@@ -219,6 +220,27 @@ export function useMtdSubmission(taxYearId: number) {
       onSuccess,
     }),
     clear: useMutation({ mutationFn: (quarter: number) => api.delete(path(quarter)), onSuccess }),
+  };
+}
+
+// ---- Automatic backups ----
+
+export const useAutoBackup = () =>
+  useQuery({ queryKey: ['auto-backup'], queryFn: () => api.get<AutoBackupStatus>('/backup/auto') });
+
+export function useAutoBackupMutations() {
+  const qc = useQueryClient();
+  const onSuccess = (data: AutoBackupStatus) => qc.setQueryData(['auto-backup'], data);
+  return {
+    save: useMutation({
+      mutationFn: (settings: { enabled: boolean; time: string; keep: number }) => api.put<AutoBackupStatus>('/backup/auto', settings),
+      onSuccess,
+    }),
+    runNow: useMutation({
+      mutationFn: () => api.post<AutoBackupStatus>('/backup/auto/run'),
+      onSuccess,
+      onError: () => qc.invalidateQueries({ queryKey: ['auto-backup'] }),
+    }),
   };
 }
 

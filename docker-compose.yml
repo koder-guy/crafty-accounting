@@ -7,11 +7,15 @@ services:
     env_file: .env
     environment:
       DATA_DIR: /data
+      BACKUP_DIR: /backups
       PORT: 3000
+      TZ: ${TZ:-Europe/London}
     ports:
       - "${HOST_PORT:-8080}:3000"
     volumes:
       - crafty-data:/data
+      # Automatic backups go to a folder on the host, ideally another disk or a NAS share.
+      - ${BACKUP_HOST_DIR:-./backups}:/backups
 
 volumes:
   crafty-data:

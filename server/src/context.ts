@@ -11,6 +11,7 @@ export interface AppContext {
     dbFile: string;
     uploadsDir: string;
     tmpDir: string;
+    backupDir: string;
   };
 }
 
@@ -19,6 +20,7 @@ export function createContext(config: Config): AppContext {
     dbFile: path.join(config.dataDir, 'crafty.db'),
     uploadsDir: path.join(config.dataDir, 'uploads'),
     tmpDir: path.join(config.dataDir, 'tmp'),
+    backupDir: config.backupDir,
   };
   fs.mkdirSync(paths.uploadsDir, { recursive: true });
   fs.rmSync(paths.tmpDir, { recursive: true, force: true });

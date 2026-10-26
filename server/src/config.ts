@@ -4,6 +4,8 @@ import crypto from 'node:crypto';
 
 export interface Config {
   dataDir: string;
+  /** Where automatic backups are written; ideally on a different disk. */
+  backupDir: string;
   port: number;
   adminPassword: string;
   sessionSecret: string;
@@ -29,6 +31,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
 
   return {
     dataDir,
+    backupDir: path.resolve(env.BACKUP_DIR || path.join(dataDir, 'backups')),
     port: Number(env.PORT ?? 3000),
     adminPassword,
     sessionSecret: env.SESSION_SECRET || persistedSecret(dataDir),

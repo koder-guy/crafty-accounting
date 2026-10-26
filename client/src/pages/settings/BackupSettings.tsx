@@ -4,6 +4,7 @@ import { DatabaseBackup, Download, FileArchive, FileCode, RotateCcw, Upload } fr
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { Alert, Button, Card, CardHeader } from '../../components/ui';
 import { api } from '../../lib/api';
+import { AutoBackupCard } from './AutoBackupCard';
 import { SettingsHeading } from './SettingsLayout';
 
 function DownloadTile({ href, icon, title, children }: { href: string; icon: React.ReactNode; title: string; children: React.ReactNode }) {
@@ -60,6 +61,8 @@ export function BackupSettings() {
           title="Backup and restore"
           description="Download a copy of your books, restore from an earlier backup, or start again with an empty database."
         />
+        <AutoBackupCard />
+
         <Card>
           <CardHeader icon={<DatabaseBackup className="size-5 text-accent-soft" />} title="Download a backup" />
           <div className="grid gap-4 px-5 pb-6 sm:px-6 lg:grid-cols-2">

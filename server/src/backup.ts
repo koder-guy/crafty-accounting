@@ -13,7 +13,7 @@ import Database from 'better-sqlite3';
 import yauzl from 'yauzl';
 import { APP_NAME } from '@crafty/shared';
 import type { AppContext } from './context';
-import { applyMigrations, openDatabase, schemaVersion, seedCategories, type Db } from './db';
+import { applyMigrations, openDatabase, schemaVersion, seedCategories, setSetting, type Db } from './db';
 import { CURRENT_SCHEMA_VERSION } from './db/migrations';
 import { documentNameProblem } from './documents';
 import { HttpError } from './http';
@@ -120,12 +120,20 @@ export function restoreBackup(ctx: AppContext, sql: string, uploadsFrom?: string
   const newDbFile = buildDatabaseFromDump(ctx, sql);
   const { dbFile, uploadsDir } = ctx.paths;
 
+  // Automatic backup settings belong to this install, so they survive a restore.
+  const keepSettings = ctx.db.prepare("SELECT key, value FROM settings WHERE key LIKE 'auto\\_backup\\_%' ESCAPE '\\'").all() as {
+    key: string;
+    value: string | null;
+  }[];
+
   ctx.db.pragma('wal_checkpoint(TRUNCATE)');
   ctx.db.close();
   fs.copyFileSync(dbFile, path.join(path.dirname(dbFile), 'crafty.pre-restore.db'));
   for (const suffix of ['-wal', '-shm']) fs.rmSync(dbFile + suffix, { force: true });
   fs.renameSync(newDbFile, dbFile);
   ctx.db = openDatabase(dbFile);
+  ctx.db.prepare("DELETE FROM settings WHERE key LIKE 'auto\\_backup\\_%' ESCAPE '\\'").run();
+  for (const { key, value } of keepSettings) setSetting(ctx.db, key, value);
 
   if (uploadsFrom) {
     const old = `${uploadsDir}.old-${Date.now()}`;
@@ -153,7 +161,8 @@ export function resetToEmpty(ctx: AppContext): void {
   db.transaction(() => {
     db.prepare('DELETE FROM tax_years').run();
     db.prepare('DELETE FROM categories WHERE is_custom = 1').run();
-    db.prepare('DELETE FROM settings').run();
+    // Keep the automatic backup settings; they're about the install, not the books.
+    db.prepare("DELETE FROM settings WHERE key NOT LIKE 'auto\\_backup\\_%' ESCAPE '\\'").run();
     // Start ids from 1 again; standard categories keep theirs.
     db.prepare("DELETE FROM sqlite_sequence WHERE name != 'categories'").run();
   })();
