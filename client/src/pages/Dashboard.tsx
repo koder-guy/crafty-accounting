@@ -223,7 +223,7 @@ function KeyDates({ data }: { data: DashboardData }) {
 
   return (
     <Card>
-      <CardHeader icon={<CalendarClock className="size-5 text-accent-soft" />} title="Key dates" />
+      <CardHeader icon={<CalendarClock className="size-5 text-accent-soft" />} title="Key Dates" />
       <dl className="space-y-4 px-5 pb-6 text-sm sm:px-6">
         <div>
           <dt className="text-muted">Tax year ends</dt>
@@ -367,7 +367,7 @@ export function Dashboard() {
 
             <div className="grid gap-5 xl:grid-cols-3">
               <Card className="xl:col-span-2">
-                <CardHeader icon={<PieChart className="size-5 text-accent-soft" />} title="By HMRC category" />
+                <CardHeader icon={<PieChart className="size-5 text-accent-soft" />} title="By Category" />
                 <div className="grid gap-8 px-5 pb-6 sm:px-6 md:grid-cols-2">
                   <CategoryBreakdown title="Income" rows={data.incomeByCategory} tone="in" />
                   <CategoryBreakdown title="Expenses" rows={data.expensesByCategory} tone="out" />
