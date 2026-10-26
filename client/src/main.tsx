@@ -15,9 +15,9 @@ import { IncomeView } from './pages/IncomeView';
 import { OutgoingList } from './pages/OutgoingList';
 import { ExpenseForm } from './pages/ExpenseForm';
 import { ExpenseView } from './pages/ExpenseView';
-import { TaxYears } from './pages/TaxYears';
 import { MtdQuarterly } from './pages/MtdQuarterly';
 import { SettingsLayout } from './pages/settings/SettingsLayout';
+import { TaxYearsSettings } from './pages/settings/TaxYearsSettings';
 import { CustomCategories } from './pages/settings/CustomCategories';
 import { BackupSettings } from './pages/settings/BackupSettings';
 import { NotFound } from './pages/NotFound';
@@ -48,13 +48,14 @@ function App() {
         <Route path="outgoing/:id" element={<ExpenseView />} />
         <Route path="outgoing/:id/edit" element={<ExpenseForm />} />
         <Route path="mtd" element={<MtdQuarterly />} />
-        <Route path="tax-years" element={<TaxYears />} />
         <Route path="settings" element={<SettingsLayout />}>
-          <Route index element={<Navigate to="categories" replace />} />
+          <Route index element={<Navigate to="tax-years" replace />} />
+          <Route path="tax-years" element={<TaxYearsSettings />} />
           <Route path="categories" element={<CustomCategories />} />
           <Route path="backup" element={<BackupSettings />} />
         </Route>
         <Route path="backup" element={<Navigate to="/settings/backup" replace />} />
+        <Route path="tax-years" element={<Navigate to="/settings/tax-years" replace />} />
         <Route path="*" element={<NotFound />} />
       </Route>
     </Routes>

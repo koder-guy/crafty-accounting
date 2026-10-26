@@ -1,8 +1,9 @@
 import { NavLink, Outlet } from 'react-router';
-import { DatabaseBackup, Tags } from 'lucide-react';
+import { DatabaseBackup, Layers, Tags } from 'lucide-react';
 import { PageBody, PageHeader } from '../../components/PageHeader';
 
 const SECTIONS = [
+  { to: '/settings/tax-years', label: 'Tax years', icon: Layers },
   { to: '/settings/categories', label: 'Custom categories', icon: Tags },
   { to: '/settings/backup', label: 'Backup and restore', icon: DatabaseBackup },
 ];
@@ -11,7 +12,7 @@ const SECTIONS = [
 export function SettingsLayout() {
   return (
     <>
-      <PageHeader title="Settings" subtitle="Manage categories, backups and other app settings." />
+      <PageHeader title="Settings" subtitle="Manage tax years, categories, backups and other app settings." />
       <PageBody>
         <div className="lg:grid lg:grid-cols-[220px_minmax(0,1fr)] lg:gap-8">
           <nav aria-label="Settings" className="mb-6 flex gap-2 overflow-x-auto lg:mb-0 lg:flex-col lg:gap-1">

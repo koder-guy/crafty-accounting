@@ -5,7 +5,6 @@ import {
   ArrowUpRight,
   CalendarDays,
   FileSpreadsheet,
-  Layers,
   LogOut,
   Menu,
   Settings,
@@ -38,7 +37,7 @@ function TaxYearSwitcher() {
   if (!data) return <div className="h-11 rounded-lg border border-line bg-surface" />;
   if (data.taxYears.length === 0) {
     return (
-      <NavLink to="/tax-years" className="block rounded-lg border border-dashed border-line-strong px-3 py-2.5 text-sm text-muted hover:text-ink">
+      <NavLink to="/settings/tax-years" className="block rounded-lg border border-dashed border-line-strong px-3 py-2.5 text-sm text-muted hover:text-ink">
         Create your first tax year →
       </NavLink>
     );
@@ -130,7 +129,6 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
           count={active?.expenseCount}
         />
         <NavItem to="/mtd" icon={<FileSpreadsheet className="size-5 text-muted" aria-hidden />} label="MTD Quarterly" />
-        <NavItem to="/tax-years" icon={<Layers className="size-5 text-muted" aria-hidden />} label="Tax Years Management" />
         <NavItem to="/settings" icon={<Settings className="size-5 text-muted" aria-hidden />} label="Settings" />
       </nav>
       <div className="border-t border-line px-5 py-4 text-xs font-semibold text-ink/80">

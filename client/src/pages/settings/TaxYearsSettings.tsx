@@ -8,12 +8,12 @@ import {
   todayIso,
   type TaxYear,
 } from '@crafty/shared';
-import { ConfirmDialog } from '../components/ConfirmDialog';
-import { PageBody, PageHeader } from '../components/PageHeader';
-import { Alert, Badge, Button, Card, CardHeader, EmptyState, Spinner } from '../components/ui';
-import { useTaxYearMutations, useTaxYears } from '../lib/queries';
+import { ConfirmDialog } from '../../components/ConfirmDialog';
+import { Alert, Badge, Button, Card, CardHeader, EmptyState, Spinner } from '../../components/ui';
+import { useTaxYearMutations, useTaxYears } from '../../lib/queries';
+import { SettingsHeading } from './SettingsLayout';
 
-export function TaxYears() {
+export function TaxYearsSettings() {
   const { data, isLoading } = useTaxYears();
   const { create, setActive, remove } = useTaxYearMutations();
   const currentStart = taxYearStartYearForDate(todayIso());
@@ -47,8 +47,11 @@ export function TaxYears() {
 
   return (
     <>
-      <PageHeader title="Tax Years Management" />
-      <PageBody>
+      <div className="space-y-6">
+        <SettingsHeading
+          title="Tax years"
+          description="Create UK tax years (6 April to 5 April), choose the active one, or delete a year and everything in it."
+        />
         <Card>
           <CardHeader icon={<CalendarPlus className="size-5 text-accent-soft" />} title="Create a tax year" />
           <div className="flex flex-col gap-4 px-5 pb-6 sm:flex-row sm:items-end sm:px-6">
@@ -128,7 +131,7 @@ export function TaxYears() {
             </ul>
           )}
         </Card>
-      </PageBody>
+      </div>
 
       <ConfirmDialog
         open={toDelete !== null}
