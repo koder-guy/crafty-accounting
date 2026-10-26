@@ -18,7 +18,7 @@ import { CURRENT_SCHEMA_VERSION } from './db/migrations';
 import { documentNameProblem } from './documents';
 import { HttpError } from './http';
 
-const REQUIRED_TABLES = ['schema_migrations', 'tax_years', 'settings', 'categories', 'incomes', 'expenses', 'expense_line_items'];
+const REQUIRED_TABLES = ['schema_migrations', 'tax_years', 'settings', 'categories', 'incomes', 'expenses', 'expense_line_items', 'mtd_submissions'];
 const ALLOWED_STATEMENT = /^(CREATE TABLE |CREATE INDEX |CREATE UNIQUE INDEX |INSERT INTO )/;
 const MAX_ZIP_BYTES = 4 * 1024 ** 3;
 

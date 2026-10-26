@@ -317,6 +317,44 @@ describe('dashboard', () => {
   });
 });
 
+describe('MTD quarters', () => {
+  it('gives quarterly and year-to-date figures for each update period', async () => {
+    const yearId = await createYear();
+    await agent.post('/api/incomes').send(income(yearId, { date: '2025-06-14', amountPence: 38000 })).expect(201);
+    await agent.post('/api/incomes').send(income(yearId, { date: '2025-07-06', amountPence: 13800 })).expect(201);
+    await agent.post('/api/expenses').send(expense(yearId, { date: '2025-07-05' })).expect(201);
+
+    const { body } = await agent.get('/api/mtd/quarters').query({ taxYearId: yearId }).expect(200);
+    const [q1, q2, q3] = body.quarters;
+    expect(q1.period.periodIncome).toEqual({ turnover: 38000 });
+    expect(q1.period.periodExpenses).toEqual({ costOfGoods: 3000, adminCosts: 550, otherExpenses: 1000 });
+    expect(q1.period.periodDisallowableExpenses).toEqual({ otherExpensesDisallowable: 1000 });
+    expect(q2.period.periodIncome).toEqual({ turnover: 13800 });
+    expect(q2.period.periodExpenses).toEqual({});
+    expect(q2.cumulative.periodIncome).toEqual({ turnover: 51800 });
+    expect(q2.cumulative.totals.netProfitPence).toBe(51800 - 3550);
+    expect(q3.cumulative.totals).toEqual(q2.cumulative.totals);
+    expect(q1.submission).toBeNull();
+  });
+
+  it('records, updates and clears a submission, and deletes it with the tax year', async () => {
+    const yearId = await createYear();
+    await agent.put(`/api/mtd/quarters/${yearId}/1/submission`).send({ submittedOn: '2025-08-01', reference: 'ABC123' }).expect(200);
+    await agent.put(`/api/mtd/quarters/${yearId}/1/submission`).send({ submittedOn: '2025-08-02' }).expect(200);
+    let { body } = await agent.get('/api/mtd/quarters').query({ taxYearId: yearId });
+    expect(body.quarters[0].submission).toEqual({ submittedOn: '2025-08-02', reference: null });
+
+    await agent.put(`/api/mtd/quarters/${yearId}/5/submission`).send({ submittedOn: '2025-08-02' }).expect(404);
+    await agent.delete(`/api/mtd/quarters/${yearId}/1/submission`).expect(204);
+    ({ body } = await agent.get('/api/mtd/quarters').query({ taxYearId: yearId }));
+    expect(body.quarters[0].submission).toBeNull();
+
+    await agent.put(`/api/mtd/quarters/${yearId}/2/submission`).send({ submittedOn: '2025-11-01' }).expect(200);
+    await agent.delete(`/api/tax-years/${yearId}`).expect(200);
+    expect((ctx.db.prepare('SELECT COUNT(*) AS n FROM mtd_submissions').get() as { n: number }).n).toBe(0);
+  });
+});
+
 describe('backup and restore', () => {
   async function seed() {
     const yearId = await createYear();

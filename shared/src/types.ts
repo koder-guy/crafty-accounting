@@ -1,7 +1,7 @@
 // Shapes returned by the API.
 import type { CategoryType } from './categories';
 import type { PaymentMethod } from './schemas';
-import type { MtdPeriodSummary } from './mtd';
+import type { MtdPeriodSummary, MtdQuarter } from './mtd';
 
 export interface TaxYear {
   id: number;
@@ -102,6 +102,24 @@ export interface DashboardData {
   recentIncomes: Income[];
   recentExpenses: Expense[];
   mtd: MtdPeriodSummary;
+}
+
+export interface MtdQuarterSubmission {
+  submittedOn: string;
+  reference: string | null;
+}
+
+export interface MtdQuarterSummary extends MtdQuarter {
+  /** Figures for transactions dated within this quarter only. */
+  period: MtdPeriodSummary;
+  /** Figures from the start of the tax year to the end of this quarter (what MTD submits). */
+  cumulative: MtdPeriodSummary;
+  submission: MtdQuarterSubmission | null;
+}
+
+export interface MtdQuartersResponse {
+  taxYear: TaxYear;
+  quarters: MtdQuarterSummary[];
 }
 
 export interface ApiErrorBody {

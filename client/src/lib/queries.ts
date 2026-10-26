@@ -5,6 +5,7 @@ import type {
   Expense,
   ExpenseWithLineItems,
   Income,
+  MtdQuartersResponse,
   TaxYear,
   TaxYearsResponse,
   TransactionFilters,
@@ -133,6 +134,7 @@ function useInvalidateTransactions(kind: Kind) {
   return () => {
     qc.invalidateQueries({ queryKey: [kind] });
     qc.invalidateQueries({ queryKey: ['dashboard'] });
+    qc.invalidateQueries({ queryKey: ['mtd'] });
     qc.invalidateQueries({ queryKey: ['tax-years'] });
   };
 }
@@ -149,6 +151,29 @@ export function useSaveTransaction<T>(kind: Kind) {
 export function useDeleteTransaction(kind: Kind) {
   const invalidate = useInvalidateTransactions(kind);
   return useMutation({ mutationFn: (id: number) => api.delete(`/${kind}/${id}`), onSuccess: invalidate });
+}
+
+// ---- MTD ----
+
+export const useMtdQuarters = (taxYearId: number | undefined) =>
+  useQuery({
+    queryKey: ['mtd', taxYearId],
+    queryFn: () => api.get<MtdQuartersResponse>(`/mtd/quarters${toQuery({ taxYearId })}`),
+    enabled: taxYearId !== undefined,
+  });
+
+export function useMtdSubmission(taxYearId: number) {
+  const qc = useQueryClient();
+  const onSuccess = () => qc.invalidateQueries({ queryKey: ['mtd', taxYearId] });
+  const path = (quarter: number) => `/mtd/quarters/${taxYearId}/${quarter}/submission`;
+  return {
+    save: useMutation({
+      mutationFn: ({ quarter, submittedOn, reference }: { quarter: number; submittedOn: string; reference: string }) =>
+        api.put(path(quarter), { submittedOn, reference }),
+      onSuccess,
+    }),
+    clear: useMutation({ mutationFn: (quarter: number) => api.delete(path(quarter)), onSuccess }),
+  };
 }
 
 // ---- Dashboard ----

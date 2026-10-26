@@ -5,6 +5,7 @@ import {
   ArrowUpRight,
   CalendarDays,
   DatabaseBackup,
+  FileSpreadsheet,
   Layers,
   LogOut,
   Menu,
@@ -129,6 +130,7 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
           label="Outgoing"
           count={active?.expenseCount}
         />
+        <NavItem to="/mtd" icon={<FileSpreadsheet className="size-5 text-muted" aria-hidden />} label="MTD Quarterly" />
         <NavItem to="/tax-years" icon={<Layers className="size-5 text-muted" aria-hidden />} label="Tax Years Management" />
         <NavItem to="/backup" icon={<DatabaseBackup className="size-5 text-muted" aria-hidden />} label="Backup & Restore" />
       </nav>

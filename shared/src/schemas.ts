@@ -102,4 +102,9 @@ export const transactionFiltersSchema = z.object({
 type ParsedFilters = z.infer<typeof transactionFiltersSchema>;
 export type TransactionFilters = Pick<ParsedFilters, 'taxYearId'> & Partial<Omit<ParsedFilters, 'taxYearId'>>;
 
+export const mtdSubmissionSchema = z.object({
+  submittedOn: isoDate,
+  reference: optionalText(100),
+});
+
 export const loginSchema = z.object({ password: z.string().min(1, 'Enter the password') });

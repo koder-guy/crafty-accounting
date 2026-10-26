@@ -136,12 +136,16 @@ export function EmptyState({ icon, title, children }: { icon?: ReactNode; title:
   );
 }
 
-export function Badge({ tone = 'neutral', children }: { tone?: 'neutral' | 'accent' | 'out' | 'teal'; children: ReactNode }) {
+export type BadgeTone = 'neutral' | 'accent' | 'out' | 'teal' | 'warn' | 'ok';
+
+export function Badge({ tone = 'neutral', children }: { tone?: BadgeTone; children: ReactNode }) {
   const styles = {
     neutral: 'bg-surface-2 text-muted border-line-strong',
     accent: 'bg-accent-bg text-accent-soft border-accent/30',
     out: 'bg-out-bg text-out-soft border-out/30',
     teal: 'bg-teal-bg text-teal border-teal/30',
+    warn: 'bg-warn-bg text-warn border-warn/30',
+    ok: 'bg-ok/10 text-ok border-ok/30',
   }[tone];
   return <span className={`inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-medium ${styles}`}>{children}</span>;
 }

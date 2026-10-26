@@ -7,6 +7,7 @@ Self-hosted bookkeeping for a UK sole trader, built for selling at craft fairs a
 - **Outgoing**: purchases with invoice line items. Each line has a category and can be marked disallowable, and the line items must add up to the transaction amount.
 - **Lists**: search, filter and sort, then export the filtered rows to CSV.
 - **Dashboard**: totals, a monthly chart, a breakdown by HMRC category, and key dates.
+- **MTD Quarterly**: the four standard update periods for each tax year, with deadlines and status. It shows each quarter's figures and the year-to-date figures per MTD field, can copy the figures as JSON, and records when each quarter was submitted.
 - **Backups**: download a `.sql` dump or a full `.zip` (database plus documents), and restore from either.
 - **Sign-in**: a single password.
 
@@ -70,6 +71,8 @@ For automated off-site copies, you can also back up the Docker volume itself.
 - Categories map to the MTD `periodIncome` / `periodExpenses` field names (`turnover`, `costOfGoods`, `adminCosts`, …).
 - Disallowable line items are included in `periodExpenses` and also reported under `<code>Disallowable`, matching SA103.
 - `shared/src/mtd.ts` (`buildMtdPeriodSummary`) already produces MTD-shaped totals for any set of transactions, so a future quarterly or annual submission can reuse it.
+- **Quarterly update periods** are the standard tax-year quarters: 6 Apr–5 Jul, 6 Jul–5 Oct, 6 Oct–5 Jan and 6 Jan–5 Apr. Each is due by the 7th of the following month. Updates are cumulative, so the **MTD Quarterly** page defaults to year-to-date figures. Calendar-quarter periods aren't supported.
+- **Submitting** directly to HMRC isn't built yet. For now, record each submission's date and reference on the MTD Quarterly page.
 
 ## Development
 

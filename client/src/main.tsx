@@ -16,6 +16,7 @@ import { OutgoingList } from './pages/OutgoingList';
 import { ExpenseForm } from './pages/ExpenseForm';
 import { ExpenseView } from './pages/ExpenseView';
 import { TaxYears } from './pages/TaxYears';
+import { MtdQuarterly } from './pages/MtdQuarterly';
 import { Backup } from './pages/Backup';
 import { NotFound } from './pages/NotFound';
 
@@ -44,6 +45,7 @@ function App() {
         <Route path="outgoing/new" element={<ExpenseForm />} />
         <Route path="outgoing/:id" element={<ExpenseView />} />
         <Route path="outgoing/:id/edit" element={<ExpenseForm />} />
+        <Route path="mtd" element={<MtdQuarterly />} />
         <Route path="tax-years" element={<TaxYears />} />
         <Route path="backup" element={<Backup />} />
         <Route path="*" element={<NotFound />} />

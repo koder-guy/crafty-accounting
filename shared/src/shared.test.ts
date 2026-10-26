@@ -5,6 +5,9 @@ import {
   formatGBP,
   isDateInTaxYear,
   isValidIsoDate,
+  mtdPayload,
+  mtdQuarters,
+  mtdQuarterStatus,
   parsePoundsToPence,
   penceToPounds,
   selfAssessmentDeadline,
@@ -101,6 +104,39 @@ describe('expense schema', () => {
 
   it('requires at least one line item', () => {
     expect(expenseInputSchema.safeParse({ ...base, totalPence: 0, lineItems: [] }).success).toBe(false);
+  });
+});
+
+describe('MTD quarters', () => {
+  it('splits the tax year into standard update periods with deadlines', () => {
+    const quarters = mtdQuarters(2025);
+    expect(quarters.map((q) => [q.startDate, q.endDate, q.deadline])).toEqual([
+      ['2025-04-06', '2025-07-05', '2025-08-07'],
+      ['2025-07-06', '2025-10-05', '2025-11-07'],
+      ['2025-10-06', '2026-01-05', '2026-02-07'],
+      ['2026-01-06', '2026-04-05', '2026-05-07'],
+    ]);
+  });
+
+  it('works out each quarter’s status', () => {
+    const [q1] = mtdQuarters(2025);
+    expect(mtdQuarterStatus(q1, '2025-04-05', false)).toBe('upcoming');
+    expect(mtdQuarterStatus(q1, '2025-07-05', false)).toBe('open');
+    expect(mtdQuarterStatus(q1, '2025-08-07', false)).toBe('due');
+    expect(mtdQuarterStatus(q1, '2025-08-08', false)).toBe('overdue');
+    expect(mtdQuarterStatus(q1, '2025-08-08', true)).toBe('submitted');
+  });
+
+  it('converts a summary to an MTD payload in pounds', () => {
+    const summary = buildMtdPeriodSummary(
+      [{ hmrcCode: 'turnover', amountPence: 51805 }],
+      [{ hmrcCode: 'adminCosts', amountPence: 1001, disallowable: true }],
+    );
+    expect(mtdPayload(summary)).toEqual({
+      periodIncome: { turnover: 518.05 },
+      periodExpenses: { adminCosts: 10.01 },
+      periodDisallowableExpenses: { adminCostsDisallowable: 10.01 },
+    });
   });
 });
 

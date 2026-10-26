@@ -77,6 +77,16 @@ CREATE TABLE expense_line_items (
   sort_order INTEGER NOT NULL DEFAULT 0
 );
 
+CREATE TABLE mtd_submissions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  tax_year_id INTEGER NOT NULL REFERENCES tax_years(id) ON DELETE CASCADE,
+  quarter INTEGER NOT NULL CHECK (quarter BETWEEN 1 AND 4),
+  submitted_on TEXT NOT NULL,
+  reference TEXT,
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  UNIQUE (tax_year_id, quarter)
+);
+
 CREATE INDEX idx_incomes_year_date ON incomes (tax_year_id, date);
 CREATE INDEX idx_expenses_year_date ON expenses (tax_year_id, date);
 CREATE INDEX idx_line_items_expense ON expense_line_items (expense_id);
