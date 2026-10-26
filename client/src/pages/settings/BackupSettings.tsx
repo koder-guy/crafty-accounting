@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { DatabaseBackup, Download, FileArchive, FileCode, Upload } from 'lucide-react';
+import { DatabaseBackup, Download, FileArchive, FileCode, RotateCcw, Upload } from 'lucide-react';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { Alert, Button, Card, CardHeader } from '../../components/ui';
 import { api } from '../../lib/api';
@@ -31,6 +31,15 @@ export function BackupSettings() {
   const [file, setFile] = useState<File | null>(null);
   const [confirming, setConfirming] = useState(false);
   const [done, setDone] = useState(false);
+  const [confirmingReset, setConfirmingReset] = useState(false);
+  const [resetDone, setResetDone] = useState(false);
+
+  const reset = async () => {
+    await api.post('/reset', { confirm: 'RESET' });
+    setResetDone(true);
+    // Back to a clean slate everywhere (including remembered UI state), staying signed in.
+    await qc.resetQueries({ predicate: (q) => q.queryKey[0] !== 'me' });
+  };
 
   const restore = async () => {
     const form = new FormData();
@@ -47,7 +56,10 @@ export function BackupSettings() {
   return (
     <>
       <div className="space-y-6">
-        <SettingsHeading title="Backup and restore" description="Download a copy of your books, or restore from an earlier backup." />
+        <SettingsHeading
+          title="Backup and restore"
+          description="Download a copy of your books, restore from an earlier backup, or start again with an empty database."
+        />
         <Card>
           <CardHeader icon={<DatabaseBackup className="size-5 text-accent-soft" />} title="Download a backup" />
           <div className="grid gap-4 px-5 pb-6 sm:px-6 lg:grid-cols-2">
@@ -93,6 +105,27 @@ export function BackupSettings() {
             {done && <Alert tone="success">Backup restored.</Alert>}
           </div>
         </Card>
+
+        <Card className="border-out/40">
+          <CardHeader icon={<RotateCcw className="size-5 text-out-soft" />} title="Start again with an empty database" />
+          <div className="space-y-4 px-5 pb-6 sm:px-6">
+            <p className="text-sm text-muted">
+              Deletes all tax years, incoming and outgoing transactions, attached documents, custom categories and MTD submission
+              records. The standard MTD categories and your sign-in password stay. A copy of the old data is kept on the server as{' '}
+              <code>crafty.pre-reset.db</code> and <code>uploads.pre-reset</code> until the next reset.
+            </p>
+            <Button
+              variant="danger"
+              onClick={() => {
+                setResetDone(false);
+                setConfirmingReset(true);
+              }}
+            >
+              Reset everything…
+            </Button>
+            {resetDone && <Alert tone="success">Everything has been reset. Create a tax year to start again.</Alert>}
+          </div>
+        </Card>
       </div>
 
       <ConfirmDialog
@@ -108,6 +141,21 @@ export function BackupSettings() {
           {isZip ? ', including all attached documents' : ''}.
         </p>
         <p>Download a backup of the current data first if you might need it.</p>
+      </ConfirmDialog>
+
+      <ConfirmDialog
+        open={confirmingReset}
+        title="Delete everything and start again?"
+        confirmLabel="Reset everything"
+        requireText="RESET"
+        onClose={() => setConfirmingReset(false)}
+        onConfirm={reset}
+      >
+        <p>
+          All tax years, transactions, documents, custom categories and MTD submission records will be deleted, leaving an empty
+          database.
+        </p>
+        <p>Download a full backup (.zip) first if you might need any of it.</p>
       </ConfirmDialog>
     </>
   );

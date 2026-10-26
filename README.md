@@ -74,6 +74,8 @@ Use **Settings → Backup and restore** in the app:
 - **Full backup (.zip)** contains `backup.sql` plus every document in `uploads/`. Restoring it replaces the database and all documents.
 - **Database only (.sql)** is a plain-text SQL dump with one statement per line. Restoring it replaces the database and leaves the documents folder alone.
 
+**Start again with an empty database** (also in Backup and restore) deletes all tax years, transactions, documents, custom categories and MTD submission records, after you type `RESET` to confirm. The standard categories and your password stay. The old database is kept as `/data/crafty.pre-reset.db` and the old documents as `/data/uploads.pre-reset/` until the next reset.
+
 Before a restore replaces anything, the file is loaded into a separate database and checked: only `CREATE TABLE`, `CREATE INDEX` and `INSERT` statements are accepted, the expected tables must exist, and foreign-key and integrity checks must pass. Backups from older versions are migrated forward automatically.
 
 For automated off-site copies, you can also back up the Docker volume itself.

@@ -496,6 +496,27 @@ describe('backup and restore', () => {
     expect(fs.readFileSync(path.join(dataDir, 'uploads', 'payout.pdf'))).toEqual(PDF);
   });
 
+  it('resets to an empty database, keeping copies of the old data', async () => {
+    await seed();
+    await agent.post('/api/categories').send({ name: 'Printer filament', mapsToCategoryId: cat('costOfGoods') }).expect(201);
+    await agent.post('/api/reset').send({ confirm: 'reset' }).expect(400);
+    expect((await agent.get('/api/tax-years')).body.taxYears).toHaveLength(1);
+
+    await agent.post('/api/reset').send({ confirm: 'RESET' }).expect(200);
+    const count = (table: string) => (ctx.db.prepare(`SELECT COUNT(*) AS n FROM ${table}`).get() as { n: number }).n;
+    for (const table of ['tax_years', 'incomes', 'expenses', 'expense_line_items', 'mtd_submissions', 'settings']) {
+      expect(count(table)).toBe(0);
+    }
+    const categories = (await agent.get('/api/categories').expect(200)).body;
+    expect(categories).toHaveLength(17);
+    expect(categories.every((c: { isCustom: boolean }) => !c.isCustom)).toBe(true);
+    expect(fs.readdirSync(path.join(dataDir, 'uploads'))).toHaveLength(0);
+    expect(fs.existsSync(path.join(dataDir, 'uploads.pre-reset', 'payout.pdf'))).toBe(true);
+    expect(fs.existsSync(path.join(dataDir, 'crafty.pre-reset.db'))).toBe(true);
+
+    expect(await createYear()).toBe(1);
+  });
+
   it('refuses files that are not backups or contain other statements', async () => {
     await createYear();
     await agent.post('/api/restore').attach('file', Buffer.from('hello'), 'backup.sql').expect(400);

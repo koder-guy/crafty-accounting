@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import { Router } from 'express';
 import multer from 'multer';
 import type { AppContext } from '../context';
-import { dumpSql, extractZipBackup, restoreBackup, writeZipBackup } from '../backup';
+import { dumpSql, extractZipBackup, resetToEmpty, restoreBackup, writeZipBackup } from '../backup';
 import { decodeUploadName } from '../documents';
 import { HttpError } from '../http';
 
@@ -42,6 +42,14 @@ export function backupRouter(ctx: AppContext): Router {
       fs.rmSync(file.path, { force: true });
       if (extractedUploads) fs.rmSync(extractedUploads, { recursive: true, force: true });
     }
+  });
+
+  router.post('/reset', (req, res) => {
+    if ((req.body as { confirm?: unknown } | undefined)?.confirm !== 'RESET') {
+      throw new HttpError(400, 'Type RESET to confirm');
+    }
+    resetToEmpty(ctx);
+    res.json({ reset: true });
   });
 
   return router;

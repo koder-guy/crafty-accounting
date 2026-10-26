@@ -135,6 +135,35 @@ export function restoreBackup(ctx: AppContext, sql: string, uploadsFrom?: string
   }
 }
 
+/**
+ * Empties the books: every tax year (and with it all transactions, line items
+ * and MTD submissions), custom categories, settings and documents. The
+ * standard MTD categories stay. As a safety net the old database is kept as
+ * crafty.pre-reset.db and the old documents as uploads.pre-reset/ (each reset
+ * replaces the previous copies).
+ */
+export function resetToEmpty(ctx: AppContext): void {
+  const { dbFile, uploadsDir } = ctx.paths;
+  const dataDir = path.dirname(dbFile);
+  const db = ctx.db;
+
+  db.pragma('wal_checkpoint(TRUNCATE)');
+  fs.copyFileSync(dbFile, path.join(dataDir, 'crafty.pre-reset.db'));
+
+  db.transaction(() => {
+    db.prepare('DELETE FROM tax_years').run();
+    db.prepare('DELETE FROM categories WHERE is_custom = 1').run();
+    db.prepare('DELETE FROM settings').run();
+    // Start ids from 1 again; standard categories keep theirs.
+    db.prepare("DELETE FROM sqlite_sequence WHERE name != 'categories'").run();
+  })();
+
+  const previous = path.join(dataDir, 'uploads.pre-reset');
+  fs.rmSync(previous, { recursive: true, force: true });
+  fs.renameSync(uploadsDir, previous);
+  fs.mkdirSync(uploadsDir);
+}
+
 export async function writeZipBackup(ctx: AppContext, out: Writable): Promise<void> {
   const archive = archiver('zip', { zlib: { level: 6 } });
   const done = pipeline(archive, out);
