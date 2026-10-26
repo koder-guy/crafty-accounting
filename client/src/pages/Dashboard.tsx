@@ -284,7 +284,11 @@ export function Dashboard() {
                 label="Total income"
                 value={formatGBP(data.totals.incomePence)}
                 sub="Card, cash and bank transfer"
-                icon={<TrendingUp className="mt-1 size-5 text-accent-soft" aria-hidden />}
+                icon={
+                  <IconChip className="bg-accent-bg text-accent-soft">
+                    <TrendingUp className="size-5" aria-hidden />
+                  </IconChip>
+                }
               />
               <StatCard
                 label="Card income"
@@ -315,7 +319,11 @@ export function Dashboard() {
                 value={formatGBP(data.totals.netProfitPence)}
                 sub="Income minus allowable outgoing"
                 valueClass={data.totals.netProfitPence < 0 ? 'text-out-soft' : 'text-accent-soft'}
-                icon={<PoundSterling className="mt-1 size-5 text-accent-soft" aria-hidden />}
+                icon={
+                  <IconChip className="bg-violet-500/15 text-violet-300">
+                    <PoundSterling className="size-5" aria-hidden />
+                  </IconChip>
+                }
               />
             </div>
 
