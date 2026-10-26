@@ -40,14 +40,15 @@ export function IconButton({
   children,
   ...props
 }: ButtonHTMLAttributes<HTMLButtonElement> & { label: string; tone?: 'default' | 'danger' }) {
-  const toneClass = tone === 'danger' ? 'hover:text-out-soft hover:bg-out-bg' : 'hover:text-accent-soft hover:bg-accent-bg';
+  const toneClass =
+    tone === 'danger' ? 'text-out-soft hover:text-red-300 hover:bg-out-bg' : 'text-muted hover:text-accent-soft hover:bg-accent-bg';
   return (
     <button
       type="button"
       title={label}
       aria-label={label}
       {...props}
-      className={`inline-flex size-8 items-center justify-center rounded-md text-muted transition-colors ${toneClass} ${className}`}
+      className={`inline-flex size-8 items-center justify-center rounded-md transition-colors disabled:pointer-events-none disabled:opacity-40 ${toneClass} ${className}`}
     >
       {children}
     </button>
