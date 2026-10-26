@@ -74,7 +74,7 @@ export function OutgoingList() {
                 )
               }
             />
-            <FilterBar filterState={filterState} categories={categories.filter((c) => c.type === 'EXPENSE')} taxYear={taxYear} />
+            <FilterBar filterState={filterState} categories={categories.filter((c) => c.type === 'EXPENSE')} />
             {error ? (
               <div className="p-6">
                 <Alert>{error.message}</Alert>
@@ -114,7 +114,7 @@ export function OutgoingList() {
                             <DocIndicator filename={row.documentFilename} />
                           </div>
                           <div className="truncate text-xs text-muted">
-                            {[row.invoiceNumber, row.description].filter(Boolean).join(' · ') ||
+                            {[row.invoiceNumber, row.orderNumber, row.description].filter(Boolean).join(' · ') ||
                               `${row.lineItemCount} line ${row.lineItemCount === 1 ? 'item' : 'items'}`}
                           </div>
                         </td>

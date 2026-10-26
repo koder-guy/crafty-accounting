@@ -333,7 +333,7 @@ export function Dashboard() {
                 items={data.recentIncomes.map((i) => ({
                   key: i.id,
                   to: `/incoming/${i.id}`,
-                  name: i.source ?? i.description,
+                  name: i.description,
                   sub: `${formatDisplayDate(i.date)} · ${PAYMENT_METHOD_LABELS[i.paymentMethod]}`,
                   amount: formatGBP(i.amountPence),
                   tone: 'in',

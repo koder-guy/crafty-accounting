@@ -162,6 +162,7 @@ export function expensesRouter(ctx: AppContext): Router {
       e.date,
       e.supplier,
       e.invoiceNumber,
+      e.orderNumber,
       e.description,
       PAYMENT_METHOD_LABELS[e.paymentMethod],
       penceToPounds(e.totalPence),
@@ -170,7 +171,7 @@ export function expensesRouter(ctx: AppContext): Router {
       e.notes,
     ]);
     const csv = toCsv(
-      ['Date', 'Supplier', 'Invoice number', 'Description', 'Payment method', 'Amount (GBP)', 'Disallowable (GBP)', 'Document', 'Notes'],
+      ['Date', 'Supplier', 'Invoice number', 'Order number', 'Description', 'Payment method', 'Amount (GBP)', 'Disallowable (GBP)', 'Document', 'Notes'],
       rows,
     );
     res.attachment(csvFilename('outgoing', getTaxYear(ctx.db, filters.taxYearId))).type('text/csv').send(csv);
@@ -204,15 +205,16 @@ export function expensesRouter(ctx: AppContext): Router {
       ctx.db.transaction(() => {
         const result = ctx.db
           .prepare(
-            `INSERT INTO expenses (tax_year_id, date, supplier, invoice_number, description, payment_method,
-               total_pence, notes, document_filename)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            `INSERT INTO expenses (tax_year_id, date, supplier, invoice_number, order_number, description,
+               payment_method, total_pence, notes, document_filename)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           )
           .run(
             input.taxYearId,
             input.date,
             input.supplier,
             input.invoiceNumber,
+            input.orderNumber,
             input.description,
             input.paymentMethod,
             input.totalPence,
@@ -247,14 +249,16 @@ export function expensesRouter(ctx: AppContext): Router {
       ctx.db.transaction(() => {
         ctx.db
           .prepare(
-            `UPDATE expenses SET date = ?, supplier = ?, invoice_number = ?, description = ?, payment_method = ?,
-               total_pence = ?, notes = ?, document_filename = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+            `UPDATE expenses SET date = ?, supplier = ?, invoice_number = ?, order_number = ?, description = ?,
+               payment_method = ?, total_pence = ?, notes = ?, document_filename = ?,
+               updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
              WHERE id = ?`,
           )
           .run(
             input.date,
             input.supplier,
             input.invoiceNumber,
+            input.orderNumber,
             input.description,
             input.paymentMethod,
             input.totalPence,

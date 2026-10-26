@@ -62,6 +62,7 @@ export const expenseInputSchema = z
     date: isoDate,
     supplier: z.string().trim().min(1, 'Supplier is required').max(200),
     invoiceNumber: optionalText(100),
+    orderNumber: optionalText(100),
     description: optionalText(500),
     paymentMethod: z.enum(PAYMENT_METHODS, 'Choose a payment method'),
     totalPence: pence,

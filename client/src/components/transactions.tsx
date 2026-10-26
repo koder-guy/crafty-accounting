@@ -1,9 +1,8 @@
 // Building blocks shared by the Incoming and Outgoing pages.
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link, useSearchParams } from 'react-router';
-import { ChevronDown, ChevronsUpDown, ChevronUp, Download, Eye, FileText, Paperclip, Pencil, Search, Trash2, X } from 'lucide-react';
+import { ChevronDown, ChevronsUpDown, ChevronUp, Download, Eye, FileText, Paperclip, Pencil, Search, Trash2 } from 'lucide-react';
 import {
-  parsePoundsToPence,
   PAYMENT_METHOD_LABELS,
   PAYMENT_METHODS,
   type Category,
@@ -16,7 +15,7 @@ import { Button, IconButton } from './ui';
 
 // ---- Filters (kept in the URL so they survive navigation) ----
 
-const FILTER_KEYS = ['search', 'from', 'to', 'categoryId', 'paymentMethod', 'min', 'max'] as const;
+const FILTER_KEYS = ['search', 'categoryId', 'paymentMethod'] as const;
 
 export function useTransactionFilters(taxYear: TaxYear | null) {
   const [params, setParams] = useSearchParams();
@@ -24,18 +23,12 @@ export function useTransactionFilters(taxYear: TaxYear | null) {
 
   const filters: TransactionFilters | null = useMemo(() => {
     if (!taxYear) return null;
-    const min = parsePoundsToPence(params.get('min') ?? '');
-    const max = parsePoundsToPence(params.get('max') ?? '');
     const method = params.get('paymentMethod');
     return {
       taxYearId: taxYear.id,
       search: params.get('search') || undefined,
-      from: params.get('from') || undefined,
-      to: params.get('to') || undefined,
       categoryId: Number(params.get('categoryId')) || undefined,
       paymentMethod: PAYMENT_METHODS.includes(method as PaymentMethod) ? (method as PaymentMethod) : undefined,
-      minPence: min !== null && min >= 0 ? min : undefined,
-      maxPence: max !== null && max >= 0 ? max : undefined,
     };
   }, [params, taxYear]);
 
@@ -50,21 +43,19 @@ export function useTransactionFilters(taxYear: TaxYear | null) {
       { replace: true },
     );
 
-  const clear = () => setParams({}, { replace: true });
   const active = FILTER_KEYS.some((k) => params.get(k));
-  return { filters, get, set, clear, active };
+  return { filters, get, set, active };
 }
 
+/** Category and payment method menus, then the text search on the right. */
 export function FilterBar({
   filterState,
   categories,
-  taxYear,
 }: {
   filterState: ReturnType<typeof useTransactionFilters>;
   categories: Category[];
-  taxYear: TaxYear;
 }) {
-  const { get, set, clear, active } = filterState;
+  const { get, set } = filterState;
   const [search, setSearch] = useState(get('search'));
   const first = useRef(true);
 
@@ -79,14 +70,25 @@ export function FilterBar({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search]);
 
-  const reset = () => {
-    setSearch('');
-    clear();
-  };
-
   return (
-    <div className="flex flex-wrap gap-3 border-b border-line px-5 pb-5 sm:px-6 [&>*]:min-w-0">
-      <div className="relative flex-[3_1_240px]">
+    <div className="flex flex-col gap-3 border-b border-line px-5 pb-5 sm:flex-row sm:justify-end sm:px-6">
+      <FilterSelect label="Category" className="sm:w-72" value={get('categoryId')} onChange={(v) => set('categoryId', v)}>
+        <option value="">All categories</option>
+        {categories.map((c) => (
+          <option key={c.id} value={c.id}>
+            {c.name}
+          </option>
+        ))}
+      </FilterSelect>
+      <FilterSelect label="Payment method" className="sm:w-44" value={get('paymentMethod')} onChange={(v) => set('paymentMethod', v)}>
+        <option value="">All payment types</option>
+        {PAYMENT_METHODS.map((m) => (
+          <option key={m} value={m}>
+            {PAYMENT_METHOD_LABELS[m]}
+          </option>
+        ))}
+      </FilterSelect>
+      <div className="relative sm:w-64">
         <label htmlFor="f-search" className="sr-only">
           Search
         </label>
@@ -100,69 +102,7 @@ export function FilterBar({
           onChange={(e) => setSearch(e.target.value)}
         />
       </div>
-      <FilterInput
-        label="From date"
-        type="date"
-        className="flex-[1_1_150px]"
-        value={get('from')}
-        onChange={(v) => set('from', v)}
-        min={taxYear.startDate}
-        max={taxYear.endDate}
-      />
-      <FilterInput
-        label="To date"
-        type="date"
-        className="flex-[1_1_150px]"
-        value={get('to')}
-        onChange={(v) => set('to', v)}
-        min={taxYear.startDate}
-        max={taxYear.endDate}
-      />
-      <FilterSelect label="Category" className="flex-[2_1_200px]" value={get('categoryId')} onChange={(v) => set('categoryId', v)}>
-        <option value="">All categories</option>
-        {categories.map((c) => (
-          <option key={c.id} value={c.id}>
-            {c.name}
-          </option>
-        ))}
-      </FilterSelect>
-      <FilterSelect label="Payment method" className="flex-[1_1_150px]" value={get('paymentMethod')} onChange={(v) => set('paymentMethod', v)}>
-        <option value="">All methods</option>
-        {PAYMENT_METHODS.map((m) => (
-          <option key={m} value={m}>
-            {PAYMENT_METHOD_LABELS[m]}
-          </option>
-        ))}
-      </FilterSelect>
-      <FilterInput label="Minimum amount (£)" className="flex-[1_1_90px]" inputMode="decimal" placeholder="Min £" value={get('min')} onChange={(v) => set('min', v)} />
-      <FilterInput label="Maximum amount (£)" className="flex-[1_1_90px]" inputMode="decimal" placeholder="Max £" value={get('max')} onChange={(v) => set('max', v)} />
-      <Button variant="ghost" onClick={reset} disabled={!active && !search} className="flex-none">
-        <X className="size-4" aria-hidden />
-        Clear
-      </Button>
     </div>
-  );
-}
-
-function FilterInput({
-  label,
-  value,
-  onChange,
-  className = '',
-  ...props
-}: { label: string; value: string; onChange: (v: string) => void } & Omit<
-  React.InputHTMLAttributes<HTMLInputElement>,
-  'value' | 'onChange'
->) {
-  return (
-    <input
-      aria-label={label}
-      title={label}
-      className={`field ${className}`}
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      {...props}
-    />
   );
 }
 
@@ -296,26 +236,16 @@ export function DocIndicator({ filename }: { filename: string | null }) {
 
 // ---- Payment method picker ----
 
-export function PaymentMethodPicker({ value, onChange }: { value: PaymentMethod | ''; onChange: (m: PaymentMethod) => void }) {
+export function PaymentMethodOptions() {
   return (
-    <div role="radiogroup" aria-label="Payment method" className="grid grid-cols-3 gap-2">
+    <>
+      <option value="">Choose…</option>
       {PAYMENT_METHODS.map((m) => (
-        <button
-          key={m}
-          type="button"
-          role="radio"
-          aria-checked={value === m}
-          onClick={() => onChange(m)}
-          className={`rounded-lg border px-3 py-2 text-sm transition-colors ${
-            value === m
-              ? 'border-accent bg-accent-bg font-medium text-accent-soft'
-              : 'border-line-strong bg-surface-2 text-muted hover:text-ink'
-          }`}
-        >
+        <option key={m} value={m}>
           {PAYMENT_METHOD_LABELS[m]}
-        </button>
+        </option>
       ))}
-    </div>
+    </>
   );
 }
 
@@ -411,25 +341,7 @@ export function DocumentField({
           </Button>
         )}
       </div>
-      <p className={`mt-1.5 text-xs ${error ? 'text-out-soft' : 'text-muted'}`}>
-        {error ?? 'PDF or image. The filename is kept as it is, so it must not match a document already stored.'}
-      </p>
+      {error && <p className="mt-1.5 text-xs text-out-soft">{error}</p>}
     </div>
   );
-}
-
-export function DocumentPreview({ filename }: { filename: string }) {
-  const url = documentUrl(filename);
-  const lower = filename.toLowerCase();
-  if (lower.endsWith('.pdf')) {
-    return <iframe src={url} title={filename} className="h-[70vh] w-full rounded-lg border border-line bg-white" />;
-  }
-  if (/\.(jpe?g|png|webp)$/.test(lower)) {
-    return (
-      <a href={url} target="_blank" rel="noreferrer">
-        <img src={url} alt={filename} className="max-h-[70vh] w-auto rounded-lg border border-line" />
-      </a>
-    );
-  }
-  return <p className="text-sm text-muted">This file type can't be previewed in the browser. Use Download to open it.</p>;
 }

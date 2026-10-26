@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Controller, useFieldArray, useForm, useWatch } from 'react-hook-form';
+import { useFieldArray, useForm, useWatch } from 'react-hook-form';
 import { useNavigate, useParams } from 'react-router';
 import { Plus, Trash2 } from 'lucide-react';
 import {
@@ -14,7 +14,7 @@ import {
 import { BackLink, dateInYear, yearRangeHint } from '../components/FormShell';
 import { NoTaxYear } from '../components/NoTaxYear';
 import { PageBody, PageHeader } from '../components/PageHeader';
-import { DocumentField, PaymentMethodPicker } from '../components/transactions';
+import { DocumentField, PaymentMethodOptions } from '../components/transactions';
 import { Alert, Button, Card, CardHeader, Field, IconButton, Spinner } from '../components/ui';
 import { ApiError, transactionForm } from '../lib/api';
 import { useActiveTaxYear, useCategories, useExpense, useSaveTransaction, useTaxYears } from '../lib/queries';
@@ -32,6 +32,7 @@ interface Values {
   date: string;
   supplier: string;
   invoiceNumber: string;
+  orderNumber: string;
   description: string;
   paymentMethod: PaymentMethod | '';
   total: string;
@@ -76,6 +77,7 @@ export function ExpenseForm() {
       date: '',
       supplier: '',
       invoiceNumber: '',
+      orderNumber: '',
       description: '',
       paymentMethod: '',
       total: '',
@@ -91,6 +93,7 @@ export function ExpenseForm() {
         date: existing.date,
         supplier: existing.supplier,
         invoiceNumber: existing.invoiceNumber ?? '',
+        orderNumber: existing.orderNumber ?? '',
         description: existing.description ?? '',
         paymentMethod: existing.paymentMethod,
         total: penceToPounds(existing.totalPence),
@@ -109,6 +112,7 @@ export function ExpenseForm() {
         date: isDateInTaxYear(today, activeYear) ? today : '',
         supplier: '',
         invoiceNumber: '',
+        orderNumber: '',
         description: '',
         paymentMethod: '',
         total: '',
@@ -139,6 +143,7 @@ export function ExpenseForm() {
       date: values.date,
       supplier: values.supplier,
       invoiceNumber: values.invoiceNumber,
+      orderNumber: values.orderNumber,
       description: values.description,
       paymentMethod: values.paymentMethod,
       totalPence: parsePoundsToPence(values.total),
@@ -226,6 +231,9 @@ export function ExpenseForm() {
               <Field label="Invoice number" htmlFor="invoiceNumber" hint="Optional">
                 <input id="invoiceNumber" className="field" {...register('invoiceNumber', { maxLength: 100 })} />
               </Field>
+              <Field label="Order number" htmlFor="orderNumber" hint="Optional">
+                <input id="orderNumber" className="field" {...register('orderNumber', { maxLength: 100 })} />
+              </Field>
               <Field label="Transaction amount (£)" htmlFor="total" error={errors.total?.message} hint="The invoice total">
                 <input
                   id="total"
@@ -235,16 +243,13 @@ export function ExpenseForm() {
                   {...register('total', { validate: validAmount })}
                 />
               </Field>
+              <Field label="Payment method" htmlFor="paymentMethod" error={errors.paymentMethod?.message}>
+                <select id="paymentMethod" className="field" {...register('paymentMethod', { required: 'Choose a payment method' })}>
+                  <PaymentMethodOptions />
+                </select>
+              </Field>
               <Field label="Description" htmlFor="description" hint="Optional" className="sm:col-span-2">
                 <input id="description" className="field" {...register('description', { maxLength: 500 })} />
-              </Field>
-              <Field label="Payment method" error={errors.paymentMethod?.message} className="sm:col-span-2">
-                <Controller
-                  control={control}
-                  name="paymentMethod"
-                  rules={{ required: 'Choose a payment method' }}
-                  render={({ field }) => <PaymentMethodPicker value={field.value} onChange={field.onChange} />}
-                />
               </Field>
             </div>
           </Card>

@@ -81,6 +81,10 @@ CREATE INDEX idx_expenses_year_date ON expenses (tax_year_id, date);
 CREATE INDEX idx_line_items_expense ON expense_line_items (expense_id);
 `,
   },
+  {
+    version: 2,
+    sql: `ALTER TABLE expenses ADD COLUMN order_number TEXT;`,
+  },
 ];
 
 export const CURRENT_SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;

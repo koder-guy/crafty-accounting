@@ -1,12 +1,11 @@
 import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
-import { Download, Paperclip, Pencil, Trash2 } from 'lucide-react';
+import { Download, Pencil, Trash2 } from 'lucide-react';
 import { displayTaxYear, formatDisplayDate, formatGBP, PAYMENT_METHOD_LABELS } from '@crafty/shared';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { BackLink } from '../components/FormShell';
 import { PageBody, PageHeader } from '../components/PageHeader';
-import { DocumentPreview } from '../components/transactions';
-import { Alert, Badge, Button, ButtonLink, Card, CardHeader, DetailRow, Spinner } from '../components/ui';
+import { Alert, Badge, Button, ButtonLink, Card, DetailRow, Spinner } from '../components/ui';
 import { documentUrl } from '../lib/api';
 import { useDeleteTransaction, useIncome, useTaxYears } from '../lib/queries';
 
@@ -22,7 +21,7 @@ export function IncomeView() {
   return (
     <>
       <PageHeader
-        title={income ? (income.source ?? income.description) : 'Incoming'}
+        title={income ? income.description : 'Incoming'}
         subtitle={income ? `Incoming · ${formatDisplayDate(income.date)}` : undefined}
         actions={
           income && (
@@ -55,32 +54,25 @@ export function IncomeView() {
               <dl className="divide-y divide-line">
                 <DetailRow label="Date">{formatDisplayDate(income.date)}</DetailRow>
                 <DetailRow label="Description">{income.description}</DetailRow>
-                <DetailRow label="Source / event">{income.source}</DetailRow>
                 <DetailRow label="Reference">{income.reference}</DetailRow>
                 <DetailRow label="Category">
                   {income.categoryName} <span className="ml-1 font-mono text-xs text-faint">{income.hmrcCode}</span>
                 </DetailRow>
                 <DetailRow label="Tax year">{year ? displayTaxYear(year.label) : null}</DetailRow>
+                <DetailRow label="Document">
+                  {income.documentFilename && (
+                    <a
+                      href={documentUrl(income.documentFilename, true)}
+                      className="inline-flex items-center gap-1.5 break-all text-accent-soft hover:underline"
+                    >
+                      <Download className="size-4 shrink-0" aria-hidden />
+                      {income.documentFilename}
+                    </a>
+                  )}
+                </DetailRow>
                 <DetailRow label="Notes">{income.notes && <span className="whitespace-pre-wrap">{income.notes}</span>}</DetailRow>
               </dl>
             </Card>
-            {income.documentFilename && (
-              <Card>
-                <CardHeader
-                  icon={<Paperclip className="size-5 text-accent-soft" />}
-                  title={<span className="break-all">{income.documentFilename}</span>}
-                  action={
-                    <a href={documentUrl(income.documentFilename, true)} className="inline-flex items-center gap-1.5 text-sm text-accent-soft hover:underline">
-                      <Download className="size-4" aria-hidden />
-                      Download
-                    </a>
-                  }
-                />
-                <div className="px-5 pb-6 sm:px-6">
-                  <DocumentPreview filename={income.documentFilename} />
-                </div>
-              </Card>
-            )}
           </>
         )}
       </PageBody>

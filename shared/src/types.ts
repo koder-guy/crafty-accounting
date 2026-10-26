@@ -59,6 +59,7 @@ export interface Expense {
   date: string;
   supplier: string;
   invoiceNumber: string | null;
+  orderNumber: string | null;
   description: string | null;
   paymentMethod: PaymentMethod;
   totalPence: number;

@@ -1,11 +1,10 @@
 import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
-import { Download, ListOrdered, Paperclip, Pencil, Trash2 } from 'lucide-react';
+import { Download, ListOrdered, Pencil, Trash2 } from 'lucide-react';
 import { displayTaxYear, formatDisplayDate, formatGBP, PAYMENT_METHOD_LABELS } from '@crafty/shared';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { BackLink } from '../components/FormShell';
 import { PageBody, PageHeader } from '../components/PageHeader';
-import { DocumentPreview } from '../components/transactions';
 import { Alert, Badge, Button, ButtonLink, Card, CardHeader, DetailRow, Spinner } from '../components/ui';
 import { documentUrl } from '../lib/api';
 import { useDeleteTransaction, useExpense, useTaxYears } from '../lib/queries';
@@ -61,8 +60,20 @@ export function ExpenseView() {
                 <DetailRow label="Date">{formatDisplayDate(expense.date)}</DetailRow>
                 <DetailRow label="Supplier">{expense.supplier}</DetailRow>
                 <DetailRow label="Invoice number">{expense.invoiceNumber}</DetailRow>
+                <DetailRow label="Order number">{expense.orderNumber}</DetailRow>
                 <DetailRow label="Description">{expense.description}</DetailRow>
                 <DetailRow label="Tax year">{year ? displayTaxYear(year.label) : null}</DetailRow>
+                <DetailRow label="Document">
+                  {expense.documentFilename && (
+                    <a
+                      href={documentUrl(expense.documentFilename, true)}
+                      className="inline-flex items-center gap-1.5 break-all text-accent-soft hover:underline"
+                    >
+                      <Download className="size-4 shrink-0" aria-hidden />
+                      {expense.documentFilename}
+                    </a>
+                  )}
+                </DetailRow>
                 <DetailRow label="Notes">{expense.notes && <span className="whitespace-pre-wrap">{expense.notes}</span>}</DetailRow>
               </dl>
             </Card>
@@ -106,23 +117,6 @@ export function ExpenseView() {
               </div>
             </Card>
 
-            {expense.documentFilename && (
-              <Card>
-                <CardHeader
-                  icon={<Paperclip className="size-5 text-accent-soft" />}
-                  title={<span className="break-all">{expense.documentFilename}</span>}
-                  action={
-                    <a href={documentUrl(expense.documentFilename, true)} className="inline-flex items-center gap-1.5 text-sm text-accent-soft hover:underline">
-                      <Download className="size-4" aria-hidden />
-                      Download
-                    </a>
-                  }
-                />
-                <div className="px-5 pb-6 sm:px-6">
-                  <DocumentPreview filename={expense.documentFilename} />
-                </div>
-              </Card>
-            )}
           </>
         )}
       </PageBody>

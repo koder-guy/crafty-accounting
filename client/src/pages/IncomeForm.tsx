@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react';
-import { Controller, useForm } from 'react-hook-form';
+import { useForm } from 'react-hook-form';
 import { useNavigate, useParams } from 'react-router';
 import { isDateInTaxYear, parsePoundsToPence, penceToPounds, todayIso, type Income, type PaymentMethod } from '@crafty/shared';
 import { BackLink, dateInYear, yearRangeHint } from '../components/FormShell';
 import { NoTaxYear } from '../components/NoTaxYear';
 import { PageBody, PageHeader } from '../components/PageHeader';
-import { DocumentField, PaymentMethodPicker } from '../components/transactions';
+import { DocumentField, PaymentMethodOptions } from '../components/transactions';
 import { Alert, Button, Card, Field, Spinner } from '../components/ui';
 import { ApiError, transactionForm } from '../lib/api';
 import { useActiveTaxYear, useCategories, useIncome, useSaveTransaction, useTaxYears } from '../lib/queries';
@@ -13,7 +13,6 @@ import { useActiveTaxYear, useCategories, useIncome, useSaveTransaction, useTaxY
 interface Values {
   date: string;
   description: string;
-  source: string;
   reference: string;
   paymentMethod: PaymentMethod | '';
   amount: string;
@@ -39,7 +38,6 @@ export function IncomeForm() {
 
   const {
     register,
-    control,
     handleSubmit,
     reset,
     setError,
@@ -48,7 +46,6 @@ export function IncomeForm() {
     defaultValues: {
       date: '',
       description: '',
-      source: '',
       reference: '',
       paymentMethod: '',
       amount: '',
@@ -63,7 +60,6 @@ export function IncomeForm() {
       reset({
         date: existing.date,
         description: existing.description,
-        source: existing.source ?? '',
         reference: existing.reference ?? '',
         paymentMethod: existing.paymentMethod,
         amount: penceToPounds(existing.amountPence),
@@ -75,7 +71,6 @@ export function IncomeForm() {
       reset({
         date: isDateInTaxYear(today, activeYear) ? today : '',
         description: '',
-        source: '',
         reference: '',
         paymentMethod: '',
         amount: '',
@@ -92,7 +87,8 @@ export function IncomeForm() {
       taxYearId: taxYear.id,
       date: values.date,
       description: values.description,
-      source: values.source,
+      // The source field is no longer shown; keep any value already stored.
+      source: existing?.source ?? null,
       reference: values.reference,
       paymentMethod: values.paymentMethod,
       amountPence: parsePoundsToPence(values.amount),
@@ -179,14 +175,10 @@ export function IncomeForm() {
                   })}
                 />
               </Field>
-              <Field label="Source / event" htmlFor="source" hint="e.g. the craft fair or customer" className="sm:col-span-2">
-                <input id="source" className="field" placeholder="Abingdon Market" {...register('source', { maxLength: 200 })} />
-              </Field>
               <Field label="Description" htmlFor="description" error={errors.description?.message} className="sm:col-span-2">
                 <input
                   id="description"
                   className="field"
-                  placeholder="Stall sales"
                   {...register('description', { required: 'Description is required', maxLength: 500 })}
                 />
               </Field>
@@ -200,16 +192,13 @@ export function IncomeForm() {
                   ))}
                 </select>
               </Field>
-              <Field label="Reference" htmlFor="reference" hint="Optional, e.g. a payout or receipt number">
-                <input id="reference" className="field" {...register('reference', { maxLength: 100 })} />
+              <Field label="Payment method" htmlFor="paymentMethod" error={errors.paymentMethod?.message}>
+                <select id="paymentMethod" className="field" {...register('paymentMethod', { required: 'Choose a payment method' })}>
+                  <PaymentMethodOptions />
+                </select>
               </Field>
-              <Field label="Payment method" error={errors.paymentMethod?.message} className="sm:col-span-2">
-                <Controller
-                  control={control}
-                  name="paymentMethod"
-                  rules={{ required: 'Choose a payment method' }}
-                  render={({ field }) => <PaymentMethodPicker value={field.value} onChange={field.onChange} />}
-                />
+              <Field label="Reference" htmlFor="reference" hint="Optional, e.g. a payout or receipt number" className="sm:col-span-2">
+                <input id="reference" className="field" {...register('reference', { maxLength: 100 })} />
               </Field>
               <Field label="Notes" htmlFor="notes" className="sm:col-span-2">
                 <textarea id="notes" rows={3} className="field" {...register('notes', { maxLength: 2000 })} />

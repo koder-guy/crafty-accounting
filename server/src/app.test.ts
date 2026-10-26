@@ -7,6 +7,10 @@ import type { Category } from '@crafty/shared';
 import { createApp } from './app';
 import { loadConfig } from './config';
 import { createContext, type AppContext } from './context';
+import Database from 'better-sqlite3';
+import { dumpSql } from './backup';
+import { seedCategories } from './db';
+import { MIGRATIONS } from './db/migrations';
 import { documentNameProblem } from './documents';
 
 const PASSWORD = 'test-password';
@@ -263,6 +267,20 @@ describe('expenses', () => {
     expect(csv.text).not.toContain('Glass beads');
   });
 
+  it('stores, searches and exports the order number', async () => {
+    const yearId = await createYear();
+    const created = (await agent.post('/api/expenses').send(expense(yearId, { orderNumber: 'PO-77' })).expect(201)).body;
+    expect(created.orderNumber).toBe('PO-77');
+    const updated = (
+      await agent.put(`/api/expenses/${created.id}`).send(expense(yearId, { orderNumber: 'PO-78' })).expect(200)
+    ).body;
+    expect(updated.orderNumber).toBe('PO-78');
+    expect((await agent.get('/api/expenses').query({ taxYearId: yearId, search: 'po-78' })).body).toHaveLength(1);
+    const csv = await agent.get('/api/expenses/export.csv').query({ taxYearId: yearId }).expect(200);
+    expect(csv.text.split('\r\n')[0]).toContain('Order number');
+    expect(csv.text).toContain('PO-78');
+  });
+
   it('finds expenses by line item description and category', async () => {
     const yearId = await createYear();
     await agent.post('/api/expenses').send(expense(yearId)).expect(201);
@@ -352,6 +370,28 @@ describe('backup and restore', () => {
     await agent.post('/api/restore').attach('file', zip.body as Buffer, 'backup.zip').expect(200);
     expect(snapshot()).toEqual(before);
     expect(fs.readFileSync(path.join(dataDir, 'uploads', 'payout.pdf'))).toEqual(PDF);
+  });
+
+  it('upgrades a backup made before the order number existed', async () => {
+    const old = new Database(':memory:');
+    old.exec('CREATE TABLE schema_migrations (version INTEGER PRIMARY KEY, applied_at TEXT)');
+    old.exec(MIGRATIONS[0].sql);
+    old.prepare('INSERT INTO schema_migrations (version) VALUES (1)').run();
+    seedCategories(old);
+    old.prepare("INSERT INTO tax_years (label, start_date, end_date) VALUES ('2025-26', '2025-04-06', '2026-04-05')").run();
+    old
+      .prepare(
+        "INSERT INTO expenses (tax_year_id, date, supplier, payment_method, total_pence) VALUES (1, '2025-05-01', 'Old Ltd', 'cash', 500)",
+      )
+      .run();
+    old.prepare('INSERT INTO expense_line_items (expense_id, description, amount_pence, category_id) VALUES (1, ?, 500, ?)').run('Item', cat('costOfGoods'));
+    const dump = dumpSql(old);
+    old.close();
+
+    await agent.post('/api/restore').attach('file', Buffer.from(dump), 'old.sql').expect(200);
+    const expenses = (await agent.get('/api/expenses').query({ taxYearId: 1 }).expect(200)).body;
+    expect(expenses).toHaveLength(1);
+    expect(expenses[0]).toMatchObject({ supplier: 'Old Ltd', orderNumber: null });
   });
 
   it('refuses files that are not backups or contain other statements', async () => {

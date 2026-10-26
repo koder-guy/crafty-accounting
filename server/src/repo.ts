@@ -172,6 +172,7 @@ function mapExpense(row: Row, categoryNames: Map<number, string>): Expense {
     date: row.date,
     supplier: row.supplier,
     invoiceNumber: row.invoice_number,
+    orderNumber: row.order_number,
     description: row.description,
     paymentMethod: row.payment_method,
     totalPence: row.total_pence,
@@ -194,7 +195,7 @@ export function listExpenses(db: Db, filters: TransactionFilters, limit?: number
     'e',
     'total_pence',
     filters,
-    ['e.supplier', 'e.invoice_number', 'e.description', 'e.notes', 'e.document_filename'],
+    ['e.supplier', 'e.invoice_number', 'e.order_number', 'e.description', 'e.notes', 'e.document_filename'],
     [{ sql: lineSearch, termCount: 2 }],
   );
   let sql = `${EXPENSE_SELECT} WHERE ${where}`;
