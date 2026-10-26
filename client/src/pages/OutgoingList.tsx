@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { Fragment, useState } from 'react';
 import { useNavigate } from 'react-router';
-import { ArrowUpRight, Plus } from 'lucide-react';
-import { formatDisplayDate, formatGBP, type Expense } from '@crafty/shared';
+import { ArrowUpRight, ChevronRight, Plus } from 'lucide-react';
+import { formatDisplayDate, formatGBP, type Expense, type ExpenseWithLineItems } from '@crafty/shared';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { NoTaxYear } from '../components/NoTaxYear';
 import { PageBody, PageHeader } from '../components/PageHeader';
@@ -14,7 +14,7 @@ import {
   useSort,
   useTransactionFilters,
 } from '../components/transactions';
-import { Alert, ButtonLink, Card, CardHeader, EmptyState, PaymentBadge, Spinner } from '../components/ui';
+import { Alert, Badge, ButtonLink, Card, CardHeader, EmptyState, PaymentBadge, Spinner } from '../components/ui';
 import { exportCsvUrl, useActiveTaxYear, useCategories, useDeleteTransaction, useExpenses } from '../lib/queries';
 
 export function OutgoingList() {
@@ -23,6 +23,14 @@ export function OutgoingList() {
   const { data: categories = [] } = useCategories();
   const { data, isLoading, error } = useExpenses(filterState.filters);
   const remove = useDeleteTransaction('expenses');
+  const [expanded, setExpanded] = useState<Set<number>>(() => new Set());
+  const toggleRow = (id: number) =>
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   const [toDelete, setToDelete] = useState<Expense | null>(null);
   const navigate = useNavigate();
 
@@ -90,6 +98,9 @@ export function OutgoingList() {
                 <table className="w-full min-w-[820px] text-sm">
                   <thead className="text-xs tracking-wide text-muted uppercase">
                     <tr className="border-b border-line">
+                      <th scope="col" className="w-10 pl-3">
+                        <span className="sr-only">Show line items</span>
+                      </th>
                       <SortTh label="Date" sortKey="date" sort={sort} onSort={toggle} />
                       <SortTh label="Supplier" sortKey="supplier" sort={sort} onSort={toggle} />
                       <SortTh label="Categories" sortKey="category" sort={sort} onSort={toggle} />
@@ -101,47 +112,71 @@ export function OutgoingList() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-line">
-                    {sorted.map((row) => (
-                      <tr
-                        key={row.id}
-                        className="cursor-pointer transition-colors hover:bg-surface-2/60"
-                        onClick={(e) => !(e.target as HTMLElement).closest('a,button') && navigate(`/outgoing/${row.id}`)}
-                      >
-                        <td className="px-4 py-3 whitespace-nowrap text-muted">{formatDisplayDate(row.date)}</td>
-                        <td className="max-w-xs px-4 py-3">
-                          <div className="flex items-center gap-1.5 font-medium text-ink">
-                            <span className="truncate">{row.supplier}</span>
-                            <DocIndicator filename={row.documentFilename} />
-                          </div>
-                          <div className="truncate text-xs text-muted">
-                            {[row.invoiceNumber, row.orderNumber, row.description].filter(Boolean).join(' · ') ||
-                              `${row.lineItemCount} line ${row.lineItemCount === 1 ? 'item' : 'items'}`}
-                          </div>
-                        </td>
-                        <td className="max-w-[240px] px-4 py-3 text-muted">
-                          <div className="truncate" title={row.categoryNames.join('\n')}>
-                            {row.categoryNames[0]}
-                            {row.categoryNames.length > 1 && <span className="text-faint"> +{row.categoryNames.length - 1}</span>}
-                          </div>
-                        </td>
-                        <td className="px-4 py-3">
-                          <PaymentBadge method={row.paymentMethod} />
-                        </td>
-                        <td className="px-4 py-3 text-right whitespace-nowrap">
-                          <div className="tabular font-semibold text-out-soft">{formatGBP(row.totalPence)}</div>
-                          {row.disallowablePence > 0 && (
-                            <div className="tabular text-xs text-faint">{formatGBP(row.disallowablePence)} disallowable</div>
+                    {sorted.map((row) => {
+                      const open = expanded.has(row.id);
+                      return (
+                        <Fragment key={row.id}>
+                          <tr
+                            className={`cursor-pointer transition-colors hover:bg-surface-2/60 ${open ? 'bg-surface-2/40' : ''}`}
+                            onClick={(e) => !(e.target as HTMLElement).closest('a,button') && navigate(`/outgoing/${row.id}`)}
+                          >
+                            <td className="py-3 pl-3">
+                              <button
+                                type="button"
+                                onClick={() => toggleRow(row.id)}
+                                aria-expanded={open}
+                                aria-controls={`lines-${row.id}`}
+                                aria-label={`${open ? 'Hide' : 'Show'} line items for ${row.supplier}`}
+                                className="inline-flex size-7 items-center justify-center rounded-md text-muted transition-colors hover:bg-accent-bg hover:text-accent-soft"
+                              >
+                                <ChevronRight className={`size-4 transition-transform ${open ? 'rotate-90' : ''}`} aria-hidden />
+                              </button>
+                            </td>
+                            <td className="px-4 py-3 whitespace-nowrap text-muted">{formatDisplayDate(row.date)}</td>
+                            <td className="max-w-xs px-4 py-3">
+                              <div className="flex items-center gap-1.5 font-medium text-ink">
+                                <span className="truncate">{row.supplier}</span>
+                                <DocIndicator filename={row.documentFilename} />
+                              </div>
+                              <div className="truncate text-xs text-muted">
+                                {[row.invoiceNumber, row.orderNumber, row.description].filter(Boolean).join(' · ') ||
+                                  `${row.lineItemCount} line ${row.lineItemCount === 1 ? 'item' : 'items'}`}
+                              </div>
+                            </td>
+                            <td className="max-w-[240px] px-4 py-3 text-muted">
+                              <div className="truncate" title={row.categoryNames.join('\n')}>
+                                {row.categoryNames[0]}
+                                {row.categoryNames.length > 1 && <span className="text-faint"> +{row.categoryNames.length - 1}</span>}
+                              </div>
+                            </td>
+                            <td className="px-4 py-3">
+                              <PaymentBadge method={row.paymentMethod} />
+                            </td>
+                            <td className="px-4 py-3 text-right whitespace-nowrap">
+                              <div className="tabular font-semibold text-out-soft">{formatGBP(row.totalPence)}</div>
+                              {row.disallowablePence > 0 && (
+                                <div className="tabular text-xs text-faint">{formatGBP(row.disallowablePence)} disallowable</div>
+                              )}
+                            </td>
+                            <td className="px-3 py-2">
+                              <RowActions
+                                viewTo={`/outgoing/${row.id}`}
+                                editTo={`/outgoing/${row.id}/edit`}
+                                onDelete={() => setToDelete(row)}
+                              />
+                            </td>
+                          </tr>
+                          {open && (
+                            <tr id={`lines-${row.id}`} className="border-t-0! bg-surface-2/40">
+                              <td />
+                              <td colSpan={6} className="px-4 pt-1 pb-4">
+                                <LineItemsTable expense={row} />
+                              </td>
+                            </tr>
                           )}
-                        </td>
-                        <td className="px-3 py-2">
-                          <RowActions
-                            viewTo={`/outgoing/${row.id}`}
-                            editTo={`/outgoing/${row.id}/edit`}
-                            onDelete={() => setToDelete(row)}
-                          />
-                        </td>
-                      </tr>
-                    ))}
+                        </Fragment>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -170,5 +205,38 @@ export function OutgoingList() {
         )}
       </ConfirmDialog>
     </>
+  );
+}
+
+/** Read-only line items shown under an expanded row. */
+function LineItemsTable({ expense }: { expense: ExpenseWithLineItems }) {
+  return (
+    <table className="w-full rounded-lg border border-line bg-page/40 text-sm">
+      <thead className="text-xs tracking-wide text-faint uppercase">
+        <tr className="border-b border-line">
+          <th scope="col" className="px-4 py-2 text-left font-medium">Line item</th>
+          <th scope="col" className="px-4 py-2 text-left font-medium">Category</th>
+          <th scope="col" className="px-4 py-2 text-right font-medium">Amount</th>
+        </tr>
+      </thead>
+      <tbody className="divide-y divide-line">
+        {expense.lineItems.map((li) => (
+          <tr key={li.id}>
+            <td className="px-4 py-2 text-ink">
+              {li.description}
+              {li.disallowable && (
+                <span className="ml-2">
+                  <Badge tone="out">Disallowable</Badge>
+                </span>
+              )}
+            </td>
+            <td className="px-4 py-2 text-muted">
+              {li.categoryName} <span className="ml-1 font-mono text-xs text-faint">{li.hmrcCode}</span>
+            </td>
+            <td className="tabular px-4 py-2 text-right text-ink">{formatGBP(li.amountPence)}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
   );
 }

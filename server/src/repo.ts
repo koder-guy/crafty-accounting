@@ -188,7 +188,7 @@ function mapExpense(row: Row, categoryNames: Map<number, string>): Expense {
 
 const categoryNameMap = (db: Db) => new Map(listCategories(db).map((c) => [c.id, c.name]));
 
-export function listExpenses(db: Db, filters: TransactionFilters, limit?: number): Expense[] {
+export function listExpenses(db: Db, filters: TransactionFilters, limit?: number): ExpenseWithLineItems[] {
   const lineSearch = `EXISTS (SELECT 1 FROM expense_line_items li JOIN categories c ON c.id = li.category_id
     WHERE li.expense_id = e.id AND (li.description LIKE ? ESCAPE '\\' OR c.name LIKE ? ESCAPE '\\'))`;
   const { where, params } = filterClauses(
@@ -206,30 +206,45 @@ export function listExpenses(db: Db, filters: TransactionFilters, limit?: number
   sql += ' ORDER BY e.date DESC, e.id DESC';
   if (limit) sql += ` LIMIT ${Math.floor(limit)}`;
   const names = categoryNameMap(db);
-  return (db.prepare(sql).all(...params) as Row[]).map((row) => mapExpense(row, names));
+  const expenses = (db.prepare(sql).all(...params) as Row[]).map((row) => mapExpense(row, names));
+  const lines = lineItemsFor(db, expenses.map((e) => e.id));
+  return expenses.map((e) => ({ ...e, lineItems: lines.get(e.id) ?? [] }));
+}
+
+const mapLineItem = (li: Row): LineItem => ({
+  id: li.id,
+  description: li.description,
+  amountPence: li.amount_pence,
+  categoryId: li.category_id,
+  categoryName: li.category_name,
+  hmrcCode: li.hmrc_code,
+  disallowable: li.disallowable === 1,
+});
+
+/** Line items for several expenses in one query, keyed by expense id. */
+function lineItemsFor(db: Db, expenseIds: number[]): Map<number, LineItem[]> {
+  const byExpense = new Map<number, LineItem[]>();
+  if (expenseIds.length === 0) return byExpense;
+  const rows = db
+    .prepare(
+      `SELECT li.*, c.name AS category_name, c.hmrc_code FROM expense_line_items li
+       JOIN categories c ON c.id = li.category_id
+       WHERE li.expense_id IN (SELECT value FROM json_each(?))
+       ORDER BY li.sort_order, li.id`,
+    )
+    .all(JSON.stringify(expenseIds)) as Row[];
+  for (const row of rows) {
+    const list = byExpense.get(row.expense_id) ?? [];
+    list.push(mapLineItem(row));
+    byExpense.set(row.expense_id, list);
+  }
+  return byExpense;
 }
 
 export function getExpense(db: Db, id: number): ExpenseWithLineItems | null {
   const row = db.prepare(`${EXPENSE_SELECT} WHERE e.id = ?`).get(id) as Row | undefined;
   if (!row) return null;
-  const lineItems = (
-    db
-      .prepare(
-        `SELECT li.*, c.name AS category_name, c.hmrc_code FROM expense_line_items li
-         JOIN categories c ON c.id = li.category_id WHERE li.expense_id = ? ORDER BY li.sort_order, li.id`,
-      )
-      .all(id) as Row[]
-  ).map(
-    (li): LineItem => ({
-      id: li.id,
-      description: li.description,
-      amountPence: li.amount_pence,
-      categoryId: li.category_id,
-      categoryName: li.category_name,
-      hmrcCode: li.hmrc_code,
-      disallowable: li.disallowable === 1,
-    }),
-  );
+  const lineItems = lineItemsFor(db, [id]).get(id) ?? [];
   return { ...mapExpense(row, categoryNameMap(db)), lineItems };
 }
 

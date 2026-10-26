@@ -2,7 +2,6 @@ import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tansta
 import type {
   Category,
   DashboardData,
-  Expense,
   ExpenseWithLineItems,
   Income,
   MtdQuartersResponse,
@@ -114,7 +113,7 @@ export const useIncomes = (filters: TransactionFilters | null) =>
 export const useExpenses = (filters: TransactionFilters | null) =>
   useQuery({
     queryKey: ['expenses', 'list', filters],
-    queryFn: () => api.get<Expense[]>(`/expenses${filterQuery(filters!)}`),
+    queryFn: () => api.get<ExpenseWithLineItems[]>(`/expenses${filterQuery(filters!)}`),
     enabled: filters !== null,
     placeholderData: (prev) => prev,
   });

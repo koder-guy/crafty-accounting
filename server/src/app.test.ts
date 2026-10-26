@@ -264,6 +264,20 @@ describe('expenses', () => {
     expect(csv.text).not.toContain('Glass beads');
   });
 
+  it('includes each transaction’s line items in the list', async () => {
+    const yearId = await createYear();
+    await agent.post('/api/expenses').send(expense(yearId)).expect(201);
+    await agent
+      .post('/api/expenses')
+      .send(expense(yearId, { totalPence: 700, lineItems: [{ description: 'Glue', amountPence: 700, categoryId: cat('costOfGoods') }] }))
+      .expect(201);
+    const { body } = await agent.get('/api/expenses').query({ taxYearId: yearId }).expect(200);
+    const byTotal = Object.fromEntries(body.map((e: { totalPence: number; lineItems: unknown[] }) => [e.totalPence, e.lineItems]));
+    expect(byTotal[4550].map((li: { description: string }) => li.description)).toEqual(['Glass beads', 'Postage', 'Personal item']);
+    expect(byTotal[4550][2]).toMatchObject({ disallowable: true, hmrcCode: 'otherExpenses' });
+    expect(byTotal[700]).toHaveLength(1);
+  });
+
   it('stores, searches and exports the order number', async () => {
     const yearId = await createYear();
     const created = (await agent.post('/api/expenses').send(expense(yearId, { orderNumber: 'PO-77' })).expect(201)).body;
