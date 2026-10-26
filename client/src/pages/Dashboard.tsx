@@ -356,7 +356,7 @@ export function Dashboard() {
                 items={data.recentExpenses.map((e) => ({
                   key: e.id,
                   to: `/outgoing/${e.id}`,
-                  name: e.supplier,
+                  name: e.payee,
                   sub: `${formatDisplayDate(e.date)} · ${PAYMENT_METHOD_LABELS[e.paymentMethod]}`,
                   amount: formatGBP(e.totalPence),
                   tone: 'out',

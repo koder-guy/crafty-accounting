@@ -33,7 +33,7 @@ const FAIRS = [
 /** `custom` names one of CUSTOM_CATEGORIES; otherwise the standard category for `code` is used. */
 type Line = { description: string; code: string; custom?: string; min: number; max: number; disallowable?: boolean };
 interface Purchase {
-  supplier: string;
+  payee: string;
   lines: Line[];
   orderNumber?: boolean;
   payment?: 'cash' | 'card' | 'bank_transfer';
@@ -48,7 +48,7 @@ const CUSTOM_CATEGORIES = [
 
 const PURCHASES: Purchase[] = [
   {
-    supplier: 'Bead World Ltd',
+    payee: 'Bead World Ltd',
     orderNumber: true,
     lines: [
       { description: 'Glass beads', code: 'costOfGoods', custom: 'Beads', min: 1200, max: 6500 },
@@ -57,7 +57,7 @@ const PURCHASES: Purchase[] = [
     ],
   },
   {
-    supplier: 'Hobbycraft',
+    payee: 'Hobbycraft',
     lines: [
       { description: 'Yarn', code: 'costOfGoods', min: 900, max: 4800 },
       { description: 'Fabric', code: 'costOfGoods', min: 1100, max: 3900 },
@@ -65,7 +65,7 @@ const PURCHASES: Purchase[] = [
     ],
   },
   {
-    supplier: 'Cotton Reel Supplies',
+    payee: 'Cotton Reel Supplies',
     orderNumber: true,
     payment: 'bank_transfer',
     lines: [
@@ -74,7 +74,7 @@ const PURCHASES: Purchase[] = [
     ],
   },
   {
-    supplier: 'Prusa Research',
+    payee: 'Prusa Research',
     orderNumber: true,
     lines: [
       { description: 'PLA filament 1kg', code: 'costOfGoods', custom: 'Printer filament', min: 2200, max: 6600 },
@@ -83,14 +83,14 @@ const PURCHASES: Purchase[] = [
     ],
   },
   {
-    supplier: 'Shell Garage',
+    payee: 'Shell Garage',
     lines: [
       { description: 'Fuel to craft fair', code: 'carVanTravelExpenses', min: 2500, max: 6000 },
       { description: 'Snacks', code: 'otherExpenses', min: 250, max: 800, disallowable: true },
     ],
   },
   {
-    supplier: 'Vistaprint',
+    payee: 'Vistaprint',
     orderNumber: true,
     lines: [
       { description: 'Business cards', code: 'advertisingCosts', min: 1500, max: 3500 },
@@ -98,7 +98,7 @@ const PURCHASES: Purchase[] = [
     ],
   },
   {
-    supplier: 'EE Mobile',
+    payee: 'EE Mobile',
     payment: 'bank_transfer',
     lines: [
       { description: 'Phone bill – business use', code: 'adminCosts', min: 1200, max: 1800 },
@@ -106,18 +106,18 @@ const PURCHASES: Purchase[] = [
     ],
   },
   {
-    supplier: 'Square',
+    payee: 'Square',
     lines: [{ description: 'Card processing fees', code: 'financeCharges', min: 350, max: 1900 }],
   },
   {
-    supplier: 'Etsy',
+    payee: 'Etsy',
     lines: [
       { description: 'Listing and transaction fees', code: 'financeCharges', min: 400, max: 2200 },
       { description: 'Etsy Ads', code: 'advertisingCosts', min: 500, max: 1500 },
     ],
   },
   {
-    supplier: 'Screwfix',
+    payee: 'Screwfix',
     lines: [
       { description: 'Display stand repair parts', code: 'maintenanceCosts', min: 800, max: 3000 },
       { description: 'Gazebo weights', code: 'otherExpenses', min: 1500, max: 2800 },
@@ -127,12 +127,12 @@ const PURCHASES: Purchase[] = [
 
 const YEARLY: Purchase[] = [
   {
-    supplier: 'Policy Expert',
+    payee: 'Policy Expert',
     payment: 'bank_transfer',
     lines: [{ description: 'Public and product liability insurance', code: 'premisesRunningCosts', min: 9500, max: 13500 }],
   },
   {
-    supplier: 'Smith & Co Accountants',
+    payee: 'Smith & Co Accountants',
     payment: 'bank_transfer',
     lines: [{ description: 'Self Assessment preparation', code: 'professionalFees', min: 15000, max: 25000 }],
   },
@@ -234,7 +234,7 @@ export function generateSampleData(db: Db, uploadsDir: string, today = todayIso(
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   );
   const insertExpense = db.prepare(
-    `INSERT INTO expenses (tax_year_id, date, supplier, invoice_number, order_number, description, payment_method, total_pence, notes, document_filename)
+    `INSERT INTO expenses (tax_year_id, date, payee, invoice_number, order_number, description, payment_method, total_pence, notes, document_filename)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   );
   const insertLine = db.prepare(
@@ -259,11 +259,11 @@ export function generateSampleData(db: Db, uploadsDir: string, today = todayIso(
     const invoice = rnd.chance(0.7) ? `INV-${rnd.int(10000, 99999)}` : null;
     const order = purchase.orderNumber ? `ORD-${rnd.int(100000, 999999)}` : null;
     const doc =
-      invoice && rnd.chance(0.35) ? attach(`${date} ${purchase.supplier} ${invoice}.pdf`, `${purchase.supplier} invoice ${invoice}`) : null;
+      invoice && rnd.chance(0.35) ? attach(`${date} ${purchase.payee} ${invoice}.pdf`, `${purchase.payee} invoice ${invoice}`) : null;
     const { lastInsertRowid } = insertExpense.run(
       yearId,
       date,
-      purchase.supplier,
+      purchase.payee,
       invoice,
       order,
       null,
@@ -304,7 +304,7 @@ export function generateSampleData(db: Db, uploadsDir: string, today = todayIso(
         result.incomes += 2;
         const feeDate = addDays(date, -rnd.int(7, 30));
         addExpense(yearId, feeDate < year.startDate ? date : feeDate, {
-          supplier: fair,
+          payee: fair,
           payment: 'bank_transfer',
           lines: [{ description: 'Stall fee', code: 'premisesRunningCosts', custom: 'Stall fees', min: 2500, max: 6500 }],
         });
@@ -323,7 +323,7 @@ export function generateSampleData(db: Db, uploadsDir: string, today = todayIso(
         }
         for (let i = rnd.int(1, 3); i > 0; i--) {
           const date = addDays(monthStart, rnd.int(0, 27));
-          if (date <= end) addExpense(yearId, date, rnd.pick(PURCHASES.filter((p) => p.supplier !== 'Shell Garage')));
+          if (date <= end) addExpense(yearId, date, rnd.pick(PURCHASES.filter((p) => p.payee !== 'Shell Garage')));
         }
       }
 

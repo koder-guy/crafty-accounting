@@ -31,7 +31,7 @@ interface LineValues {
 
 interface Values {
   date: string;
-  supplier: string;
+  payee: string;
   invoiceNumber: string;
   orderNumber: string;
   description: string;
@@ -76,7 +76,7 @@ export function ExpenseForm() {
   } = useForm<Values>({
     defaultValues: {
       date: '',
-      supplier: '',
+      payee: '',
       invoiceNumber: '',
       orderNumber: '',
       description: '',
@@ -92,7 +92,7 @@ export function ExpenseForm() {
     if (id && existing) {
       reset({
         date: existing.date,
-        supplier: existing.supplier,
+        payee: existing.payee,
         invoiceNumber: existing.invoiceNumber ?? '',
         orderNumber: existing.orderNumber ?? '',
         description: existing.description ?? '',
@@ -111,7 +111,7 @@ export function ExpenseForm() {
       const today = todayIso();
       reset({
         date: isDateInTaxYear(today, activeYear) ? today : '',
-        supplier: '',
+        payee: '',
         invoiceNumber: '',
         orderNumber: '',
         description: '',
@@ -142,7 +142,7 @@ export function ExpenseForm() {
     const payload = {
       taxYearId: taxYear.id,
       date: values.date,
-      supplier: values.supplier,
+      payee: values.payee,
       invoiceNumber: values.invoiceNumber,
       orderNumber: values.orderNumber,
       description: values.description,
@@ -221,12 +221,12 @@ export function ExpenseForm() {
                   {...register('date', { validate: dateInYear(taxYear) })}
                 />
               </Field>
-              <Field label="Payee" htmlFor="supplier" error={errors.supplier?.message}>
+              <Field label="Payee" htmlFor="payee" error={errors.payee?.message}>
                 <input
-                  id="supplier"
+                  id="payee"
                   className="field"
                   placeholder="Bead World Ltd"
-                  {...register('supplier', { required: 'Payee is required', maxLength: 200 })}
+                  {...register('payee', { required: 'Payee is required', maxLength: 200 })}
                 />
               </Field>
               <Field label="Invoice number" htmlFor="invoiceNumber" hint="Optional">

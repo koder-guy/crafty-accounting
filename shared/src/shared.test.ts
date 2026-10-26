@@ -84,7 +84,7 @@ describe('expense schema', () => {
   const base = {
     taxYearId: 1,
     date: '2025-06-01',
-    supplier: 'Craft Supplies Ltd',
+    payee: 'Craft Supplies Ltd',
     paymentMethod: 'card',
     lineItems: [
       { description: 'Beads', amountPence: 1000, categoryId: 3 },

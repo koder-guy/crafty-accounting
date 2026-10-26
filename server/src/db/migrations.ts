@@ -58,7 +58,7 @@ CREATE TABLE expenses (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   tax_year_id INTEGER NOT NULL REFERENCES tax_years(id) ON DELETE CASCADE,
   date TEXT NOT NULL,
-  supplier TEXT NOT NULL,
+  payee TEXT NOT NULL,
   invoice_number TEXT,
   order_number TEXT,
   description TEXT,

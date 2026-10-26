@@ -31,7 +31,7 @@ export function OutgoingList() {
     data,
     {
       date: (r) => `${r.date}-${String(r.id).padStart(8, '0')}`,
-      supplier: (r) => r.supplier.toLowerCase(),
+      payee: (r) => r.payee.toLowerCase(),
       category: (r) => r.categoryNames.join(', '),
       method: (r) => r.paymentMethod,
       amount: (r) => r.totalPence,
@@ -95,7 +95,7 @@ export function OutgoingList() {
                         <span className="sr-only">Show line items</span>
                       </th>
                       <SortTh label="Date" sortKey="date" sort={sort} onSort={toggle} />
-                      <SortTh label="Payee" sortKey="supplier" sort={sort} onSort={toggle} />
+                      <SortTh label="Payee" sortKey="payee" sort={sort} onSort={toggle} />
                       <SortTh label="Categories" sortKey="category" sort={sort} onSort={toggle} />
                       <SortTh label="Method" sortKey="method" sort={sort} onSort={toggle} />
                       <SortTh label="Amount" sortKey="amount" sort={sort} onSort={toggle} align="right" />
@@ -119,7 +119,7 @@ export function OutgoingList() {
                                 onClick={() => toggleRow(row.id)}
                                 aria-expanded={open}
                                 aria-controls={`lines-${row.id}`}
-                                aria-label={`${open ? 'Hide' : 'Show'} line items for ${row.supplier}`}
+                                aria-label={`${open ? 'Hide' : 'Show'} line items for ${row.payee}`}
                                 className="inline-flex size-7 items-center justify-center rounded-md text-muted transition-colors hover:bg-accent-bg hover:text-accent-soft"
                               >
                                 <ChevronRight className={`size-4 transition-transform ${open ? 'rotate-90' : ''}`} aria-hidden />
@@ -128,7 +128,7 @@ export function OutgoingList() {
                             <td className="px-4 py-3 whitespace-nowrap text-muted">{formatDisplayDate(row.date)}</td>
                             <td className="max-w-xs px-4 py-3">
                               <div className="flex items-center gap-1.5 font-medium text-ink">
-                                <span className="truncate">{row.supplier}</span>
+                                <span className="truncate">{row.payee}</span>
                                 <DocDownloadLink filename={row.documentFilename} />
                               </div>
                               <div className="truncate text-xs text-muted">
@@ -188,7 +188,7 @@ export function OutgoingList() {
         {toDelete && (
           <>
             <p>
-              <strong className="text-ink">{toDelete.supplier}</strong> on {formatDisplayDate(toDelete.date)} for{' '}
+              <strong className="text-ink">{toDelete.payee}</strong> on {formatDisplayDate(toDelete.date)} for{' '}
               <strong className="text-ink">{formatGBP(toDelete.totalPence)}</strong> will be permanently deleted, with its{' '}
               {toDelete.lineItemCount} line {toDelete.lineItemCount === 1 ? 'item' : 'items'}
               {toDelete.documentFilename ? ' and attached document' : ''}.

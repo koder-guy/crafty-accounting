@@ -160,7 +160,7 @@ export function expensesRouter(ctx: AppContext): Router {
     const filters = parseWith(transactionFiltersSchema, req.query);
     const rows = listExpenses(ctx.db, filters).map((e) => [
       e.date,
-      e.supplier,
+      e.payee,
       e.invoiceNumber,
       e.orderNumber,
       e.description,
@@ -205,14 +205,14 @@ export function expensesRouter(ctx: AppContext): Router {
       ctx.db.transaction(() => {
         const result = ctx.db
           .prepare(
-            `INSERT INTO expenses (tax_year_id, date, supplier, invoice_number, order_number, description,
+            `INSERT INTO expenses (tax_year_id, date, payee, invoice_number, order_number, description,
                payment_method, total_pence, notes, document_filename)
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           )
           .run(
             input.taxYearId,
             input.date,
-            input.supplier,
+            input.payee,
             input.invoiceNumber,
             input.orderNumber,
             input.description,
@@ -249,14 +249,14 @@ export function expensesRouter(ctx: AppContext): Router {
       ctx.db.transaction(() => {
         ctx.db
           .prepare(
-            `UPDATE expenses SET date = ?, supplier = ?, invoice_number = ?, order_number = ?, description = ?,
+            `UPDATE expenses SET date = ?, payee = ?, invoice_number = ?, order_number = ?, description = ?,
                payment_method = ?, total_pence = ?, notes = ?, document_filename = ?,
                updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
              WHERE id = ?`,
           )
           .run(
             input.date,
-            input.supplier,
+            input.payee,
             input.invoiceNumber,
             input.orderNumber,
             input.description,

@@ -61,7 +61,7 @@ export interface Expense {
   id: number;
   taxYearId: number;
   date: string;
-  supplier: string;
+  payee: string;
   invoiceNumber: string | null;
   orderNumber: string | null;
   description: string | null;

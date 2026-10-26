@@ -21,7 +21,7 @@ export function ExpenseView() {
   return (
     <>
       <PageHeader
-        title={expense ? expense.supplier : 'Outgoing'}
+        title={expense ? expense.payee : 'Outgoing'}
         subtitle={expense ? `Outgoing · ${formatDisplayDate(expense.date)}` : undefined}
         actions={
           expense && (
@@ -58,7 +58,7 @@ export function ExpenseView() {
               </div>
               <dl className="divide-y divide-line">
                 <DetailRow label="Date">{formatDisplayDate(expense.date)}</DetailRow>
-                <DetailRow label="Payee">{expense.supplier}</DetailRow>
+                <DetailRow label="Payee">{expense.payee}</DetailRow>
                 <DetailRow label="Invoice number">{expense.invoiceNumber}</DetailRow>
                 <DetailRow label="Order number">{expense.orderNumber}</DetailRow>
                 <DetailRow label="Description">{expense.description}</DetailRow>

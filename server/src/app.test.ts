@@ -55,7 +55,7 @@ function expense(taxYearId: number, overrides: Record<string, unknown> = {}) {
   return {
     taxYearId,
     date: '2025-05-02',
-    supplier: 'Bead World',
+    payee: 'Bead World',
     invoiceNumber: 'INV-100',
     paymentMethod: 'card',
     totalPence: 4550,
@@ -371,14 +371,14 @@ describe('expenses', () => {
     const yearId = await createYear();
     await agent.post('/api/expenses').send(expense(yearId)).expect(201);
     await agent.post('/api/expenses').send(expense(yearId, {
-      supplier: 'Fuel Co',
+      payee: 'Fuel Co',
       totalPence: 2000,
       lineItems: [{ description: 'Diesel', amountPence: 2000, categoryId: cat('carVanTravelExpenses') }],
     })).expect(201);
     const byLine = await agent.get('/api/expenses').query({ taxYearId: yearId, search: 'glass', from: '2025-04-06' }).expect(200);
-    expect(byLine.body.map((e: { supplier: string }) => e.supplier)).toEqual(['Bead World']);
+    expect(byLine.body.map((e: { payee: string }) => e.payee)).toEqual(['Bead World']);
     const byCat = await agent.get('/api/expenses').query({ taxYearId: yearId, categoryId: cat('carVanTravelExpenses') }).expect(200);
-    expect(byCat.body.map((e: { supplier: string }) => e.supplier)).toEqual(['Fuel Co']);
+    expect(byCat.body.map((e: { payee: string }) => e.payee)).toEqual(['Fuel Co']);
   });
 });
 
