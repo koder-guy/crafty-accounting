@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
 import { ArrowDownRight, Plus } from 'lucide-react';
-import { formatDisplayDate, formatGBP, PAYMENT_METHOD_LABELS, type Income } from '@crafty/shared';
+import { formatDisplayDate, formatGBP, type Income } from '@crafty/shared';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { NoTaxYear } from '../components/NoTaxYear';
 import { PageBody, PageHeader } from '../components/PageHeader';
@@ -14,7 +14,7 @@ import {
   useSort,
   useTransactionFilters,
 } from '../components/transactions';
-import { Alert, ButtonLink, Card, CardHeader, EmptyState, Spinner } from '../components/ui';
+import { Alert, ButtonLink, Card, CardHeader, EmptyState, PaymentBadge, Spinner } from '../components/ui';
 import { exportCsvUrl, useActiveTaxYear, useCategories, useDeleteTransaction, useIncomes } from '../lib/queries';
 
 export function IncomingList() {
@@ -117,7 +117,9 @@ export function IncomingList() {
                         <td className="max-w-[220px] truncate px-4 py-3 text-muted" title={row.categoryName}>
                           {row.categoryName}
                         </td>
-                        <td className="px-4 py-3 whitespace-nowrap text-muted">{PAYMENT_METHOD_LABELS[row.paymentMethod]}</td>
+                        <td className="px-4 py-3">
+                          <PaymentBadge method={row.paymentMethod} />
+                        </td>
                         <td className="tabular px-4 py-3 text-right font-semibold whitespace-nowrap text-in-soft">
                           {formatGBP(row.amountPence)}
                         </td>

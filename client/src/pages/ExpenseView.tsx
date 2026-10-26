@@ -1,11 +1,11 @@
 import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { Download, ListOrdered, Pencil, Trash2 } from 'lucide-react';
-import { displayTaxYear, formatDisplayDate, formatGBP, PAYMENT_METHOD_LABELS } from '@crafty/shared';
+import { displayTaxYear, formatDisplayDate, formatGBP } from '@crafty/shared';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { BackLink } from '../components/FormShell';
 import { PageBody, PageHeader } from '../components/PageHeader';
-import { Alert, Badge, Button, ButtonLink, Card, CardHeader, DetailRow, Spinner } from '../components/ui';
+import { Alert, Badge, Button, ButtonLink, Card, CardHeader, DetailRow, PaymentBadge, Spinner } from '../components/ui';
 import { documentUrl } from '../lib/api';
 import { useDeleteTransaction, useExpense, useTaxYears } from '../lib/queries';
 
@@ -54,7 +54,7 @@ export function ExpenseView() {
                     <span className="ml-3 text-sm text-muted">{formatGBP(expense.disallowablePence)} disallowable</span>
                   )}
                 </div>
-                <Badge tone="teal">{PAYMENT_METHOD_LABELS[expense.paymentMethod]}</Badge>
+                <PaymentBadge method={expense.paymentMethod} />
               </div>
               <dl className="divide-y divide-line">
                 <DetailRow label="Date">{formatDisplayDate(expense.date)}</DetailRow>

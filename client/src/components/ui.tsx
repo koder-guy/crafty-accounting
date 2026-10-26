@@ -1,6 +1,7 @@
 import type { ButtonHTMLAttributes, ReactNode } from 'react';
 import { Link, type LinkProps } from 'react-router';
 import { CircleCheck, LoaderCircle, TriangleAlert } from 'lucide-react';
+import { PAYMENT_METHOD_LABELS, type PaymentMethod } from '@crafty/shared';
 
 type Variant = 'primary' | 'secondary' | 'ghost' | 'danger';
 
@@ -143,6 +144,21 @@ export function Badge({ tone = 'neutral', children }: { tone?: 'neutral' | 'acce
     teal: 'bg-teal-bg text-teal border-teal/30',
   }[tone];
   return <span className={`inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-medium ${styles}`}>{children}</span>;
+}
+
+const PAYMENT_STYLES: Record<PaymentMethod, string> = {
+  cash: 'bg-amber-400/10 text-amber-300 border-amber-400/30',
+  card: 'bg-teal-bg text-teal border-teal/30',
+  bank_transfer: 'bg-sky-400/10 text-sky-300 border-sky-400/30',
+};
+
+/** Payment method label, coloured per method (cash amber, card teal, bank transfer blue). */
+export function PaymentBadge({ method }: { method: PaymentMethod }) {
+  return (
+    <span className={`inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-medium whitespace-nowrap ${PAYMENT_STYLES[method]}`}>
+      {PAYMENT_METHOD_LABELS[method]}
+    </span>
+  );
 }
 
 export function DetailRow({ label, children }: { label: string; children: ReactNode }) {

@@ -1,11 +1,11 @@
 import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { Download, Pencil, Trash2 } from 'lucide-react';
-import { displayTaxYear, formatDisplayDate, formatGBP, PAYMENT_METHOD_LABELS } from '@crafty/shared';
+import { displayTaxYear, formatDisplayDate, formatGBP } from '@crafty/shared';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { BackLink } from '../components/FormShell';
 import { PageBody, PageHeader } from '../components/PageHeader';
-import { Alert, Badge, Button, ButtonLink, Card, DetailRow, Spinner } from '../components/ui';
+import { Alert, Button, ButtonLink, Card, DetailRow, PaymentBadge, Spinner } from '../components/ui';
 import { documentUrl } from '../lib/api';
 import { useDeleteTransaction, useIncome, useTaxYears } from '../lib/queries';
 
@@ -49,7 +49,7 @@ export function IncomeView() {
             <Card className="px-5 sm:px-6">
               <div className="flex flex-wrap items-baseline justify-between gap-3 border-b border-line py-5">
                 <span className="tabular text-3xl font-bold text-in-soft">{formatGBP(income.amountPence)}</span>
-                <Badge tone="teal">{PAYMENT_METHOD_LABELS[income.paymentMethod]}</Badge>
+                <PaymentBadge method={income.paymentMethod} />
               </div>
               <dl className="divide-y divide-line">
                 <DetailRow label="Date">{formatDisplayDate(income.date)}</DetailRow>
