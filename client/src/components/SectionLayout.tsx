@@ -8,8 +8,48 @@ export interface SectionLink {
   icon: ComponentType<{ className?: string; 'aria-hidden'?: boolean }>;
 }
 
-/** A page with a sub-menu down the side on desktop (tabs across the top on phones). */
-export function SectionLayout({ title, subtitle, sections }: { title: string; subtitle: string; sections: SectionLink[] }) {
+/**
+ * A page with sub-pages: a menu down the side on desktop ("side"), or tabs
+ * across the top ("tabs"). Phones always get tabs.
+ */
+export function SectionLayout({
+  title,
+  subtitle,
+  sections,
+  variant = 'side',
+}: {
+  title: string;
+  subtitle: string;
+  sections: SectionLink[];
+  variant?: 'side' | 'tabs';
+}) {
+  if (variant === 'tabs') {
+    return (
+      <>
+        <PageHeader title={title} subtitle={subtitle} />
+        <nav aria-label={title} className="flex gap-1 overflow-x-auto border-b border-line px-4 sm:px-8 print:hidden">
+          {sections.map(({ to, label, icon: Icon }) => (
+            <NavLink
+              key={to}
+              to={to}
+              className={({ isActive }) =>
+                `-mb-px flex shrink-0 items-center gap-2 border-b-2 px-3 py-3 text-sm whitespace-nowrap transition-colors ${
+                  isActive ? 'border-accent font-medium text-accent-soft' : 'border-transparent text-muted hover:border-line-strong hover:text-ink'
+                }`
+              }
+            >
+              <Icon className="size-4" aria-hidden />
+              {label}
+            </NavLink>
+          ))}
+        </nav>
+        <PageBody>
+          <Outlet />
+        </PageBody>
+      </>
+    );
+  }
+
   return (
     <>
       <PageHeader title={title} subtitle={subtitle} />

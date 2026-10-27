@@ -215,16 +215,26 @@ function DrillDown({
   onClose: () => void;
 }) {
   const { data: items, isLoading, error } = useBreakdownItems(from, to, selection);
-  const ref = useRef<HTMLDivElement>(null);
+  const ref = useRef<HTMLDialogElement>(null);
   useEffect(() => {
-    // Braces matter: scrollIntoView may return a promise, which React would treat as a cleanup.
-    ref.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-  }, [title]);
+    const dialog = ref.current;
+    if (dialog && !dialog.open) dialog.showModal();
+    return () => dialog?.close();
+  }, []);
   const total = (items ?? []).reduce((acc, i) => acc + i.amountPence, 0);
 
   return (
-    <div ref={ref}>
-      <Card className="border-accent/40 print:break-inside-avoid">
+    <dialog
+      ref={ref}
+      aria-label={title}
+      onCancel={(e) => {
+        e.preventDefault();
+        onClose();
+      }}
+      // A click on the dialog element itself (not its contents) is a click on the blurred backdrop.
+      onClick={(e) => e.target === ref.current && onClose()}
+      className="m-auto max-h-[85vh] w-[calc(100%-32px)] max-w-4xl flex-col overflow-hidden rounded-[var(--radius-card)] border border-line bg-surface p-0 text-ink shadow-2xl backdrop:bg-black/60 backdrop:backdrop-blur-sm open:flex"
+    >
         <CardHeader
           icon={<ListTree className="size-5 text-accent-soft" />}
           title={
@@ -241,6 +251,7 @@ function DrillDown({
             </IconButton>
           }
         />
+        <div className="min-h-0 flex-1 overflow-auto pb-2">
         {isLoading ? (
           <Spinner />
         ) : error ? (
@@ -288,8 +299,8 @@ function DrillDown({
             </table>
           </div>
         )}
-      </Card>
-    </div>
+        </div>
+    </dialog>
   );
 }
 

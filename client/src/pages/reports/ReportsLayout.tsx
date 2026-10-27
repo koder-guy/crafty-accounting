@@ -7,5 +7,12 @@ const SECTIONS = [
 ];
 
 export function ReportsLayout() {
-  return <SectionLayout title="Reports" subtitle="Break down your income and spending, and prepare your return." sections={SECTIONS} />;
+  return (
+    <SectionLayout
+      title="Reports"
+      subtitle="Break down your income and spending, and prepare your return."
+      sections={SECTIONS}
+      variant="tabs"
+    />
+  );
 }
