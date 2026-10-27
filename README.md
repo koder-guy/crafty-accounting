@@ -115,8 +115,8 @@ It refuses to run if any tax years already exist. Adding `--reset` first **delet
 | `COOKIE_SECURE` | `false` (`true` in Docker) | Only send the session cookie over HTTPS |
 | `TRUST_PROXY` | `false` (`true` in Docker) | Trust the reverse proxy's forwarded headers |
 | `DATA_DIR` | `./data` (`/data` in Docker) | Database and uploads location |
-| `BACKUP_HOST_DIR` | `./backups` | Docker Compose: the host folder for automatic backups |
-| `BACKUP_DIR` | `DATA_DIR/backups` (`/backups` in Docker) | Where automatic backups are written |
+| `BACKUP_HOST_DIR` | `./backups` | **With Docker:** the folder on the server where automatic backups appear. This is the one to change. |
+| `BACKUP_DIR` | `DATA_DIR/backups` | **Without Docker only:** where automatic backups are written. Ignored in Docker, where Compose fixes it to `/backups` inside the container and connects that to `BACKUP_HOST_DIR`. |
 | `TZ` | `Europe/London` | Time zone for the daily backup time |
 
 ## Backups
