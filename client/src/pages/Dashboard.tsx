@@ -286,7 +286,7 @@ export function Dashboard() {
                 value={formatGBP(data.totals.incomePence)}
                 sub="Card, cash and bank transfer"
                 icon={
-                  <IconChip className="bg-accent-bg text-accent-soft">
+                  <IconChip className="bg-ok/15 text-ok">
                     <TrendingUp className="size-5" aria-hidden />
                   </IconChip>
                 }
