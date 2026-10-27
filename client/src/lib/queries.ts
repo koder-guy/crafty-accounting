@@ -1,6 +1,8 @@
 import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import type {
   AutoBackupStatus,
+  BreakdownItem,
+  BreakdownResponse,
   Category,
   DashboardData,
   ExpenseWithLineItems,
@@ -94,6 +96,7 @@ export function useCategoryMutations() {
     qc.invalidateQueries({ queryKey: ['incomes'] });
     qc.invalidateQueries({ queryKey: ['expenses'] });
     qc.invalidateQueries({ queryKey: ['dashboard'] });
+    qc.invalidateQueries({ queryKey: ['reports'] });
   };
   type Input = { name: string; mapsToCategoryId: number };
   return {
@@ -159,6 +162,7 @@ function useInvalidateTransactions(kind: Kind) {
     qc.invalidateQueries({ queryKey: [kind] });
     qc.invalidateQueries({ queryKey: ['dashboard'] });
     qc.invalidateQueries({ queryKey: ['mtd'] });
+    qc.invalidateQueries({ queryKey: ['reports'] });
     qc.invalidateQueries({ queryKey: ['tax-years'] });
   };
 }
@@ -262,6 +266,30 @@ export function useLoadSampleData() {
 }
 
 // ---- Reports ----
+
+export const useBreakdown = (from: string, to: string) =>
+  useQuery({
+    queryKey: ['reports', 'breakdown', from, to],
+    queryFn: () => api.get<BreakdownResponse>(`/reports/breakdown${toQuery({ from, to })}`),
+    enabled: Boolean(from && to && from <= to),
+    placeholderData: (prev) => prev,
+  });
+
+export type BreakdownSelection = { categoryId: number; group: boolean } | { payee: string };
+
+export const useBreakdownItems = (from: string, to: string, selection: BreakdownSelection | null) =>
+  useQuery({
+    queryKey: ['reports', 'breakdown-items', from, to, selection],
+    queryFn: () =>
+      api.get<BreakdownItem[]>(
+        `/reports/breakdown/items${toQuery(
+          selection && 'payee' in selection
+            ? { from, to, payee: selection.payee }
+            : { from, to, categoryId: selection!.categoryId, group: selection!.group ? '1' : '0' },
+        )}`,
+      ),
+    enabled: selection !== null && Boolean(from && to && from <= to),
+  });
 
 export const useYearEndSummary = (taxYearId: number | undefined) =>
   useQuery({

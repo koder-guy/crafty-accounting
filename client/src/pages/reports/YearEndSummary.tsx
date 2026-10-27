@@ -11,10 +11,10 @@ import {
   type Sa103sBox,
   type YearEndSummaryResponse,
 } from '@crafty/shared';
-import { NoTaxYear } from '../components/NoTaxYear';
-import { PageBody, PageHeader } from '../components/PageHeader';
-import { Alert, Button, Card, CardHeader, Spinner } from '../components/ui';
-import { useActiveTaxYear, useCategories, useYearEndSummary } from '../lib/queries';
+import { NoTaxYear } from '../../components/NoTaxYear';
+import { SectionHeading } from '../../components/SectionLayout';
+import { Alert, Button, Card, CardHeader, Spinner } from '../../components/ui';
+import { useActiveTaxYear, useCategories, useYearEndSummary } from '../../lib/queries';
 
 function BoxRow({ box, label, amount, strong = false }: { box: string; label: ReactNode; amount: number; strong?: boolean }) {
   return (
@@ -160,9 +160,10 @@ export function YearEndSummary() {
   const today = todayIso();
 
   return (
-    <>
-      <PageHeader
+    <div className="space-y-6">
+      <SectionHeading
         title="Year-end Summary"
+        description="Figures for the Self Assessment self-employment (short) pages for the active tax year."
         actions={
           data && (
             <Button onClick={() => window.print()}>
@@ -172,7 +173,6 @@ export function YearEndSummary() {
           )
         }
       />
-      <PageBody>
         {yearLoading || (taxYear && isLoading) ? (
           <Spinner />
         ) : !taxYear ? (
@@ -222,7 +222,6 @@ export function YearEndSummary() {
             </p>
           </>
         )}
-      </PageBody>
-    </>
+    </div>
   );
 }

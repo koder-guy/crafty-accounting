@@ -5,7 +5,7 @@ import {
   ArrowUpRight,
   CalendarDays,
   FileSpreadsheet,
-  FileText,
+  ChartPie,
   LogOut,
   Menu,
   Settings,
@@ -130,7 +130,7 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
           count={active?.expenseCount}
         />
         <NavItem to="/mtd" icon={<FileSpreadsheet className="size-5 text-muted" aria-hidden />} label="MTD Quarterly" />
-        <NavItem to="/year-end" icon={<FileText className="size-5 text-muted" aria-hidden />} label="Year-end Summary" />
+        <NavItem to="/reports" icon={<ChartPie className="size-5 text-muted" aria-hidden />} label="Reports" />
         <NavItem to="/settings" icon={<Settings className="size-5 text-muted" aria-hidden />} label="Settings" />
       </nav>
       <div className="border-t border-line px-5 py-4 text-xs font-semibold text-ink/80">

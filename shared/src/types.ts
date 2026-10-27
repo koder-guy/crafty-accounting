@@ -134,6 +134,54 @@ export interface YearEndSummaryResponse {
   summary: SelfAssessmentSummary;
 }
 
+export interface BreakdownCategory {
+  categoryId: number;
+  name: string;
+  isCustom: boolean;
+  totalPence: number;
+  disallowablePence: number;
+  /** Incoming transactions or outgoing line items. */
+  count: number;
+}
+
+/** One standard MTD category, with any custom categories mapped to it. */
+export interface BreakdownGroup {
+  hmrcCode: string;
+  /** The standard category itself (amounts recorded directly against it). */
+  standard: BreakdownCategory;
+  custom: BreakdownCategory[];
+  totalPence: number;
+  disallowablePence: number;
+  count: number;
+}
+
+export interface BreakdownSection {
+  totalPence: number;
+  disallowablePence: number;
+  groups: BreakdownGroup[];
+}
+
+export interface BreakdownResponse {
+  from: string;
+  to: string;
+  income: BreakdownSection;
+  expenses: BreakdownSection;
+  /** Outgoing transactions by payee, largest first. */
+  payees: { payee: string; totalPence: number; count: number }[];
+}
+
+export interface BreakdownItem {
+  kind: 'income' | 'expense';
+  /** The incoming or outgoing transaction to link to. */
+  transactionId: number;
+  date: string;
+  payee: string | null;
+  description: string;
+  categoryName: string;
+  amountPence: number;
+  disallowable: boolean;
+}
+
 export interface AutoBackupStatus {
   enabled: boolean;
   time: string;

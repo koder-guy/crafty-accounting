@@ -119,4 +119,20 @@ export const autoBackupSettingsSchema = z.object({
   keep: z.number().int().min(1, 'Keep at least 1 backup').max(365, 'Keep at most 365 backups'),
 });
 
+/** A date range for reports; it may span tax years. */
+export const reportRangeSchema = z
+  .object({ from: isoDate, to: isoDate })
+  .refine((r) => r.from <= r.to, { message: 'The start date must be on or before the end date', path: ['to'] });
+
+/** What to list in a breakdown drill-down: one category, a category group, or a payee. */
+export const breakdownItemsSchema = z
+  .object({
+    from: isoDate,
+    to: isoDate,
+    categoryId: z.coerce.number().int().positive().optional(),
+    group: z.enum(['0', '1']).optional(),
+    payee: z.string().trim().min(1).optional(),
+  })
+  .refine((q) => (q.categoryId === undefined) !== (q.payee === undefined), 'Choose a category or a payee');
+
 export const loginSchema = z.object({ password: z.string().min(1, 'Enter the password') });

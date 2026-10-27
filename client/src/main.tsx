@@ -16,7 +16,9 @@ import { OutgoingList } from './pages/OutgoingList';
 import { ExpenseForm } from './pages/ExpenseForm';
 import { ExpenseView } from './pages/ExpenseView';
 import { MtdQuarterly } from './pages/MtdQuarterly';
-import { YearEndSummary } from './pages/YearEndSummary';
+import { ReportsLayout } from './pages/reports/ReportsLayout';
+import { Breakdown } from './pages/reports/Breakdown';
+import { YearEndSummary } from './pages/reports/YearEndSummary';
 import { SettingsLayout } from './pages/settings/SettingsLayout';
 import { TaxYearsSettings } from './pages/settings/TaxYearsSettings';
 import { CustomCategories } from './pages/settings/CustomCategories';
@@ -49,7 +51,12 @@ function App() {
         <Route path="outgoing/:id" element={<ExpenseView />} />
         <Route path="outgoing/:id/edit" element={<ExpenseForm />} />
         <Route path="mtd" element={<MtdQuarterly />} />
-        <Route path="year-end" element={<YearEndSummary />} />
+        <Route path="reports" element={<ReportsLayout />}>
+          <Route index element={<Navigate to="breakdown" replace />} />
+          <Route path="breakdown" element={<Breakdown />} />
+          <Route path="year-end" element={<YearEndSummary />} />
+        </Route>
+        <Route path="year-end" element={<Navigate to="/reports/year-end" replace />} />
         <Route path="settings" element={<SettingsLayout />}>
           <Route index element={<Navigate to="tax-years" replace />} />
           <Route path="tax-years" element={<TaxYearsSettings />} />

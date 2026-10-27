@@ -545,6 +545,86 @@ describe('automatic backups', () => {
   });
 });
 
+describe('breakdown report', () => {
+  async function seedBreakdown() {
+    const y1 = await createYear(2025);
+    const y2 = await createYear(2026);
+    const packaging = (await agent.post('/api/categories').send({ name: 'Packaging', mapsToCategoryId: cat('costOfGoods') })).body;
+    const etsy = (await agent.post('/api/categories').send({ name: 'Etsy sales', mapsToCategoryId: cat('turnover') })).body;
+    const line = (description: string, amountPence: number, categoryId: number, disallowable = false) => ({
+      description,
+      amountPence,
+      categoryId,
+      disallowable,
+    });
+    const exp = (taxYearId: number, date: string, payee: string, lines: ReturnType<typeof line>[]) =>
+      agent
+        .post('/api/expenses')
+        .send(expense(taxYearId, { date, payee, totalPence: lines.reduce((a, l) => a + l.amountPence, 0), lineItems: lines }))
+        .expect(201);
+    await exp(y1, '2026-03-10', 'Bead World', [line('Beads', 3000, cat('costOfGoods')), line('Boxes', 500, packaging.id)]);
+    await exp(y1, '2026-03-20', 'bead world', [line('Gift bags', 700, packaging.id), line('Lunch', 900, cat('otherExpenses'), true)]);
+    await exp(y2, '2026-04-10', 'Packaging Co', [line('Tissue paper', 1200, packaging.id)]);
+    await exp(y1, '2026-02-01', 'Old Supplier', [line('Old boxes', 999, packaging.id)]);
+    await agent.post('/api/incomes').send(income(y1, { date: '2026-03-15', amountPence: 20000 })).expect(201);
+    await agent.post('/api/incomes').send(income(y2, { date: '2026-04-15', amountPence: 5000, categoryId: etsy.id })).expect(201);
+    return { packaging, etsy };
+  }
+
+  it('totals a date range across tax years, grouping custom categories under their MTD category', async () => {
+    const { packaging } = await seedBreakdown();
+    const { body } = await agent.get('/api/reports/breakdown').query({ from: '2026-03-01', to: '2026-04-30' }).expect(200);
+
+    expect(body.income.totalPence).toBe(25000);
+    expect(body.income.groups).toHaveLength(1);
+    expect(body.income.groups[0].custom.map((c: { name: string; totalPence: number }) => [c.name, c.totalPence])).toEqual([
+      ['Etsy sales', 5000],
+    ]);
+
+    expect(body.expenses.totalPence).toBe(3000 + 500 + 700 + 900 + 1200);
+    expect(body.expenses.disallowablePence).toBe(900);
+    const cog = body.expenses.groups.find((g: { hmrcCode: string }) => g.hmrcCode === 'costOfGoods');
+    expect(cog.standard.totalPence).toBe(3000);
+    expect(cog.custom).toEqual([expect.objectContaining({ categoryId: packaging.id, totalPence: 2400, count: 3 })]);
+    expect(cog.totalPence).toBe(5400);
+    expect(body.expenses.groups[0].hmrcCode).toBe('costOfGoods');
+
+    expect(body.payees).toEqual([
+      { payee: 'Bead World', totalPence: 5100, count: 2 },
+      { payee: 'Packaging Co', totalPence: 1200, count: 1 },
+    ]);
+  });
+
+  it('lists the items behind a category, a category group or a payee', async () => {
+    const { packaging, etsy } = await seedBreakdown();
+    const range = { from: '2026-03-01', to: '2026-04-30' };
+    const items = async (q: Record<string, string | number>) =>
+      (await agent.get('/api/reports/breakdown/items').query({ ...range, ...q }).expect(200)).body as {
+        description: string;
+        amountPence: number;
+        kind: string;
+      }[];
+
+    expect((await items({ categoryId: packaging.id })).map((i) => i.description)).toEqual(['Boxes', 'Gift bags', 'Tissue paper']);
+    expect((await items({ categoryId: cat('costOfGoods') })).map((i) => i.description)).toEqual(['Beads']);
+    expect(await items({ categoryId: cat('costOfGoods'), group: '1' })).toHaveLength(4);
+    expect((await items({ payee: 'BEAD WORLD' })).map((i) => i.description)).toEqual(['Beads', 'Boxes', 'Gift bags', 'Lunch']);
+    const incomes = await items({ categoryId: cat('turnover'), group: '1' });
+    expect(incomes.map((i) => [i.kind, i.amountPence])).toEqual([
+      ['income', 20000],
+      ['income', 5000],
+    ]);
+    expect(await items({ categoryId: etsy.id })).toHaveLength(1);
+  });
+
+  it('validates the range and the drill-down', async () => {
+    await agent.get('/api/reports/breakdown').query({ from: '2026-05-01', to: '2026-04-01' }).expect(400);
+    await agent.get('/api/reports/breakdown').query({ from: '2026-05-01' }).expect(400);
+    await agent.get('/api/reports/breakdown/items').query({ from: '2026-04-01', to: '2026-05-01' }).expect(400);
+    await agent.get('/api/reports/breakdown/items').query({ from: '2026-04-01', to: '2026-05-01', categoryId: 9999 }).expect(404);
+  });
+});
+
 describe('year-end summary', () => {
   it('gives SA103S figures that agree with the MTD totals, including custom categories', async () => {
     const yearId = await createYear();
