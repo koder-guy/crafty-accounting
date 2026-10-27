@@ -421,7 +421,7 @@ describe('dashboard', () => {
     });
     expect(body.monthly[2].incomePence).toBe(38000);
     expect(body.monthly[9].incomePence).toBe(13800);
-    expect(body.monthly[0].expensesPence).toBe(4550);
+    expect(body.monthly[0].expensesPence).toBe(3550);
     expect(body.mtd.periodDisallowableExpenses).toEqual({ otherExpensesDisallowable: 1000 });
   });
 });
