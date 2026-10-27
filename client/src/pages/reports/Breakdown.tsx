@@ -346,7 +346,8 @@ export function Breakdown() {
     return 'Selected items';
   })();
 
-  const net = (data?.income.totalPence ?? 0) - (data?.expenses.totalPence ?? 0);
+  const allowableExpenses = (data?.expenses.totalPence ?? 0) - (data?.expenses.disallowablePence ?? 0);
+  const profit = (data?.income.totalPence ?? 0) - allowableExpenses;
 
   return (
     <div className="space-y-6">
@@ -415,14 +416,14 @@ export function Breakdown() {
             </Card>
             <Card className="p-5">
               <div className="eyebrow">Expenses</div>
-              <div className="tabular mt-2 text-2xl font-bold text-out-soft">{formatGBP(data.expenses.totalPence)}</div>
+              <div className="tabular mt-2 text-2xl font-bold text-out-soft">{formatGBP(allowableExpenses)}</div>
               {data.expenses.disallowablePence > 0 && (
-                <div className="mt-1 text-xs text-muted">Includes {formatGBP(data.expenses.disallowablePence)} disallowable</div>
+                <div className="mt-1 text-xs text-muted">Excludes {formatGBP(data.expenses.disallowablePence)} disallowable</div>
               )}
             </Card>
             <Card className="p-5">
-              <div className="eyebrow">Income minus expenses</div>
-              <div className={`tabular mt-2 text-2xl font-bold ${net < 0 ? 'text-out-soft' : 'text-white'}`}>{formatGBP(net)}</div>
+              <div className="eyebrow">Profit</div>
+              <div className={`tabular mt-2 text-2xl font-bold ${profit < 0 ? 'text-out-soft' : 'text-white'}`}>{formatGBP(profit)}</div>
             </Card>
           </div>
 
