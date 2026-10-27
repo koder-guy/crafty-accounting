@@ -13,7 +13,7 @@ import {
   type CategoryTotal,
   type DashboardData,
 } from '@crafty/shared';
-import { NoTaxYear } from '../components/NoTaxYear';
+import { SampleDataNotice, Welcome } from '../components/Welcome';
 import { PageBody, PageHeader } from '../components/PageHeader';
 import { DocIndicator } from '../components/transactions';
 import { Alert, Card, CardHeader, Spinner } from '../components/ui';
@@ -274,11 +274,12 @@ export function Dashboard() {
         {yearLoading || (taxYear && isLoading) ? (
           <Spinner />
         ) : !taxYear ? (
-          <NoTaxYear />
+          <Welcome />
         ) : error || !data ? (
           <Alert>{error?.message ?? 'Could not load the dashboard'}</Alert>
         ) : (
           <>
+            <SampleDataNotice />
             <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
               <StatCard
                 label="Total income"

@@ -244,6 +244,23 @@ export function useAutoBackupMutations() {
   };
 }
 
+// ---- Sample data ----
+
+export const useSampleData = () =>
+  useQuery({
+    queryKey: ['sample-data'],
+    queryFn: () => api.get<{ loaded: boolean; canLoad: boolean }>('/sample-data'),
+  });
+
+export function useLoadSampleData() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.post('/sample-data'),
+    // Everything changes, so refetch it all (staying signed in).
+    onSuccess: () => qc.resetQueries({ predicate: (q) => q.queryKey[0] !== 'me' }),
+  });
+}
+
 // ---- Reports ----
 
 export const useYearEndSummary = (taxYearId: number | undefined) =>

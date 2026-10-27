@@ -703,6 +703,22 @@ describe('sample data', () => {
     await agent.post('/api/restore').attach('file', Buffer.from(dump), 'backup.sql').expect(200);
   });
 
+  it('can be loaded from the app into an empty install, and is flagged until cleared', async () => {
+    expect((await agent.get('/api/sample-data').expect(200)).body).toEqual({ loaded: false, canLoad: true });
+    const { body } = await agent.post('/api/sample-data').expect(201);
+    expect(body.taxYears).toBe(2);
+    expect((await agent.get('/api/sample-data')).body).toEqual({ loaded: true, canLoad: false });
+    await agent.post('/api/sample-data').expect(409);
+
+    // Deleting every tax year clears the flag; a reset does too.
+    for (const y of (await agent.get('/api/tax-years')).body.taxYears) await agent.delete(`/api/tax-years/${y.id}`).expect(200);
+    expect((await agent.get('/api/sample-data')).body).toEqual({ loaded: false, canLoad: true });
+    await agent.post('/api/sample-data').expect(201);
+    await agent.post('/api/reset').send({ confirm: 'RESET' }).expect(200);
+    await createYear();
+    expect((await agent.get('/api/sample-data')).body).toEqual({ loaded: false, canLoad: false });
+  });
+
   it('refuses to overwrite existing data, and clears it on request', () => {
     generateSampleData(ctx.db, uploads(), '2026-10-26');
     expect(() => generateSampleData(ctx.db, uploads(), '2026-10-26')).toThrow(/already has data/);

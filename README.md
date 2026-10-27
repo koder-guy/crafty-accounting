@@ -88,7 +88,9 @@ After changing these settings, run `docker compose up -d` to apply them.
 
 ### Sample data for testing
 
-To fill an empty install with realistic test data, run:
+On a new install with no tax years, the dashboard offers **Load sample data**, which is the quickest way to explore the app. A reminder stays on the dashboard until you clear it with **Settings → Backup and restore → Start again with an empty database**.
+
+You can also load it from the command line:
 
 ```bash
 docker compose exec crafty-accounting node server/dist/seed.js

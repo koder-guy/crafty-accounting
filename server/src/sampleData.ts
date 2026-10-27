@@ -349,6 +349,8 @@ export function generateSampleData(db: Db, uploadsDir: string, today = todayIso(
       }
     }
     setSetting(db, 'active_tax_year_id', String(currentYearId));
+    // Lets the dashboard remind you this is sample data until it's cleared.
+    setSetting(db, 'sample_data_loaded', '1');
   })();
 
   return result;

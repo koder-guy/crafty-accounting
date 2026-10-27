@@ -58,6 +58,7 @@ export function taxYearsRouter(ctx: AppContext): Router {
 
     // Transactions and line items go via ON DELETE CASCADE.
     db.prepare('DELETE FROM tax_years WHERE id = ?').run(id);
+    if (listTaxYears(db).length === 0) setSetting(db, 'sample_data_loaded', null);
     for (const name of documents) removeDocumentFile(ctx, name);
 
     res.json({
