@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { Link } from 'react-router';
 import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
-import { ArrowDownRight, ArrowUpRight, CalendarClock, CreditCard, PieChart, PoundSterling, TrendingDown, TrendingUp } from 'lucide-react';
+import { ArrowDownRight, ArrowUpRight, CalendarClock, PieChart, PoundSterling, TrendingDown, TrendingUp } from 'lucide-react';
 import {
   daysBetween,
   formatDisplayDate,
@@ -280,7 +280,7 @@ export function Dashboard() {
         ) : (
           <>
             <SampleDataNotice />
-            <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="grid gap-5 md:grid-cols-3">
               <StatCard
                 label="Total income"
                 value={formatGBP(data.totals.incomePence)}
@@ -292,22 +292,12 @@ export function Dashboard() {
                 }
               />
               <StatCard
-                label="Card income"
-                value={formatGBP(data.totals.cardIncomePence)}
-                sub="Card payments"
-                icon={
-                  <IconChip className="bg-teal-bg text-teal">
-                    <CreditCard className="size-5" aria-hidden />
-                  </IconChip>
-                }
-              />
-              <StatCard
                 label="Total outgoing"
-                value={formatGBP(data.totals.expensesPence)}
+                value={formatGBP(data.totals.allowableExpensesPence)}
                 sub={
                   data.totals.disallowablePence > 0
-                    ? `Includes ${formatGBP(data.totals.disallowablePence)} disallowable`
-                    : 'Expenses recorded'
+                    ? `Excludes ${formatGBP(data.totals.disallowablePence)} disallowable`
+                    : 'Allowable expenses'
                 }
                 icon={
                   <IconChip className="bg-out-bg text-out-soft">
