@@ -15,6 +15,7 @@ import {
   UserRound,
   Wallet,
   X,
+  type LucideIcon,
 } from 'lucide-react';
 import { APP_NAME, APP_VERSION, displayTaxYear, taxYearStartYearForDate, todayIso } from '@crafty/shared';
 import { useLiveUpdates } from '../lib/liveUpdates';
@@ -77,15 +78,16 @@ function TaxYearSwitcher() {
   );
 }
 
+/** A sidebar link. Icons are muted grey, and the current page's icon takes the accent colour with its label. */
 function NavItem({
   to,
-  icon,
+  icon: Icon,
   label,
   count,
   end,
 }: {
   to: string;
-  icon: React.ReactNode;
+  icon: LucideIcon;
   label: string;
   count?: number;
   end?: boolean;
@@ -95,17 +97,24 @@ function NavItem({
       to={to}
       end={end}
       className={({ isActive }) =>
-        `flex items-center gap-3 rounded-xl border px-4 py-3 text-[15px] transition-colors ${
+        `group flex items-center gap-3 rounded-xl border px-4 py-3 text-[15px] transition-colors ${
           isActive
             ? 'border-white/30 bg-surface font-medium text-accent-soft'
             : 'border-transparent text-ink/90 hover:bg-surface hover:text-white'
         }`
       }
     >
-      {icon}
-      <span className="flex-1">{label}</span>
-      {count !== undefined && (
-        <span className="tabular min-w-7 rounded-full bg-surface-2 px-2 py-0.5 text-center text-xs text-muted">{count}</span>
+      {({ isActive }) => (
+        <>
+          <Icon
+            className={`size-5 transition-colors ${isActive ? 'text-accent-soft' : 'text-muted group-hover:text-ink'}`}
+            aria-hidden
+          />
+          <span className="flex-1">{label}</span>
+          {count !== undefined && (
+            <span className="tabular min-w-7 rounded-full bg-surface-2 px-2 py-0.5 text-center text-xs text-muted">{count}</span>
+          )}
+        </>
       )}
     </NavLink>
   );
@@ -126,29 +135,14 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
         <TaxYearSwitcher />
       </div>
       <nav className="flex-1 space-y-1.5 overflow-y-auto px-4 py-5" aria-label="Main">
-        <NavItem to="/" end icon={<TrendingUp className="size-5 text-accent-soft" aria-hidden />} label="Dashboard" />
-        <NavItem
-          to="/incoming"
-          icon={<ArrowDownRight className="size-5 text-in-soft" aria-hidden />}
-          label="Incoming"
-          count={active?.incomeCount}
-        />
-        <NavItem
-          to="/outgoing"
-          icon={<ArrowUpRight className="size-5 text-out-soft" aria-hidden />}
-          label="Outgoing"
-          count={active?.expenseCount}
-        />
-        <NavItem
-          to="/mileage"
-          icon={<Car className="size-5 text-muted" aria-hidden />}
-          label="Mileage"
-          count={active?.mileageCount}
-        />
-        <NavItem to="/use-of-home" icon={<House className="size-5 text-muted" aria-hidden />} label="Use of Home" />
-        <NavItem to="/reports" icon={<ChartPie className="size-5 text-muted" aria-hidden />} label="Reports" />
-        <NavItem to="/mtd" icon={<FileSpreadsheet className="size-5 text-muted" aria-hidden />} label="MTD Quarterly" />
-        <NavItem to="/settings" icon={<Settings className="size-5 text-muted" aria-hidden />} label="Settings" />
+        <NavItem to="/" end icon={TrendingUp} label="Dashboard" />
+        <NavItem to="/incoming" icon={ArrowDownRight} label="Incoming" count={active?.incomeCount} />
+        <NavItem to="/outgoing" icon={ArrowUpRight} label="Outgoing" count={active?.expenseCount} />
+        <NavItem to="/mileage" icon={Car} label="Mileage" count={active?.mileageCount} />
+        <NavItem to="/use-of-home" icon={House} label="Use of Home" />
+        <NavItem to="/reports" icon={ChartPie} label="Reports" />
+        <NavItem to="/mtd" icon={FileSpreadsheet} label="MTD Quarterly" />
+        <NavItem to="/settings" icon={Settings} label="Settings" />
       </nav>
       <div className="space-y-1 border-t border-line px-5 py-4 text-xs">
         {me?.user && (
