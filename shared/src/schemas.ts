@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { VEHICLES } from './mileage';
+import { MAX_MONTH_HOURS } from './useOfHome';
 import { isValidIsoDate } from './taxYear';
 
 export const PAYMENT_METHODS = ['cash', 'card', 'bank_transfer'] as const;
@@ -154,6 +155,22 @@ export const mileageInputSchema = z.object({
   expectedUpdatedAt: z.string().optional(),
 });
 export type MileageInput = z.infer<typeof mileageInputSchema>;
+
+export const useOfHomeInputSchema = z.object({
+  taxYearId: id,
+  /** Hours for each tax month that has any; months left out have none. */
+  months: z
+    .array(
+      z.object({
+        index: z.number().int().min(0).max(11),
+        hours: z.number().int('Enter whole hours').min(0).max(MAX_MONTH_HOURS, `A month has at most ${MAX_MONTH_HOURS} hours`),
+      }),
+    )
+    .max(12),
+  /** The updatedAt the page was loaded with (null if nothing was saved yet); refused if it has changed since. */
+  expectedUpdatedAt: z.string().nullable().optional(),
+});
+export type UseOfHomeInput = z.infer<typeof useOfHomeInputSchema>;
 
 export const taxSettingsSchema = z.object({
   otherIncomePence: z.number().int().min(0, 'Enter zero or more').max(MAX_PENCE, 'Amount is too large'),

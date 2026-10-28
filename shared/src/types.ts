@@ -133,6 +133,8 @@ export interface DashboardData {
   mtd: MtdPeriodSummary;
   /** Mileage claimed so far this year (included in the expenses above). */
   mileagePence: number;
+  /** Use of home flat rate claimed this year (included in the expenses above). */
+  useOfHomePence: number;
   taxEstimate: TaxEstimate;
 }
 
@@ -199,7 +201,7 @@ export interface BreakdownResponse {
 }
 
 export interface BreakdownItem {
-  kind: 'income' | 'expense' | 'mileage';
+  kind: 'income' | 'expense' | 'mileage' | 'home';
   /** The incoming or outgoing transaction (or mileage trip) to link to. */
   transactionId: number;
   date: string;
@@ -286,4 +288,22 @@ export interface TaxEstimateResponse {
   dueDates: { balancing: string; secondPaymentOnAccount: string };
   /** Last date with any transaction or trip, so the page can say the figures are "so far". */
   recordedTo: string | null;
+}
+
+export interface UseOfHomeMonth {
+  index: number;
+  label: string;
+  range: string;
+  startDate: string;
+  endDate: string;
+  hours: number;
+  claimPence: number;
+}
+
+export interface UseOfHomeResponse {
+  months: UseOfHomeMonth[];
+  totals: { hours: number; claimPence: number; monthsClaimed: number };
+  /** When the hours were last saved, and by whom (null if never). */
+  updatedAt: string | null;
+  updatedBy: string | null;
 }

@@ -23,14 +23,14 @@ export const dateInYear = (taxYear: TaxYear) => (value: string) =>
 export const yearRangeHint = (taxYear: TaxYear) =>
   `Tax year ${displayTaxYear(taxYear.label)}: ${formatDisplayDate(taxYear.startDate)} to ${formatDisplayDate(taxYear.endDate)}`;
 
-/** Shown on an edit form when someone else saves the same transaction meanwhile. */
-export function ChangedElsewhere({ by, onLoad }: { by: string | null; onLoad: () => void }) {
+/** Shown on an edit form when someone else saves the same record meanwhile. */
+export function ChangedElsewhere({ by, what = 'this transaction', onLoad }: { by: string | null; what?: string; onLoad: () => void }) {
   return (
     <Alert tone="warning">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <span>
-          {by ?? 'Someone else'} changed this transaction while you were editing it. Saving would overwrite their changes, so
-          load their version first.
+          {by ?? 'Someone else'} changed {what} while you were editing. Saving would overwrite their changes, so load their version
+          first.
         </span>
         <Button type="button" onClick={onLoad}>
           <RefreshCw className="size-4" aria-hidden />

@@ -6,6 +6,7 @@ Self-hosted bookkeeping for a UK sole trader, built for selling at craft fairs a
 - **Incoming**: sales with a category, payment method (cash, card or bank transfer) and an optional attached PDF or image.
 - **Outgoing**: purchases with invoice line items. Each line has a category and can be marked disallowable, and the line items must add up to the transaction amount.
 - **Mileage**: business journeys claimed at HMRC's approved mileage rates (cars and vans 45p a mile for the first 10,000 miles in a tax year and 25p after, motorcycles 24p, bicycles 20p). Claims count as car, van and travel expenses everywhere: the dashboard, MTD figures, Breakdown and SA103S box 12. Export the log to CSV. HMRC doesn't allow the mileage rate and actual running costs (fuel, insurance, repairs) for the same vehicle, so if a tax year has both mileage and outgoing in car, van and travel expenses, the Mileage page and Year-end summary warn you and link to that outgoing to check. Parking, tolls and fares are fine alongside mileage.
+- **Use of home**: HMRC's flat rate for working from home. Enter the hours of business work at home for each month (6th to the 5th, like the tax year) and it claims £10 for 25 to 50 hours, £18 for 51 to 100 and £26 for 101 or more. Claims count as rent, rates, power and insurance costs everywhere: the dashboard, MTD figures, Breakdown and SA103S box 14. The flat rate replaces a share of household bills, so don't claim those as well.
 - **Duplicate**: start a new incoming, outgoing or mileage trip from an existing one, for things that repeat like stall fees, subscriptions or the same journey. The copy is dated today and opens in the form to check before adding; references, invoice and order numbers and attached documents aren't copied.
 - **Lists**: search, filter and sort, then export the filtered rows to CSV.
 - **Dashboard**: totals, a monthly chart, a breakdown by HMRC category, and key dates.
@@ -103,7 +104,7 @@ You can also load it from the command line:
 docker compose exec crafty-accounting node server/dist/seed.js
 ```
 
-It loads last tax year in full and this tax year up to today, with craft fair takings, Etsy payouts, purchases with line items (some disallowable), mileage to each fair, a few custom categories, sample PDF attachments and recorded MTD submissions for past quarters.
+It loads last tax year in full and this tax year up to today, with craft fair takings, Etsy payouts, purchases with line items (some disallowable), mileage to each fair, hours worked at home, a few custom categories, sample PDF attachments and recorded MTD submissions for past quarters.
 
 It refuses to run if any tax years already exist. Adding `--reset` first **deletes all tax years, transactions and documents**, then loads the sample data. Don't use it on real books.
 

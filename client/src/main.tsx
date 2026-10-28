@@ -16,6 +16,7 @@ import { OutgoingList } from './pages/OutgoingList';
 import { ExpenseForm } from './pages/ExpenseForm';
 import { ExpenseView } from './pages/ExpenseView';
 import { Mileage } from './pages/Mileage';
+import { UseOfHome } from './pages/UseOfHome';
 import { MtdQuarterly } from './pages/MtdQuarterly';
 import { ReportsLayout } from './pages/reports/ReportsLayout';
 import { Breakdown } from './pages/reports/Breakdown';
@@ -54,6 +55,7 @@ function App() {
         <Route path="outgoing/:id" element={<ExpenseView />} />
         <Route path="outgoing/:id/edit" element={<ExpenseForm />} />
         <Route path="mileage" element={<Mileage />} />
+        <Route path="use-of-home" element={<UseOfHome />} />
         <Route path="mtd" element={<MtdQuarterly />} />
         <Route path="reports" element={<ReportsLayout />}>
           <Route index element={<Navigate to="tax-estimate" replace />} />

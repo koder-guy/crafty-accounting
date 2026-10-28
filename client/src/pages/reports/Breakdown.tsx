@@ -276,7 +276,13 @@ function DrillDown({
                     <td className="py-2.5 pr-3 pl-5 whitespace-nowrap text-muted sm:pl-6">{formatDisplayDate(i.date)}</td>
                     <td className="px-3 py-2.5">
                       <Link
-                        to={i.kind === 'mileage' ? '/mileage' : `/${i.kind === 'income' ? 'incoming' : 'outgoing'}/${i.transactionId}`}
+                        to={
+                          i.kind === 'mileage'
+                            ? '/mileage'
+                            : i.kind === 'home'
+                              ? '/use-of-home'
+                              : `/${i.kind === 'income' ? 'incoming' : 'outgoing'}/${i.transactionId}`
+                        }
                         className="font-medium text-ink hover:text-accent-soft hover:underline"
                       >
                         {i.payee ?? i.description}

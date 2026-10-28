@@ -23,6 +23,7 @@ import {
   taxYearFromStartYear,
   taxYearStartYearForDate,
   tenthsToMiles,
+  useOfHomeClaim,
 } from './index';
 
 describe('tax years', () => {
@@ -320,5 +321,18 @@ describe('tax estimate', () => {
   it('assumes the latest known rates for a later year', () => {
     expect(taxRatesFor('2030-31')).toMatchObject({ ratesLabel: '2026-27', assumed: true });
     expect(taxPaymentDates(2026)).toEqual({ balancing: '2028-01-31', secondPaymentOnAccount: '2028-07-31' });
+  });
+});
+
+describe('use of home', () => {
+  it('pays the flat rate for the band the month’s hours fall in', () => {
+    expect([0, 24, 25, 50, 51, 100, 101, 744].map(useOfHomeClaim)).toEqual([0, 0, 1000, 1000, 1800, 1800, 2600, 2600]);
+  });
+
+  it('gives each tax month its dates, from the 6th to the 5th', () => {
+    const months = taxMonths(2025);
+    expect(months[0]).toMatchObject({ startDate: '2025-04-06', endDate: '2025-05-05' });
+    expect(months[8]).toMatchObject({ startDate: '2025-12-06', endDate: '2026-01-05' });
+    expect(months[11]).toMatchObject({ startDate: '2026-03-06', endDate: '2026-04-05' });
   });
 });

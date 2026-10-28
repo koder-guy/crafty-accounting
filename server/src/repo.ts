@@ -9,8 +9,18 @@ import type {
   MileageTrip,
   TaxYear,
   TransactionFilters,
+  UseOfHomeResponse,
 } from '@crafty/shared';
-import { MILEAGE_HMRC_CODE, mileageClaims, taxYearStartYearForDate, todayIso } from '@crafty/shared';
+import {
+  MILEAGE_HMRC_CODE,
+  mileageClaims,
+  startYearFromLabel,
+  taxMonths,
+  taxYearStartYearForDate,
+  todayIso,
+  USE_OF_HOME_HMRC_CODE,
+  useOfHomeClaim,
+} from '@crafty/shared';
 import type { Db } from './db';
 
 export type { Db };
@@ -389,8 +399,8 @@ export interface ExpenseEntry {
 }
 
 /**
- * Every income and every expense line in a tax year, with mileage claims
- * included as expense lines: the raw material for MTD and Self Assessment figures.
+ * Every income and every expense line in a tax year, with mileage and use of
+ * home claims included as expense lines: the raw material for MTD and Self Assessment figures.
  */
 export function yearEntries(db: Db, taxYearId: number): { incomes: IncomeEntry[]; lines: ExpenseEntry[] } {
   const incomes = db
@@ -411,7 +421,7 @@ export function yearEntries(db: Db, taxYearId: number): { incomes: IncomeEntry[]
       )
       .all(taxYearId) as (Omit<ExpenseEntry, 'disallowable'> & { disallowable: number })[]
   ).map((line): ExpenseEntry => ({ ...line, disallowable: line.disallowable === 1 }));
-  for (const claim of mileageClaimLines(db, [taxYearId])) {
+  for (const claim of [...mileageClaimLines(db, [taxYearId]), ...useOfHomeClaimLines(db, [taxYearId])]) {
     lines.push({ date: claim.date, amountPence: claim.amountPence, disallowable: false, categoryId: claim.categoryId, hmrcCode: claim.hmrcCode });
   }
   return { incomes, lines };
@@ -436,4 +446,59 @@ export function mileageCheck(db: Db, taxYearId: number): MileageCheck | null {
     .get(taxYearId, MILEAGE_HMRC_CODE) as { pence: number; count: number };
   if (outgoing.count === 0) return null;
   return { mileagePence, outgoingPence: outgoing.pence, outgoingCount: outgoing.count, categoryId: mileageCategoryId(db) };
+}
+
+// ---- Use of home ----
+
+/** The year's twelve tax months with the hours worked at home and the flat-rate claim for each. */
+export function getUseOfHome(db: Db, taxYear: TaxYear): UseOfHomeResponse {
+  const rows = db
+    .prepare('SELECT month_index, hours, updated_by, updated_at FROM home_working_months WHERE tax_year_id = ?')
+    .all(taxYear.id) as Row[];
+  const hours = new Map(rows.map((r) => [r.month_index as number, r.hours as number]));
+  const months = taxMonths(startYearFromLabel(taxYear.label)!).map((m) => {
+    const h = hours.get(m.index) ?? 0;
+    return { ...m, hours: h, claimPence: useOfHomeClaim(h) };
+  });
+  // Saves replace every row at once, so the latest row says when (and by whom) the hours last changed.
+  const latest = rows.reduce<Row | null>((acc, r) => (!acc || r.updated_at > acc.updated_at ? r : acc), null);
+  return {
+    months,
+    totals: {
+      hours: months.reduce((acc, m) => acc + m.hours, 0),
+      claimPence: months.reduce((acc, m) => acc + m.claimPence, 0),
+      monthsClaimed: months.filter((m) => m.claimPence > 0).length,
+    },
+    updatedAt: latest?.updated_at ?? null,
+    updatedBy: latest?.updated_by ?? null,
+  };
+}
+
+/**
+ * Use of home claims shaped like expense line items, one per month with a
+ * claim, dated the month's last day (the 5th) so they fall in the right quarter.
+ */
+export function useOfHomeClaimLines(db: Db, taxYearIds?: number[]) {
+  const years = listTaxYears(db).filter((y) => !taxYearIds || taxYearIds.includes(y.id));
+  const categoryId = useOfHomeCategoryId(db);
+  return years.flatMap((year) =>
+    getUseOfHome(db, year)
+      .months.filter((m) => m.claimPence > 0)
+      .map((m) => ({
+        taxYearId: year.id,
+        monthIndex: m.index,
+        date: m.endDate,
+        description: `Use of home, ${m.range} (${m.hours} hours)`,
+        amountPence: m.claimPence,
+        disallowable: false,
+        categoryId,
+        hmrcCode: USE_OF_HOME_HMRC_CODE,
+      })),
+  );
+}
+
+/** The standard "Rent, rates, power and insurance costs" category, which use of home claims count towards. */
+export function useOfHomeCategoryId(db: Db): number {
+  const row = db.prepare('SELECT id FROM categories WHERE is_custom = 0 AND type = ? AND hmrc_code = ?').get('EXPENSE', USE_OF_HOME_HMRC_CODE) as Row;
+  return row.id;
 }

@@ -22,7 +22,18 @@ import {
 } from '@crafty/shared';
 import type { AppContext } from '../context';
 import { HttpError, parseWith } from '../http';
-import { getCategory, getTaxYear, listCategories, mileageCategoryId, mileageCheck, mileageClaimLines, yearEntries, type Db } from '../repo';
+import {
+  getCategory,
+  getTaxYear,
+  listCategories,
+  mileageCategoryId,
+  mileageCheck,
+  mileageClaimLines,
+  useOfHomeCategoryId,
+  useOfHomeClaimLines,
+  yearEntries,
+  type Db,
+} from '../repo';
 
 interface Entry {
   categoryId: number;
@@ -146,7 +157,8 @@ export function reportsRouter(ctx: AppContext): Router {
          FROM expense_line_items li JOIN expenses e ON e.id = li.expense_id WHERE e.date BETWEEN ? AND ?`,
       )
       .all(from, to) as { categoryId: number; amountPence: number; disallowable: number }[];
-    const mileage = mileageClaimLines(db).filter((m) => m.date >= from && m.date <= to);
+    const inRange = (c: { date: string }) => c.date >= from && c.date <= to;
+    const claims = [...mileageClaimLines(db).filter(inRange), ...useOfHomeClaimLines(db).filter(inRange)];
     const payees = db
       .prepare(
         `SELECT MIN(payee) AS payee, SUM(total_pence) AS totalPence, COUNT(*) AS count
@@ -159,7 +171,7 @@ export function reportsRouter(ctx: AppContext): Router {
       from,
       to,
       income: buildSection(categories, 'INCOME', incomes.map((i) => ({ ...i, disallowable: false }))),
-      expenses: buildSection(categories, 'EXPENSE', [...lines.map((l) => ({ ...l, disallowable: l.disallowable === 1 })), ...mileage]),
+      expenses: buildSection(categories, 'EXPENSE', [...lines.map((l) => ({ ...l, disallowable: l.disallowable === 1 })), ...claims]),
       payees,
     };
     res.json(response);
@@ -242,8 +254,23 @@ export function reportsRouter(ctx: AppContext): Router {
               disallowable: false,
             });
           }
-          items.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
         }
+        // Use of home claims count under the standard rent, rates, power and insurance category.
+        if (ids.includes(useOfHomeCategoryId(db))) {
+          for (const h of useOfHomeClaimLines(db).filter((h) => h.date >= q.from && h.date <= q.to)) {
+            items.push({
+              kind: 'home',
+              transactionId: h.taxYearId,
+              date: h.date,
+              payee: null,
+              description: h.description,
+              categoryName: 'Use of home at HMRC flat rate',
+              amountPence: h.amountPence,
+              disallowable: false,
+            });
+          }
+        }
+        items.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
       }
     }
     res.json(items);

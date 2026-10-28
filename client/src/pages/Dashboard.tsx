@@ -47,6 +47,19 @@ function StatCard({
   );
 }
 
+/** "Includes £185.60 mileage and £130.00 use of home. Excludes £15.11 disallowable" */
+function outgoingNote(data: DashboardData): string {
+  const flatRates = [
+    data.mileagePence > 0 ? `${formatGBP(data.mileagePence)} mileage` : null,
+    data.useOfHomePence > 0 ? `${formatGBP(data.useOfHomePence)} use of home` : null,
+  ].filter(Boolean);
+  const parts = [
+    flatRates.length ? `Includes ${flatRates.join(' and ')}` : null,
+    data.totals.disallowablePence > 0 ? `Excludes ${formatGBP(data.totals.disallowablePence)} disallowable` : null,
+  ].filter(Boolean);
+  return parts.join('. ') || 'Allowable expenses';
+}
+
 const IconChip = ({ className, children }: { className: string; children: ReactNode }) => (
   <div className={`flex size-11 shrink-0 items-center justify-center rounded-xl ${className}`}>{children}</div>
 );
@@ -294,14 +307,7 @@ export function Dashboard() {
               <StatCard
                 label="Total outgoing"
                 value={formatGBP(data.totals.allowableExpensesPence)}
-                sub={
-                  [
-                    data.mileagePence > 0 ? `Includes ${formatGBP(data.mileagePence)} mileage` : null,
-                    data.totals.disallowablePence > 0 ? `Excludes ${formatGBP(data.totals.disallowablePence)} disallowable` : null,
-                  ]
-                    .filter(Boolean)
-                    .join('. ') || 'Allowable expenses'
-                }
+                sub={outgoingNote(data)}
                 icon={
                   <IconChip className="bg-out-bg text-out-soft">
                     <TrendingDown className="size-5" aria-hidden />

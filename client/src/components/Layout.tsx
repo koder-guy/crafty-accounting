@@ -6,6 +6,7 @@ import {
   CalendarDays,
   Car,
   FileSpreadsheet,
+  House,
   ChartPie,
   LogOut,
   Menu,
@@ -139,6 +140,7 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
           label="Mileage"
           count={active?.mileageCount}
         />
+        <NavItem to="/use-of-home" icon={<House className="size-5 text-muted" aria-hidden />} label="Use of home" />
         <NavItem to="/reports" icon={<ChartPie className="size-5 text-muted" aria-hidden />} label="Reports" />
         <NavItem to="/mtd" icon={<FileSpreadsheet className="size-5 text-muted" aria-hidden />} label="MTD quarterly" />
         <NavItem to="/settings" icon={<Settings className="size-5 text-muted" aria-hidden />} label="Settings" />

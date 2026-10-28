@@ -66,6 +66,10 @@ export interface TaxMonth {
   index: number;
   label: string;
   range: string;
+  /** The 6th of the month. */
+  startDate: string;
+  /** The 5th of the next month. */
+  endDate: string;
 }
 
 export function taxMonths(startYear: number): TaxMonth[] {
@@ -78,6 +82,8 @@ export function taxMonths(startYear: number): TaxMonth[] {
       index,
       label: `${MONTHS[monthIdx]} ${pad2(year % 100)}`,
       range: `6 ${MONTHS[monthIdx]} ${year} – 5 ${MONTHS[nextIdx]} ${nextYear}`,
+      startDate: `${year}-${pad2(monthIdx + 1)}-06`,
+      endDate: `${nextYear}-${pad2(nextIdx + 1)}-05`,
     };
   });
 }

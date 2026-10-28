@@ -142,6 +142,20 @@ CREATE INDEX idx_mileage_year_date ON mileage_trips (tax_year_id, date);
 ALTER TABLE tax_years ADD COLUMN other_income_pence INTEGER NOT NULL DEFAULT 0 CHECK (other_income_pence >= 0);
 `,
   },
+  // Hours worked at home each tax month, for the use of home flat rate.
+  {
+    version: 4,
+    sql: `
+CREATE TABLE home_working_months (
+  tax_year_id INTEGER NOT NULL REFERENCES tax_years(id) ON DELETE CASCADE,
+  month_index INTEGER NOT NULL CHECK (month_index BETWEEN 0 AND 11),
+  hours INTEGER NOT NULL CHECK (hours > 0),
+  updated_by TEXT,
+  updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  PRIMARY KEY (tax_year_id, month_index)
+);
+`,
+  },
 ];
 
 export const CURRENT_SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;

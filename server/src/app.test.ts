@@ -642,6 +642,69 @@ describe('mileage', () => {
   });
 });
 
+describe('use of home', () => {
+  const save = (taxYearId: number, months: { index: number; hours: number }[], expectedUpdatedAt?: string | null) =>
+    agent.put('/api/use-of-home').send({ taxYearId, months, expectedUpdatedAt });
+
+  it('stores hours for each tax month and works out the flat rate', async () => {
+    const yearId = await createYear();
+    let { body } = await agent.get('/api/use-of-home').query({ taxYearId: yearId }).expect(200);
+    expect(body.months).toHaveLength(12);
+    expect(body.months[0]).toMatchObject({ label: 'Apr 25', startDate: '2025-04-06', endDate: '2025-05-05', hours: 0, claimPence: 0 });
+    expect(body.updatedAt).toBeNull();
+
+    ({ body } = await save(yearId, [{ index: 0, hours: 30 }, { index: 1, hours: 60 }, { index: 2, hours: 120 }, { index: 3, hours: 10 }], null).expect(200));
+    expect(body.months.slice(0, 4).map((m: { claimPence: number }) => m.claimPence)).toEqual([1000, 1800, 2600, 0]);
+    expect(body.totals).toEqual({ hours: 220, claimPence: 5400, monthsClaimed: 3 });
+    expect(body.updatedBy).toBe(NAME);
+
+    await save(yearId, [{ index: 0, hours: 745 }]).expect(400);
+    await save(yearId, [{ index: 12, hours: 30 }]).expect(400);
+  });
+
+  it('refuses a save made from out-of-date hours', async () => {
+    const yearId = await createYear();
+    const first = (await save(yearId, [{ index: 0, hours: 30 }], null).expect(200)).body;
+    const jo = await addPerson('Jo');
+    await jo.put('/api/use-of-home').send({ taxYearId: yearId, months: [{ index: 0, hours: 60 }], expectedUpdatedAt: first.updatedAt }).expect(200);
+    const stale = await save(yearId, [{ index: 0, hours: 90 }], first.updatedAt).expect(409);
+    expect(stale.body.error).toMatch(/^Jo changed these hours/);
+  });
+
+  it('counts claims as premises costs in every set of figures', async () => {
+    const yearId = await createYear();
+    await agent.post('/api/incomes').send(income(yearId)).expect(201);
+    await save(yearId, [{ index: 0, hours: 30 }, { index: 3, hours: 120 }]).expect(200);
+
+    const dashboard = (await agent.get('/api/dashboard').query({ taxYearId: yearId }).expect(200)).body;
+    expect(dashboard.mtd.periodExpenses).toEqual({ premisesRunningCosts: 3600 });
+    expect(dashboard.useOfHomePence).toBe(3600);
+
+    // April (ends 5 May) is in Q1; July (ends 5 August) is in Q2.
+    const quarters = (await agent.get('/api/mtd/quarters').query({ taxYearId: yearId }).expect(200)).body.quarters;
+    expect(quarters[0].period.periodExpenses.premisesRunningCosts).toBe(1000);
+    expect(quarters[1].period.periodExpenses.premisesRunningCosts).toBe(2600);
+
+    const yearEnd = (await agent.get('/api/reports/year-end').query({ taxYearId: yearId }).expect(200)).body.summary;
+    expect(yearEnd.expenseBoxes.find((b: { box: string }) => b.box === '14').amountPence).toBe(3600);
+
+    const range = { from: '2025-04-06', to: '2025-06-30' };
+    const breakdown = (await agent.get('/api/reports/breakdown').query(range).expect(200)).body;
+    expect(breakdown.expenses.groups[0]).toMatchObject({ hmrcCode: 'premisesRunningCosts', totalPence: 1000, count: 1 });
+    const items = (
+      await agent.get('/api/reports/breakdown/items').query({ ...range, categoryId: cat('premisesRunningCosts'), group: '1' }).expect(200)
+    ).body;
+    expect(items).toMatchObject([{ kind: 'home', date: '2025-05-05', amountPence: 1000 }]);
+  });
+
+  it('is deleted with its tax year', async () => {
+    const yearId = await createYear();
+    await save(yearId, [{ index: 0, hours: 30 }]).expect(200);
+    await agent.delete(`/api/tax-years/${yearId}`).expect(200);
+    expect(ctx.db.prepare('SELECT COUNT(*) AS n FROM home_working_months').get()).toEqual({ n: 0 });
+  });
+});
+
 describe('tax estimate', () => {
   it('estimates tax on the year-end profit, including other income', async () => {
     const yearId = await createYear();
@@ -1047,6 +1110,7 @@ describe('backup and restore', () => {
     ]);
     expect((await agent.get('/api/tax-years')).body).toMatchObject({ activeTaxYearId: 1, taxYears: [{ otherIncomePence: 0, mileageCount: 0 }] });
     expect((await agent.get('/api/mileage').query({ taxYearId: 1 }).expect(200)).body.trips).toEqual([]);
+    expect((await agent.get('/api/use-of-home').query({ taxYearId: 1 }).expect(200)).body.totals.claimPence).toBe(0);
     expect(ctx.db.prepare("SELECT 1 FROM settings WHERE key = 'active_tax_year_id'").get()).toBeUndefined();
     expect((await agent.get('/api/users')).body.map((u: { name: string }) => u.name)).toEqual([NAME]);
   });

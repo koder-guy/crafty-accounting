@@ -11,6 +11,7 @@ import { dashboardRouter } from './routes/dashboard';
 import { documentsRouter } from './routes/documents';
 import { mileageRouter } from './routes/mileage';
 import { mtdRouter } from './routes/mtd';
+import { useOfHomeRouter } from './routes/useOfHome';
 import { reportsRouter } from './routes/reports';
 import { sampleDataRouter } from './routes/sampleData';
 import { taxYearsRouter } from './routes/taxYears';
@@ -82,6 +83,7 @@ export function createApp(ctx: AppContext) {
   app.use('/api/incomes', incomesRouter(ctx));
   app.use('/api/expenses', expensesRouter(ctx));
   app.use('/api/mileage', mileageRouter(ctx));
+  app.use('/api/use-of-home', useOfHomeRouter(ctx));
   app.use('/api/documents', documentsRouter(ctx));
   app.use('/api/dashboard', dashboardRouter(ctx));
   app.use('/api/mtd', mtdRouter(ctx));

@@ -228,7 +228,7 @@ export function Mileage() {
             )}
 
             {editing && latest && latest.updatedAt !== editing.updatedAt && (
-              <ChangedElsewhere by={latest.updatedBy} onLoad={() => setEditing(latest)} />
+              <ChangedElsewhere by={latest.updatedBy} what="this trip" onLoad={() => setEditing(latest)} />
             )}
 
             <div ref={formRef} className="scroll-mt-24">

@@ -15,6 +15,8 @@ import type {
   TaxEstimateResponse,
   TaxYear,
   TaxYearsResponse,
+  UseOfHomeInput,
+  UseOfHomeResponse,
   TransactionFilters,
   User,
   YearEndSummaryResponse,
@@ -185,7 +187,7 @@ export const useExpense = (id: number | null) =>
     enabled: id !== null,
   });
 
-function useInvalidateTransactions(kind: Kind | 'mileage') {
+function useInvalidateTransactions(kind: Kind | 'mileage' | 'use-of-home') {
   const qc = useQueryClient();
   return () => {
     qc.invalidateQueries({ queryKey: [kind] });
@@ -314,6 +316,29 @@ export function useMileageMutations() {
     }),
     remove: useMutation({ mutationFn: (id: number) => api.delete(`/mileage/${id}`), onSuccess: invalidate }),
   };
+}
+
+// ---- Use of home ----
+
+export const useUseOfHome = (taxYearId: number | undefined) =>
+  useQuery({
+    queryKey: ['use-of-home', taxYearId],
+    queryFn: () => api.get<UseOfHomeResponse>(`/use-of-home${toQuery({ taxYearId })}`),
+    enabled: taxYearId !== undefined,
+  });
+
+export function useSaveUseOfHome() {
+  const qc = useQueryClient();
+  // Claims count as premises costs, so every total changes.
+  const invalidate = useInvalidateTransactions('use-of-home');
+  return useMutation({
+    mutationFn: (input: UseOfHomeInput) => api.put<UseOfHomeResponse>('/use-of-home', input),
+    onSuccess: (saved, input) => {
+      // Show the saved hours straight away, so the page doesn't mistake its own save for someone else's.
+      qc.setQueryData(['use-of-home', input.taxYearId], saved);
+      invalidate();
+    },
+  });
 }
 
 // ---- Tax estimate ----

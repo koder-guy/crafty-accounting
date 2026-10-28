@@ -10,7 +10,7 @@ import {
 } from '@crafty/shared';
 import type { AppContext } from '../context';
 import { HttpError, parseWith } from '../http';
-import { getTaxYear, listCategories, listExpenses, listIncomes, mileageClaimLines, yearEntries } from '../repo';
+import { getTaxYear, listCategories, listExpenses, listIncomes, mileageClaimLines, useOfHomeClaimLines, yearEntries } from '../repo';
 import { buildTaxEstimate } from './reports';
 
 const querySchema = z.object({ taxYearId: z.coerce.number().int().positive() });
@@ -80,6 +80,7 @@ export function dashboardRouter(ctx: AppContext): Router {
       recentExpenses: listExpenses(db, { taxYearId }, 5),
       mtd,
       mileagePence: mileageClaimLines(db, [taxYearId]).reduce((acc, c) => acc + c.amountPence, 0),
+      useOfHomePence: useOfHomeClaimLines(db, [taxYearId]).reduce((acc, c) => acc + c.amountPence, 0),
       taxEstimate: buildTaxEstimate(db, taxYear).estimate,
     };
     res.json(data);

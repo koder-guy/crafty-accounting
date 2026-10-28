@@ -5,6 +5,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {
   mtdQuarters,
+  taxMonths,
   taxYearFromStartYear,
   taxYearStartYearForDate,
   todayIso,
@@ -238,6 +239,7 @@ export function generateSampleData(db: Db, uploadsDir: string, today = todayIso(
   const insertTrip = db.prepare(
     'INSERT INTO mileage_trips (tax_year_id, date, description, vehicle, distance_tenths) VALUES (?, ?, ?, ?, ?)',
   );
+  const insertHomeMonth = db.prepare('INSERT INTO home_working_months (tax_year_id, month_index, hours) VALUES (?, ?, ?)');
   const insertSubmission = db.prepare('INSERT INTO mtd_submissions (tax_year_id, quarter, submitted_on, reference) VALUES (?, ?, ?, ?)');
 
   const attach = (name: string, title: string): string | null => {
@@ -338,6 +340,11 @@ export function generateSampleData(db: Db, uploadsDir: string, today = todayIso(
         const date = addDays(year.startDate, 20 + i * 220);
         if (date <= end) addExpense(yearId, date, purchase);
       });
+
+      // Hours making stock at home each month, claimed at the flat rate.
+      for (const month of taxMonths(startYear)) {
+        if (month.endDate <= end) insertHomeMonth.run(yearId, month.index, rnd.int(15, 130));
+      }
 
       // Record submissions for quarters whose deadline has passed.
       for (const q of mtdQuarters(startYear)) {
