@@ -141,22 +141,22 @@ function HoursForm({ taxYearId, data }: { taxYearId: number; data: UseOfHomeResp
               </tfoot>
             </table>
           </div>
-          <div className="flex flex-wrap items-center gap-3 border-t border-line px-5 py-4 sm:px-6">
-            <Button type="submit" variant="primary" busy={save.isPending} disabled={!dirty || !valid}>
-              Save hours
-            </Button>
-            {dirty && (
-              <Button type="button" variant="ghost" onClick={() => setFields(fieldsFrom(base))}>
-                Undo changes
-              </Button>
-            )}
-            <span className="text-xs text-muted">
+          <div className="flex flex-wrap items-center justify-end gap-3 border-t border-line px-5 py-4 sm:px-6">
+            <span className="mr-auto text-xs text-muted">
               {dirty
                 ? 'Not saved yet'
                 : base.updatedAt && base.updatedBy
                   ? `Last saved by ${recordedBy(base.updatedBy, base.updatedAt)}`
                   : null}
             </span>
+            {dirty && (
+              <Button type="button" variant="ghost" onClick={() => setFields(fieldsFrom(base))}>
+                Undo changes
+              </Button>
+            )}
+            <Button type="submit" variant="primary" busy={save.isPending} disabled={!dirty || !valid}>
+              Save hours
+            </Button>
           </div>
           {save.error && (
             <div className="px-5 pb-5 sm:px-6">
