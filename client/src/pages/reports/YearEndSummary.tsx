@@ -163,7 +163,7 @@ export function YearEndSummary() {
   return (
     <div className="space-y-6">
       <SectionHeading
-        title="Year-end Summary"
+        title="Year-end summary"
         description="Figures for the Self Assessment self-employment (short) pages for the active tax year."
         actions={
           data && (

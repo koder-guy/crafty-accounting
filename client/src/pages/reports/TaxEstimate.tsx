@@ -155,7 +155,7 @@ function EstimateBody({ data, today }: { data: TaxEstimateResponse; today: strin
               ? `A loss of ${formatGBP(data.netLossPence)}, so no tax`
               : data.usesTradingAllowance
                 ? `Using the ${whole(TRADING_ALLOWANCE_PENCE)} trading allowance, which beats your expenses`
-                : 'From the Year-end Summary'}
+                : 'From the Year-end summary'}
           </div>
         </Card>
       </div>

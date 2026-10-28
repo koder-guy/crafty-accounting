@@ -79,7 +79,7 @@ const querySchema = z.object({ taxYearId: z.coerce.number().int().positive() });
 
 /**
  * Income Tax and Class 4 estimate for a tax year, from the same profit as the
- * Year-end Summary (using the trading allowance instead if that's lower).
+ * Year-end summary (using the trading allowance instead if that's lower).
  */
 export function buildTaxEstimate(db: Db, taxYear: TaxYear): TaxEstimateResponse {
   const { incomes, lines } = yearEntries(db, taxYear.id);

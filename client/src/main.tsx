@@ -56,7 +56,7 @@ function App() {
         <Route path="mileage" element={<Mileage />} />
         <Route path="mtd" element={<MtdQuarterly />} />
         <Route path="reports" element={<ReportsLayout />}>
-          <Route index element={<Navigate to="breakdown" replace />} />
+          <Route index element={<Navigate to="tax-estimate" replace />} />
           <Route path="breakdown" element={<Breakdown />} />
           <Route path="year-end" element={<YearEndSummary />} />
           <Route path="tax-estimate" element={<TaxEstimate />} />
