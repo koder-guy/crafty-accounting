@@ -1,6 +1,6 @@
 {
   "name": "crafty-accounting",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "private": true,
   "type": "module",
   "description": "Self-hosted bookkeeping for a UK sole trader, structured for HMRC Making Tax Digital",
