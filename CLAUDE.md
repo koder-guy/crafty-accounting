@@ -2,7 +2,7 @@
 
 Self-hosted bookkeeping for a UK sole trader who sells at craft fairs (cash basis). The data model follows HMRC's Making Tax Digital (MTD) self-employment API so submission can be added later. README.md covers features, setup, Docker, HTTPS and backups; read it first.
 
-**Status:** v1.0.0 is in production use with real books (since 2026-10-27).
+**Status:** v1.0.0 is released but not yet in use with real books (as of 2026-10-28), so changes to the app and database structure are still fine. It stays a self-hosted web app; a native macOS version was considered and dropped.
 
 ## Layout
 
@@ -25,7 +25,7 @@ export PATH="/opt/homebrew/opt/node@22/bin:$PATH"
 
 ## Rules
 
-- **Database changes go in a new migration.** Append a new version to `MIGRATIONS` in `server/src/db/migrations.ts`; never edit one that has shipped (migration 1 is live). Restore runs migrations on older backups, so a new migration must also upgrade an old dump; add a test for that.
+- **Database changes go in a new migration.** Append a new version to `MIGRATIONS` in `server/src/db/migrations.ts`; don't edit one that has shipped. Until real books are in use, editing migration 1 is possible but ask first, since dev databases and backups use it. Restore runs migrations on older backups, so a new migration must also upgrade an old dump; add a test for that.
 - **Money** is integer pence everywhere; convert only for display, CSV and the MTD payload. Dates are ISO `YYYY-MM-DD`. Tax years are stored as `2025-26` and shown as `2025/26`.
 - **Categories** carry an `hmrc_code` (MTD field name). Custom categories (`is_custom`) roll up to the standard category they map to.
 - **Profit figures** use allowable expenses only (disallowable excluded): dashboard boxes, monthly chart, and the Reports → Breakdown Profit box. Category tables still list disallowable amounts, marked. The Year-end Summary also drops entertainment and depreciation (see the README note).
