@@ -1,16 +1,17 @@
 import { useState, type FormEvent } from 'react';
-import { LockKeyhole, Wallet } from 'lucide-react';
+import { LockKeyhole, UserRound, Wallet } from 'lucide-react';
 import { APP_NAME } from '@crafty/shared';
 import { Alert, Button } from '../components/ui';
 import { useLogin } from '../lib/queries';
 
 export function Login() {
+  const [name, setName] = useState('');
   const [password, setPassword] = useState('');
   const login = useLogin();
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
-    if (password) login.mutate(password);
+    if (name.trim() && password) login.mutate({ name: name.trim(), password });
   };
 
   return (
@@ -23,6 +24,21 @@ export function Login() {
           <h1 className="text-xl font-bold text-white">{APP_NAME}</h1>
           <p className="mt-1 text-sm text-muted">Sign in to your books</p>
         </div>
+        <label htmlFor="name" className="mb-1.5 block text-sm font-medium">
+          Name
+        </label>
+        <div className="relative mb-4">
+          <UserRound className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-faint" aria-hidden />
+          <input
+            id="name"
+            autoComplete="username"
+            autoCapitalize="words"
+            autoFocus
+            className="field pl-9"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+          />
+        </div>
         <label htmlFor="password" className="mb-1.5 block text-sm font-medium">
           Password
         </label>
@@ -32,7 +48,6 @@ export function Login() {
             id="password"
             type="password"
             autoComplete="current-password"
-            autoFocus
             className="field pl-9"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
@@ -43,7 +58,7 @@ export function Login() {
             <Alert>{login.error.message}</Alert>
           </div>
         )}
-        <Button type="submit" variant="primary" className="mt-6 w-full" busy={login.isPending} disabled={!password}>
+        <Button type="submit" variant="primary" className="mt-6 w-full" busy={login.isPending} disabled={!name.trim() || !password}>
           Sign in
         </Button>
       </form>

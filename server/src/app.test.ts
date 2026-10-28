@@ -3,14 +3,19 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import request from 'supertest';
+import Database from 'better-sqlite3';
 import type { Category } from '@crafty/shared';
 import { createApp } from './app';
+import { dumpSql } from './backup';
+import { seedCategories } from './db';
+import { MIGRATIONS } from './db/migrations';
 import { isAutoBackupDue, nextAutoBackup, runAutoBackup } from './autoBackup';
 import { loadConfig } from './config';
 import { createContext, type AppContext } from './context';
 import { documentNameProblem } from './documents';
 import { clearData, generateSampleData } from './sampleData';
 
+const NAME = 'Admin';
 const PASSWORD = 'test-password';
 const PDF = Buffer.from('%PDF-1.4\n%test\n');
 
@@ -25,7 +30,7 @@ beforeEach(async () => {
   dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'crafty-test-'));
   ctx = createContext(loadConfig({ DATA_DIR: dataDir, ADMIN_PASSWORD: PASSWORD, CLIENT_DIST: path.join(dataDir, 'none') }));
   agent = request.agent(createApp(ctx));
-  await agent.post('/api/auth/login').send({ password: PASSWORD }).expect(200);
+  await agent.post('/api/auth/login').send({ name: NAME, password: PASSWORD }).expect(200);
   categories = (await agent.get('/api/categories').expect(200)).body;
 });
 
@@ -73,8 +78,64 @@ describe('auth', () => {
   it('rejects requests without a session and wrong passwords', async () => {
     const anon = request(createApp(ctx));
     await anon.get('/api/tax-years').expect(401);
-    await anon.post('/api/auth/login').send({ password: 'nope' }).expect(401);
+    await anon.post('/api/auth/login').send({ name: NAME, password: 'nope' }).expect(401);
+    await anon.post('/api/auth/login').send({ name: 'Nobody', password: PASSWORD }).expect(401);
     expect((await anon.get('/api/auth/me')).body.authenticated).toBe(false);
+  });
+
+  it('signs in by name, ignoring case, and says who is signed in', async () => {
+    const other = request.agent(createApp(ctx));
+    await other.post('/api/auth/login').send({ name: 'admin', password: PASSWORD }).expect(200);
+    expect((await other.get('/api/auth/me')).body).toMatchObject({ authenticated: true, user: { name: NAME } });
+  });
+
+  it('needs ADMIN_PASSWORD only while nobody has been set up', () => {
+    const emptyDir = fs.mkdtempSync(path.join(os.tmpdir(), 'crafty-test-'));
+    try {
+      expect(() => createContext(loadConfig({ DATA_DIR: emptyDir }))).toThrow(/ADMIN_PASSWORD/);
+    } finally {
+      fs.rmSync(emptyDir, { recursive: true, force: true });
+    }
+    // The test install already has a user, so it opens without one.
+    ctx.db.close();
+    ctx = createContext(loadConfig({ DATA_DIR: dataDir, ADMIN_PASSWORD: 'ignored' }));
+    expect(ctx.db.prepare('SELECT name FROM users').all()).toEqual([{ name: NAME }]);
+  });
+});
+
+/** Adds a person and returns an agent signed in as them. */
+async function addPerson(name: string, password = 'second-password') {
+  await agent.post('/api/users').send({ name, password }).expect(201);
+  const other = request.agent(createApp(ctx));
+  await other.post('/api/auth/login').send({ name, password }).expect(200);
+  return other;
+}
+
+describe('people', () => {
+  it('adds people, who can then sign in, and refuses duplicates and short passwords', async () => {
+    await addPerson('Jo');
+    await agent.post('/api/users').send({ name: 'jo', password: 'long-enough' }).expect(409);
+    await agent.post('/api/users').send({ name: 'Sam', password: 'short' }).expect(400);
+    expect((await agent.get('/api/users').expect(200)).body.map((u: { name: string }) => u.name)).toEqual(['Admin', 'Jo']);
+  });
+
+  it('renames people and changes passwords', async () => {
+    const jo = await addPerson('Jo');
+    const id = (await jo.get('/api/auth/me')).body.user.id;
+    await agent.put(`/api/users/${id}`).send({ name: 'Joanne', password: 'new-password' }).expect(200);
+    await request(createApp(ctx)).post('/api/auth/login').send({ name: 'Jo', password: 'second-password' }).expect(401);
+    await request(createApp(ctx)).post('/api/auth/login').send({ name: 'Joanne', password: 'new-password' }).expect(200);
+    await agent.put(`/api/users/${id}`).send({ name: 'admin' }).expect(409);
+  });
+
+  it('removes people, signing them out, but not yourself', async () => {
+    const jo = await addPerson('Jo');
+    const me = (await agent.get('/api/auth/me')).body.user.id;
+    const id = (await jo.get('/api/auth/me')).body.user.id;
+    await jo.delete(`/api/users/${id}`).expect(422);
+    await jo.delete(`/api/users/${me}`).expect(204);
+    await agent.get('/api/tax-years').expect(401);
+    await jo.get('/api/tax-years').expect(200);
   });
 });
 
@@ -86,7 +147,7 @@ describe('HTTPS behind a proxy', () => {
     const res = await proxied
       .post('/api/auth/login')
       .set('X-Forwarded-Proto', 'https')
-      .send({ password: PASSWORD })
+      .send({ name: NAME, password: PASSWORD })
       .expect(200);
     expect(res.headers['strict-transport-security']).toBe('max-age=15552000');
     expect(String(res.headers['set-cookie'])).toMatch(/;\s*secure/i);
@@ -187,11 +248,20 @@ describe('tax years', () => {
     await agent.post('/api/tax-years').send({ startYear: 2025 }).expect(409);
   });
 
-  it('switches the active tax year', async () => {
-    await createYear(2024);
+  it('switches the active tax year for each person separately', async () => {
+    const first = await createYear(2024);
     const second = await createYear(2025);
+    const jo = await addPerson('Jo');
+    await jo.put('/api/tax-years/active').send({ taxYearId: first }).expect(200);
     const { body } = await agent.put('/api/tax-years/active').send({ taxYearId: second }).expect(200);
     expect(body.activeTaxYearId).toBe(second);
+    expect((await jo.get('/api/tax-years')).body.activeTaxYearId).toBe(first);
+  });
+
+  it('stays on the year you were viewing when you add another', async () => {
+    const first = await createYear(2024);
+    await createYear(2025);
+    expect((await agent.get('/api/tax-years')).body.activeTaxYearId).toBe(first);
   });
 
   it('deletes all transactions and documents in the year', async () => {
@@ -208,6 +278,82 @@ describe('tax years', () => {
       .get() as { n: number };
     expect(counts.n).toBe(0);
     expect(body.activeTaxYearId).toBeNull();
+  });
+});
+
+describe('working together', () => {
+  it('records who added and last changed each transaction', async () => {
+    const yearId = await createYear();
+    const jo = await addPerson('Jo');
+    const created = (await agent.post('/api/incomes').send(income(yearId)).expect(201)).body;
+    expect(created).toMatchObject({ createdBy: NAME, updatedBy: NAME });
+    const edited = (await jo.put(`/api/incomes/${created.id}`).send(income(yearId, { amountPence: 100 })).expect(200)).body;
+    expect(edited).toMatchObject({ createdBy: NAME, updatedBy: 'Jo' });
+
+    const spent = (await jo.post('/api/expenses').send(expense(yearId)).expect(201)).body;
+    expect(spent).toMatchObject({ createdBy: 'Jo', updatedBy: 'Jo' });
+  });
+
+  it('refuses an edit made from an out-of-date copy', async () => {
+    const yearId = await createYear();
+    const jo = await addPerson('Jo');
+    const original = (await agent.post('/api/incomes').send(income(yearId)).expect(201)).body;
+    // Both open the form; Jo saves first.
+    const joSaved = (
+      await jo.put(`/api/incomes/${original.id}`).send(income(yearId, { amountPence: 100, expectedUpdatedAt: original.updatedAt })).expect(200)
+    ).body;
+    const stale = await agent
+      .put(`/api/incomes/${original.id}`)
+      .send(income(yearId, { amountPence: 200, expectedUpdatedAt: original.updatedAt }))
+      .expect(409);
+    expect(stale.body.error).toMatch(/^Jo changed this transaction/);
+    expect((await agent.get(`/api/incomes/${original.id}`)).body.amountPence).toBe(100);
+    await agent.put(`/api/incomes/${original.id}`).send(income(yearId, { amountPence: 200, expectedUpdatedAt: joSaved.updatedAt })).expect(200);
+
+    const bought = (await agent.post('/api/expenses').send(expense(yearId)).expect(201)).body;
+    await jo.put(`/api/expenses/${bought.id}`).send(expense(yearId, { notes: 'Jo', expectedUpdatedAt: bought.updatedAt })).expect(200);
+    await agent.put(`/api/expenses/${bought.id}`).send(expense(yearId, { notes: 'Me', expectedUpdatedAt: bought.updatedAt })).expect(409);
+  });
+
+  it('tells other open browsers about changes, but not the one that made them', async () => {
+    const yearId = await createYear();
+    const jo = await addPerson('Jo');
+    const server = createApp(ctx).listen(0);
+    const port = (server.address() as { port: number }).port;
+    const cookie = (await jo.post('/api/auth/login').send({ name: 'Jo', password: 'second-password' })).headers['set-cookie'];
+    const abort = new AbortController();
+    try {
+      const res = await fetch(`http://localhost:${port}/api/events?client=jo-tab`, {
+        headers: { Cookie: ([] as string[]).concat(cookie ?? []).map((c) => c.split(';')[0]).join('; ') },
+        signal: abort.signal,
+      });
+      expect(res.headers.get('content-type')).toBe('text/event-stream');
+      const reader = res.body!.getReader();
+      const decoder = new TextDecoder();
+      let received = '';
+      const next = async () => (received += decoder.decode((await reader.read()).value));
+      await next();
+      expect(received).toContain(': connected');
+      expect(ctx.liveUpdates.size).toBe(1);
+
+      // Jo's own change from the same tab isn't echoed back; the admin's change is sent.
+      await jo.post('/api/incomes').set('X-Client-Id', 'jo-tab').send(income(yearId)).expect(201);
+      await agent.post('/api/incomes').set('X-Client-Id', 'admin-tab').send(income(yearId)).expect(201);
+      await agent.put('/api/tax-years/active').send({ taxYearId: yearId }).expect(200);
+      await agent.post('/api/categories').send({ name: 'Beads', mapsToCategoryId: cat('costOfGoods') }).expect(201);
+      while (received.split('event: changed').length < 3) await next();
+      const events = received
+        .split('\n')
+        .filter((line) => line.startsWith('data: '))
+        .map((line) => JSON.parse(line.slice(6)));
+      expect(events).toEqual([
+        { area: 'incomes', by: NAME },
+        { area: 'categories', by: NAME },
+      ]);
+    } finally {
+      abort.abort();
+      server.close();
+    }
   });
 });
 
@@ -733,6 +879,51 @@ describe('backup and restore', () => {
     const smuggled = dump.replace(/(INSERT INTO "tax_years"[^\n]*;)/, "$1 ATTACH DATABASE '/tmp/x.db' AS x;");
     await agent.post('/api/restore').attach('file', Buffer.from(smuggled), 'backup.sql').expect(400);
     expect((await agent.get('/api/tax-years')).body.taxYears).toHaveLength(1);
+  });
+
+  it('keeps everyone signed in through a restore and a reset, without putting passwords in backups', async () => {
+    await seed();
+    const jo = await addPerson('Jo');
+    const dump = (await agent.get('/api/backup.sql').expect(200)).text;
+    expect(dump).not.toMatch(/INSERT INTO "users"/);
+    expect(dump).not.toMatch(/scrypt\$/);
+
+    await agent.post('/api/users').send({ name: 'Sam', password: 'added-after' }).expect(201);
+    await agent.post('/api/restore').attach('file', Buffer.from(dump), 'backup.sql').expect(200);
+    expect((await jo.get('/api/users').expect(200)).body.map((u: { name: string }) => u.name)).toEqual(['Admin', 'Jo', 'Sam']);
+    expect((await agent.get('/api/incomes').query({ taxYearId: 1 })).body[0].createdBy).toBe(NAME);
+
+    await agent.post('/api/reset').send({ confirm: 'RESET' }).expect(200);
+    await jo.get('/api/tax-years').expect(200);
+    expect((await agent.post('/api/users').send({ name: 'Alex', password: 'one-more-person' }).expect(201)).body.id).toBe(4);
+  });
+
+  it('upgrades a backup made before sign-ins', async () => {
+    // Build a version 1 database the way the first release did.
+    const old = new Database(':memory:');
+    old.exec('CREATE TABLE schema_migrations (version INTEGER PRIMARY KEY, applied_at TEXT)');
+    old.exec(MIGRATIONS[0].sql);
+    old.prepare('INSERT INTO schema_migrations (version) VALUES (1)').run();
+    seedCategories(old);
+    old.prepare("INSERT INTO tax_years (label, start_date, end_date) VALUES ('2025-26', '2025-04-06', '2026-04-05')").run();
+    old.prepare("INSERT INTO settings (key, value) VALUES ('active_tax_year_id', '1')").run();
+    old
+      .prepare(
+        `INSERT INTO incomes (tax_year_id, date, description, payment_method, amount_pence, category_id)
+         VALUES (1, '2025-06-14', 'Market sales', 'cash', 1500, ?)`,
+      )
+      .run(cat('turnover'));
+    const dump = dumpSql(old);
+    old.close();
+    expect(dump).toMatch(/schema_version: 1/);
+
+    await agent.post('/api/restore').attach('file', Buffer.from(dump), 'backup.sql').expect(200);
+    expect((await agent.get('/api/incomes').query({ taxYearId: 1 }).expect(200)).body).toMatchObject([
+      { description: 'Market sales', createdBy: null, updatedBy: null },
+    ]);
+    expect((await agent.get('/api/tax-years')).body.activeTaxYearId).toBe(1);
+    expect(ctx.db.prepare("SELECT 1 FROM settings WHERE key = 'active_tax_year_id'").get()).toBeUndefined();
+    expect((await agent.get('/api/users')).body.map((u: { name: string }) => u.name)).toEqual([NAME]);
   });
 });
 

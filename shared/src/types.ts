@@ -14,6 +14,17 @@ export interface TaxYear {
   documentCount: number;
 }
 
+export interface User {
+  id: number;
+  name: string;
+  createdAt: string;
+}
+
+export interface MeResponse {
+  authenticated: boolean;
+  user?: User;
+}
+
 export interface TaxYearsResponse {
   taxYears: TaxYear[];
   activeTaxYearId: number | null;
@@ -46,6 +57,10 @@ export interface Income {
   documentFilename: string | null;
   createdAt: string;
   updatedAt: string;
+  /** Name of the person who added it (null for records made before sign-ins, or by sample data). */
+  createdBy: string | null;
+  /** Name of the person who last changed it. */
+  updatedBy: string | null;
 }
 
 export interface LineItem {
@@ -75,6 +90,10 @@ export interface Expense {
   categoryNames: string[];
   createdAt: string;
   updatedAt: string;
+  /** Name of the person who added it (null for records made before sign-ins, or by sample data). */
+  createdBy: string | null;
+  /** Name of the person who last changed it. */
+  updatedBy: string | null;
 }
 
 export interface ExpenseWithLineItems extends Expense {

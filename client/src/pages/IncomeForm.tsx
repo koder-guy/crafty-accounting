@@ -1,9 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { useNavigate, useParams } from 'react-router';
 import { isDateInTaxYear, parsePoundsToPence, penceToPounds, todayIso, type Income, type PaymentMethod } from '@crafty/shared';
 import { CategoryOptions } from '../components/CategoryOptions';
-import { BackLink, dateInYear, yearRangeHint } from '../components/FormShell';
+import { BackLink, ChangedElsewhere, dateInYear, yearRangeHint } from '../components/FormShell';
 import { NoTaxYear } from '../components/NoTaxYear';
 import { PageBody, PageHeader } from '../components/PageHeader';
 import { DocumentField, PaymentMethodOptions } from '../components/transactions';
@@ -25,7 +25,7 @@ export function IncomeForm() {
   const params = useParams();
   const id = params.id ? Number(params.id) : null;
   const navigate = useNavigate();
-  const { data: existing, isLoading: loadingExisting, error: loadError } = useIncome(id);
+  const { data: existing, isLoading: loadingExisting, error: loadError, refetch: refetchExisting } = useIncome(id);
   const { data: years } = useTaxYears();
   const { taxYear: activeYear, isLoading: yearLoading } = useActiveTaxYear();
   const { data: categories = [] } = useCategories();
@@ -55,19 +55,32 @@ export function IncomeForm() {
     },
   });
 
-  // Fill the form once the record (edit) or the defaults (new) are known.
+  // The version of the record the form was filled from; saving is refused if it has changed since.
+  const [loaded, setLoaded] = useState<Income | null>(null);
+  const filledFor = useRef<string | null>(null);
+  const fillFrom = (record: Income) => {
+    reset({
+      date: record.date,
+      description: record.description,
+      reference: record.reference ?? '',
+      paymentMethod: record.paymentMethod,
+      amount: penceToPounds(record.amountPence),
+      categoryId: String(record.categoryId),
+      notes: record.notes ?? '',
+    });
+    setLoaded(record);
+  };
+
+  // Fill the form once the record (edit) or the defaults (new) are known. Only
+  // once: live updates refetch the data, and that mustn't wipe what you've typed.
   useEffect(() => {
+    const key = id ? `edit-${id}` : `new-${activeYear?.id}`;
+    if (filledFor.current === key) return;
     if (id && existing) {
-      reset({
-        date: existing.date,
-        description: existing.description,
-        reference: existing.reference ?? '',
-        paymentMethod: existing.paymentMethod,
-        amount: penceToPounds(existing.amountPence),
-        categoryId: String(existing.categoryId),
-        notes: existing.notes ?? '',
-      });
+      filledFor.current = key;
+      fillFrom(existing);
     } else if (!id && activeYear && incomeCategories.length) {
+      filledFor.current = key;
       const today = todayIso();
       reset({
         date: isDateInTaxYear(today, activeYear) ? today : '',
@@ -89,19 +102,22 @@ export function IncomeForm() {
       date: values.date,
       description: values.description,
       // The source field is no longer shown; keep any value already stored.
-      source: existing?.source ?? null,
+      source: loaded?.source ?? null,
       reference: values.reference,
       paymentMethod: values.paymentMethod,
       amountPence: parsePoundsToPence(values.amount),
       categoryId: Number(values.categoryId),
       notes: values.notes,
       removeDocument: removeDoc,
+      expectedUpdatedAt: id ? loaded?.updatedAt : undefined,
     };
     save.mutate(
       { id: id ?? undefined, form: transactionForm(payload, file) },
       {
         onSuccess: (saved) => navigate(`/incoming/${saved.id}`),
         onError: (err) => {
+          // Someone else saved first: fetch their version so the form can offer it.
+          if (err instanceof ApiError && err.status === 409) refetchExisting();
           if (err instanceof ApiError) {
             for (const d of err.details ?? []) {
               if (d.path === 'date') setError('date', { message: err.message });
@@ -149,6 +165,17 @@ export function IncomeForm() {
       <PageHeader title={title} />
       <PageBody>
         <BackLink to={backTo}>Back</BackLink>
+        {existing && loaded && existing.updatedAt !== loaded.updatedAt && (
+          <div className="max-w-3xl">
+            <ChangedElsewhere
+              by={existing.updatedBy}
+              onLoad={() => {
+                fillFrom(existing);
+                save.reset();
+              }}
+            />
+          </div>
+        )}
         <form onSubmit={onSubmit} noValidate>
           <Card className="max-w-3xl p-5 sm:p-6">
             <div className="grid gap-5 sm:grid-cols-2">

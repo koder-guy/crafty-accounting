@@ -13,7 +13,8 @@ Self-hosted bookkeeping for a UK sole trader, built for selling at craft fairs a
   - **Note:** the dashboard's net profit and the Breakdown report's profit count business entertaining and depreciation as ordinary expenses, while the Year-end Summary leaves them out because HMRC never allows them. They only differ if you record expenses in either of those categories; use the Year-end Summary figure for your return.
 - **Custom categories** (Settings): your own category names, such as "Printer filament", each mapped to a standard MTD category. They're grouped under that category in every dropdown and count towards its MTD figures. Deleting a category that's in use moves its transactions to the MTD category it maps to, so MTD totals don't change.
 - **Backups** (Settings): download a `.sql` dump or a full `.zip` (database plus documents), and restore from either.
-- **Sign-in**: a single password.
+- **People** (Settings): each person signs in with their own name and password, and has their own active tax year. Transactions show who added them and who last changed them.
+- **Working together**: when someone saves a change, every other open browser shows it within a second or so, without reloading. If two people edit the same transaction at once, the second save is refused rather than overwriting the first, and the form offers to load the other person's version. What you've typed in a form is never replaced while you're typing.
 
 ## Run with Docker Compose
 
@@ -25,7 +26,7 @@ cp .env.example .env
 
 Edit `.env`:
 
-- Set `ADMIN_PASSWORD`, and ideally `SESSION_SECRET` (made with `openssl rand -hex 32`).
+- Set `ADMIN_NAME` and `ADMIN_PASSWORD` for the first person to sign in, and ideally `SESSION_SECRET` (made with `openssl rand -hex 32`). Once someone exists, add other people and change passwords in **Settings → People**; these two variables are then ignored.
 - Set `SITE_ADDRESS` to the address(es) you'll use to reach the server, for example `crafty.local, 192.168.1.50`. See **HTTPS** below.
 
 Create the folder for automatic backups and let the container's user (UID 1000) write to it. If you can, point `BACKUP_HOST_DIR` in `.env` at another disk or a NAS share instead of `./backups`:
@@ -55,6 +56,8 @@ All data lives in the `crafty-data` Docker volume, mounted at `/data`:
 
 To update to a new version, pull or copy the new code and run `docker compose up -d --build` again. Database migrations run automatically on start.
 
+Upgrading from v1.0.0, which had one shared password: the first time it starts, the app creates a person from `ADMIN_NAME` (`Admin` unless you set it) and your existing `ADMIN_PASSWORD`. Sign in with that name and password, rename yourself in **Settings → People** if you like, and add anyone else there.
+
 ### HTTPS
 
 All traffic is encrypted. Caddy gets the certificate in one of two ways, chosen by `TLS_ISSUER` in `.env`:
@@ -81,7 +84,7 @@ The authority is valid for 10 years and is kept in the `caddy-data` volume. Cadd
 2. Forward ports 80 and 443 on your router to the server.
 3. Set `SITE_ADDRESS` to the domain and `TLS_ISSUER` to your email address.
 
-Caddy then gets a free Let's Encrypt certificate and renews it automatically, and there's nothing to install on your devices. Use a strong `ADMIN_PASSWORD` if the app is reachable from the internet.
+Caddy then gets a free Let's Encrypt certificate and renews it automatically, and there's nothing to install on your devices. Use strong passwords for everyone if the app is reachable from the internet.
 
 If ports 80 and 443 are already used on the server, change `HTTP_PORT` and `HTTPS_PORT`. The address then needs the port, e.g. `https://crafty.local:8443`. Let's Encrypt needs 80 and 443 to be reachable from outside, so for a public domain forward those router ports to whichever ports you've chosen.
 
@@ -105,7 +108,8 @@ It refuses to run if any tax years already exist. Adding `--reset` first **delet
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `ADMIN_PASSWORD` | *(required)* | Sign-in password |
+| `ADMIN_NAME` | `Admin` | Name of the first person, created when nobody has been set up yet |
+| `ADMIN_PASSWORD` | *(required at first)* | Password for that first person. Needed only until someone exists; after that people are managed in Settings → People. |
 | `SESSION_SECRET` | generated | Signs the session cookie. If empty, one is generated and kept in the data folder. |
 | `PORT` | `3000` | Port inside the container |
 | `SITE_ADDRESS` | `localhost` | Docker: address(es) for HTTPS, comma separated |
@@ -143,9 +147,11 @@ Use **Settings → Backup and restore** in the app:
 - **Full backup (.zip)** contains `backup.sql` plus every document in `uploads/`. Restoring it replaces the database and all documents.
 - **Database only (.sql)** is a plain-text SQL dump with one statement per line. Restoring it replaces the database and leaves the documents folder alone.
 
-**Start again with an empty database** (also in Backup and restore) deletes all tax years, transactions, documents, custom categories and MTD submission records, after you type `RESET` to confirm. The standard categories and your password stay. The old database is kept as `/data/crafty.pre-reset.db` and the old documents as `/data/uploads.pre-reset/` until the next reset.
+**Start again with an empty database** (also in Backup and restore) deletes all tax years, transactions, documents, custom categories and MTD submission records, after you type `RESET` to confirm. The standard categories and the people who can sign in stay. The old database is kept as `/data/crafty.pre-reset.db` and the old documents as `/data/uploads.pre-reset/` until the next reset.
 
 Before a restore replaces anything, the file is loaded into a separate database and checked: only `CREATE TABLE`, `CREATE INDEX` and `INSERT` statements are accepted, the expected tables must exist, and foreign-key and integrity checks must pass. Backups from older versions are migrated forward automatically.
+
+Backups don't include the people who can sign in or their passwords. A restore keeps whoever is set up on this install, so nobody is locked out by restoring an older backup.
 
 You can also back up the Docker volume itself.
 

@@ -9,7 +9,9 @@
 
 {$SITE_ADDRESS:localhost} {
 	tls {$TLS_ISSUER:internal}
-	encode zstd gzip
+	# Compressing the live-update stream would hold its messages back.
+	@compressible not path /api/events
+	encode @compressible zstd gzip
 	header -Server
 	reverse_proxy crafty-accounting:3000
 }

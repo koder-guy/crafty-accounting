@@ -14,6 +14,13 @@ import { reportsRouter } from './routes/reports';
 import { sampleDataRouter } from './routes/sampleData';
 import { taxYearsRouter } from './routes/taxYears';
 import { expensesRouter, incomesRouter } from './routes/transactions';
+import { usersRouter } from './routes/users';
+
+/** Identifies one open browser tab, so it isn't told about its own changes. */
+const clientId = (value: unknown) => (typeof value === 'string' && /^[\w-]{1,64}$/.test(value) ? value : null);
+
+/** Changes that only affect the person making them, so nobody else needs telling. */
+const PERSONAL_CHANGES = new Set(['/tax-years/active']);
 
 export function createApp(ctx: AppContext) {
   const app = express();
@@ -50,7 +57,25 @@ export function createApp(ctx: AppContext) {
   });
   app.use('/api/auth', authRouter(ctx));
 
-  app.use('/api', requireAuth);
+  app.use('/api', requireAuth(ctx));
+
+  app.get('/api/events', (req, res) => {
+    ctx.liveUpdates.subscribe(res, clientId(req.query.client));
+  });
+  // After any successful change, tell the other open browsers to refetch.
+  app.use('/api', (req, res, next) => {
+    if (req.method !== 'GET' && req.method !== 'HEAD' && !PERSONAL_CHANGES.has(req.path)) {
+      // Read the path now: routers rewrite it while handling the request.
+      const area = req.path.split('/')[1] ?? '';
+      res.on('finish', () => {
+        if (res.statusCode >= 400) return;
+        ctx.liveUpdates.publish({ area, by: req.user!.name }, clientId(req.get('X-Client-Id')));
+      });
+    }
+    next();
+  });
+
+  app.use('/api/users', usersRouter(ctx));
   app.use('/api/tax-years', taxYearsRouter(ctx));
   app.use('/api/categories', categoriesRouter(ctx));
   app.use('/api/incomes', incomesRouter(ctx));

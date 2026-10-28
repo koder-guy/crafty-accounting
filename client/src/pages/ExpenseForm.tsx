@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useFieldArray, useForm, useWatch } from 'react-hook-form';
 import { useNavigate, useParams } from 'react-router';
 import { Plus, Trash2 } from 'lucide-react';
@@ -12,7 +12,7 @@ import {
   type PaymentMethod,
 } from '@crafty/shared';
 import { CategoryOptions } from '../components/CategoryOptions';
-import { BackLink, dateInYear, yearRangeHint } from '../components/FormShell';
+import { BackLink, ChangedElsewhere, dateInYear, yearRangeHint } from '../components/FormShell';
 import { NoTaxYear } from '../components/NoTaxYear';
 import { PageBody, PageHeader } from '../components/PageHeader';
 import { DocumentField, PaymentMethodOptions } from '../components/transactions';
@@ -52,7 +52,7 @@ export function ExpenseForm() {
   const params = useParams();
   const id = params.id ? Number(params.id) : null;
   const navigate = useNavigate();
-  const { data: existing, isLoading: loadingExisting, error: loadError } = useExpense(id);
+  const { data: existing, isLoading: loadingExisting, error: loadError, refetch: refetchExisting } = useExpense(id);
   const { data: years } = useTaxYears();
   const { taxYear: activeYear, isLoading: yearLoading } = useActiveTaxYear();
   const { data: categories = [] } = useCategories();
@@ -88,26 +88,39 @@ export function ExpenseForm() {
   });
   const { fields, append, remove } = useFieldArray({ control, name: 'lineItems' });
 
+  // The version of the record the form was filled from; saving is refused if it has changed since.
+  const [loaded, setLoaded] = useState<ExpenseWithLineItems | null>(null);
+  const filledFor = useRef<string | null>(null);
+  const fillFrom = (record: ExpenseWithLineItems) => {
+    reset({
+      date: record.date,
+      payee: record.payee,
+      invoiceNumber: record.invoiceNumber ?? '',
+      orderNumber: record.orderNumber ?? '',
+      description: record.description ?? '',
+      paymentMethod: record.paymentMethod,
+      total: penceToPounds(record.totalPence),
+      notes: record.notes ?? '',
+      lineItems: record.lineItems.map((li) => ({
+        lineId: li.id,
+        description: li.description,
+        amount: penceToPounds(li.amountPence),
+        categoryId: String(li.categoryId),
+        disallowable: li.disallowable,
+      })),
+    });
+    setLoaded(record);
+  };
+
+  // Fill the form once: live updates refetch the data, and that mustn't wipe what you've typed.
   useEffect(() => {
+    const key = id ? `edit-${id}` : `new-${activeYear?.id}`;
+    if (filledFor.current === key) return;
     if (id && existing) {
-      reset({
-        date: existing.date,
-        payee: existing.payee,
-        invoiceNumber: existing.invoiceNumber ?? '',
-        orderNumber: existing.orderNumber ?? '',
-        description: existing.description ?? '',
-        paymentMethod: existing.paymentMethod,
-        total: penceToPounds(existing.totalPence),
-        notes: existing.notes ?? '',
-        lineItems: existing.lineItems.map((li) => ({
-          lineId: li.id,
-          description: li.description,
-          amount: penceToPounds(li.amountPence),
-          categoryId: String(li.categoryId),
-          disallowable: li.disallowable,
-        })),
-      });
+      filledFor.current = key;
+      fillFrom(existing);
     } else if (!id && activeYear && expenseCategories.length) {
+      filledFor.current = key;
       const today = todayIso();
       reset({
         date: isDateInTaxYear(today, activeYear) ? today : '',
@@ -150,6 +163,7 @@ export function ExpenseForm() {
       totalPence: parsePoundsToPence(values.total),
       notes: values.notes,
       removeDocument: removeDoc,
+      expectedUpdatedAt: id ? loaded?.updatedAt : undefined,
       lineItems: values.lineItems.map((li) => ({
         id: li.lineId,
         description: li.description,
@@ -163,6 +177,8 @@ export function ExpenseForm() {
       {
         onSuccess: (saved) => navigate(`/outgoing/${saved.id}`),
         onError: (err) => {
+          // Someone else saved first: fetch their version so the form can offer it.
+          if (err instanceof ApiError && err.status === 409) refetchExisting();
           if (err instanceof ApiError && err.details?.some((d) => d.path === 'date')) {
             setError('date', { message: err.message });
           }
@@ -208,6 +224,15 @@ export function ExpenseForm() {
       <PageHeader title={title} />
       <PageBody>
         <BackLink to={backTo}>Back</BackLink>
+        {existing && loaded && existing.updatedAt !== loaded.updatedAt && (
+          <ChangedElsewhere
+            by={existing.updatedBy}
+            onLoad={() => {
+              fillFrom(existing);
+              save.reset();
+            }}
+          />
+        )}
         <form onSubmit={onSubmit} noValidate className="space-y-6">
           <Card className="p-5 sm:p-6">
             <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-4">

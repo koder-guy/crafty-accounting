@@ -17,6 +17,7 @@ const server = app.listen(config.port, () => {
 
 const shutdown = () => {
   stopScheduler();
+  ctx.liveUpdates.closeAll();
   server.close(() => {
     ctx.db.close();
     process.exit(0);

@@ -1,7 +1,7 @@
 // Data access: SQL rows in, API shapes (camelCase, shared types) out.
 import type { Category, Expense, ExpenseWithLineItems, Income, LineItem, TaxYear, TransactionFilters } from '@crafty/shared';
 import { taxYearStartYearForDate, todayIso } from '@crafty/shared';
-import { getSetting, type Db } from './db';
+import type { Db } from './db';
 
 type Row = Record<string, any>;
 
@@ -35,13 +35,12 @@ export function getTaxYear(db: Db, id: number): TaxYear | null {
 }
 
 /**
- * The stored active year if it still exists, otherwise the year containing
- * today, otherwise the most recent year.
+ * The person's chosen active year if it still exists, otherwise the year
+ * containing today, otherwise the most recent year.
  */
-export function resolveActiveTaxYearId(db: Db): number | null {
+export function resolveActiveTaxYearId(db: Db, chosenId: number | null): number | null {
   const years = listTaxYears(db);
-  const stored = Number(getSetting(db, 'active_tax_year_id'));
-  if (years.some((y) => y.id === stored)) return stored;
+  if (chosenId !== null && years.some((y) => y.id === chosenId)) return chosenId;
   const today = todayIso();
   const current = years.find((y) => y.startDate <= today && today <= y.endDate);
   return current?.id ?? years[0]?.id ?? null;
@@ -154,6 +153,8 @@ const mapIncome = (row: Row): Income => ({
   documentFilename: row.document_filename,
   createdAt: row.created_at,
   updatedAt: row.updated_at,
+  createdBy: row.created_by,
+  updatedBy: row.updated_by,
 });
 
 export function listIncomes(db: Db, filters: TransactionFilters, limit?: number): Income[] {
@@ -208,6 +209,8 @@ function mapExpense(row: Row, categoryNames: Map<number, string>): Expense {
     categoryNames: ids.map((id) => categoryNames.get(id) ?? 'Unknown'),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    createdBy: row.created_by,
+    updatedBy: row.updated_by,
   };
 }
 

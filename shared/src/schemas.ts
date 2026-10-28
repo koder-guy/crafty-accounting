@@ -44,6 +44,8 @@ export const incomeInputSchema = z.object({
   categoryId: id,
   notes: optionalText(2000),
   removeDocument: z.boolean().optional(),
+  /** On an edit, the updatedAt the form was loaded with; the save is refused if it has changed since. */
+  expectedUpdatedAt: z.string().optional(),
 });
 export type IncomeInput = z.infer<typeof incomeInputSchema>;
 
@@ -69,6 +71,7 @@ export const expenseInputSchema = z
     notes: optionalText(2000),
     lineItems: z.array(lineItemInputSchema).min(1, 'Add at least one line item'),
     removeDocument: z.boolean().optional(),
+    expectedUpdatedAt: z.string().optional(),
   })
   .superRefine((value, ctx) => {
     const sum = value.lineItems.reduce((acc, item) => acc + item.amountPence, 0);
@@ -135,4 +138,16 @@ export const breakdownItemsSchema = z
   })
   .refine((q) => (q.categoryId === undefined) !== (q.payee === undefined), 'Choose a category or a payee');
 
-export const loginSchema = z.object({ password: z.string().min(1, 'Enter the password') });
+export const loginSchema = z.object({
+  name: z.string().trim().min(1, 'Enter your name'),
+  password: z.string().min(1, 'Enter your password'),
+});
+
+const userName = z.string().trim().min(1, 'Enter a name').max(50, 'Use 50 characters or fewer');
+const newPassword = z.string().min(8, 'Use at least 8 characters').max(200);
+
+export const createUserSchema = z.object({ name: userName, password: newPassword });
+
+export const updateUserSchema = z
+  .object({ name: userName.optional(), password: newPassword.optional() })
+  .refine((v) => v.name !== undefined || v.password !== undefined, 'Nothing to change');

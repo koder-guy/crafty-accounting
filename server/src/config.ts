@@ -7,7 +7,9 @@ export interface Config {
   /** Where automatic backups are written; ideally on a different disk. */
   backupDir: string;
   port: number;
-  adminPassword: string;
+  /** Name and password for the first user, created when no users exist yet. */
+  adminName: string;
+  adminPassword: string | null;
   sessionSecret: string;
   maxUploadMb: number;
   cookieSecure: boolean;
@@ -17,15 +19,10 @@ export interface Config {
 
 const truthy = (value: string | undefined) => value === 'true' || value === '1';
 
-/** Reads settings from the environment. Throws if ADMIN_PASSWORD is missing. */
+/** Reads settings from the environment. */
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   const dataDir = path.resolve(env.DATA_DIR ?? 'data');
   fs.mkdirSync(dataDir, { recursive: true });
-
-  const adminPassword = env.ADMIN_PASSWORD ?? '';
-  if (!adminPassword) {
-    throw new Error('ADMIN_PASSWORD must be set (see .env.example)');
-  }
 
   const clientDist = path.resolve(env.CLIENT_DIST ?? path.join(process.cwd(), 'client', 'dist'));
 
@@ -33,7 +30,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     dataDir,
     backupDir: path.resolve(env.BACKUP_DIR || path.join(dataDir, 'backups')),
     port: Number(env.PORT ?? 3000),
-    adminPassword,
+    adminName: env.ADMIN_NAME?.trim() || 'Admin',
+    adminPassword: env.ADMIN_PASSWORD || null,
     sessionSecret: env.SESSION_SECRET || persistedSecret(dataDir),
     maxUploadMb: Number(env.MAX_UPLOAD_MB ?? 20),
     cookieSecure: truthy(env.COOKIE_SECURE),

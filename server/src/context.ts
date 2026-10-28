@@ -2,6 +2,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { Config } from './config';
 import { openDatabase, type Db } from './db';
+import { LiveUpdates } from './liveUpdates';
+import { ensureFirstUser } from './users';
 
 export interface AppContext {
   config: Config;
@@ -13,6 +15,7 @@ export interface AppContext {
     tmpDir: string;
     backupDir: string;
   };
+  liveUpdates: LiveUpdates;
 }
 
 export function createContext(config: Config): AppContext {
@@ -25,5 +28,7 @@ export function createContext(config: Config): AppContext {
   fs.mkdirSync(paths.uploadsDir, { recursive: true });
   fs.rmSync(paths.tmpDir, { recursive: true, force: true });
   fs.mkdirSync(paths.tmpDir, { recursive: true });
-  return { config, db: openDatabase(paths.dbFile), paths };
+  const db = openDatabase(paths.dbFile);
+  ensureFirstUser(db, config.adminName, config.adminPassword);
+  return { config, db, paths, liveUpdates: new LiveUpdates() };
 }

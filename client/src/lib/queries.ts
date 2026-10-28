@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import type {
   AutoBackupStatus,
@@ -7,13 +8,15 @@ import type {
   DashboardData,
   ExpenseWithLineItems,
   Income,
+  MeResponse,
   MtdQuartersResponse,
   TaxYear,
   TaxYearsResponse,
   TransactionFilters,
+  User,
   YearEndSummaryResponse,
 } from '@crafty/shared';
-import { api, toQuery } from './api';
+import { api, CLIENT_ID, toQuery } from './api';
 
 // ---- Auth ----
 
@@ -23,14 +26,14 @@ const clearDataQueries = (qc: QueryClient) => qc.removeQueries({ predicate: (q) 
 export const useMe = () =>
   useQuery({
     queryKey: ['me'],
-    queryFn: () => api.get<{ authenticated: boolean }>('/auth/me'),
+    queryFn: () => api.get<MeResponse>('/auth/me'),
     staleTime: Infinity,
   });
 
 export function useLogin() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (password: string) => api.post<{ authenticated: boolean }>('/auth/login', { password }),
+    mutationFn: (credentials: { name: string; password: string }) => api.post<MeResponse>('/auth/login', credentials),
     onSuccess: (data) => {
       clearDataQueries(qc);
       qc.setQueryData(['me'], data);
@@ -47,6 +50,54 @@ export function useLogout() {
       qc.setQueryData(['me'], { authenticated: false });
     },
   });
+}
+
+// ---- Live updates ----
+
+/**
+ * Listens for changes made in other browsers (another person, or another tab)
+ * and refetches, so everyone sees the same books without reloading. Forms
+ * don't lose what you've typed: they only fill themselves once.
+ */
+export function useLiveUpdates() {
+  const qc = useQueryClient();
+  useEffect(() => {
+    const source = new EventSource(`/api/events?client=${CLIENT_ID}`);
+    const refetch = (area?: string) =>
+      qc.invalidateQueries({ predicate: (q) => q.queryKey[0] !== 'me' || area === 'users' });
+    source.addEventListener('changed', (e) => refetch((JSON.parse((e as MessageEvent).data) as { area: string }).area));
+    // After a dropped connection (e.g. the server restarted), catch up on anything missed.
+    let dropped = false;
+    source.addEventListener('error', () => (dropped = true));
+    source.addEventListener('open', () => {
+      if (dropped) refetch();
+      dropped = false;
+    });
+    return () => source.close();
+  }, [qc]);
+}
+
+// ---- People ----
+
+export const useUsers = () => useQuery({ queryKey: ['users'], queryFn: () => api.get<User[]>('/users') });
+
+export function useUserMutations() {
+  const qc = useQueryClient();
+  const onSuccess = () => {
+    qc.invalidateQueries({ queryKey: ['users'] });
+    qc.invalidateQueries({ queryKey: ['me'] });
+  };
+  return {
+    create: useMutation({
+      mutationFn: (input: { name: string; password: string }) => api.post<User>('/users', input),
+      onSuccess,
+    }),
+    update: useMutation({
+      mutationFn: ({ id, ...input }: { id: number; name?: string; password?: string }) => api.put<User>(`/users/${id}`, input),
+      onSuccess,
+    }),
+    remove: useMutation({ mutationFn: (id: number) => api.delete(`/users/${id}`), onSuccess }),
+  };
 }
 
 // ---- Tax years ----

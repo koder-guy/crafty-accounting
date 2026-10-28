@@ -50,6 +50,8 @@ export function dumpSql(db: Db): string {
     .all() as { name: string; sql: string }[];
   for (const table of tables) lines.push(`${table.sql.replace(/\s+/g, ' ')};`);
   for (const table of tables) {
+    // Sign-ins belong to the install, not the books, so password hashes stay out of backups.
+    if (table.name === 'users') continue;
     const select = db.prepare(`SELECT * FROM ${quoteIdent(table.name)} ORDER BY rowid`);
     const columns = select
       .columns()
@@ -120,11 +122,12 @@ export function restoreBackup(ctx: AppContext, sql: string, uploadsFrom?: string
   const newDbFile = buildDatabaseFromDump(ctx, sql);
   const { dbFile, uploadsDir } = ctx.paths;
 
-  // Automatic backup settings belong to this install, so they survive a restore.
+  // Automatic backup settings and sign-ins belong to this install, so they survive a restore.
   const keepSettings = ctx.db.prepare("SELECT key, value FROM settings WHERE key LIKE 'auto\\_backup\\_%' ESCAPE '\\'").all() as {
     key: string;
     value: string | null;
   }[];
+  const keepUsers = ctx.db.prepare('SELECT id, name, password_hash, created_at FROM users').all();
 
   ctx.db.pragma('wal_checkpoint(TRUNCATE)');
   ctx.db.close();
@@ -134,6 +137,12 @@ export function restoreBackup(ctx: AppContext, sql: string, uploadsFrom?: string
   ctx.db = openDatabase(dbFile);
   ctx.db.prepare("DELETE FROM settings WHERE key LIKE 'auto\\_backup\\_%' ESCAPE '\\'").run();
   for (const { key, value } of keepSettings) setSetting(ctx.db, key, value);
+  // Tax year ids differ in the restored books, so everyone goes back to the default year.
+  ctx.db.transaction(() => {
+    ctx.db.prepare('DELETE FROM users').run();
+    const insert = ctx.db.prepare('INSERT INTO users (id, name, password_hash, created_at) VALUES (@id, @name, @password_hash, @created_at)');
+    for (const user of keepUsers) insert.run(user);
+  })();
 
   if (uploadsFrom) {
     const old = `${uploadsDir}.old-${Date.now()}`;
@@ -146,7 +155,7 @@ export function restoreBackup(ctx: AppContext, sql: string, uploadsFrom?: string
 /**
  * Empties the books: every tax year (and with it all transactions, line items
  * and MTD submissions), custom categories, settings and documents. The
- * standard MTD categories stay. As a safety net the old database is kept as
+ * standard MTD categories and the people who can sign in stay. As a safety net the old database is kept as
  * crafty.pre-reset.db and the old documents as uploads.pre-reset/ (each reset
  * replaces the previous copies).
  */
@@ -161,10 +170,11 @@ export function resetToEmpty(ctx: AppContext): void {
   db.transaction(() => {
     db.prepare('DELETE FROM tax_years').run();
     db.prepare('DELETE FROM categories WHERE is_custom = 1').run();
-    // Keep the automatic backup settings; they're about the install, not the books.
+    // Keep the automatic backup settings and sign-ins; they're about the install, not the books.
     db.prepare("DELETE FROM settings WHERE key NOT LIKE 'auto\\_backup\\_%' ESCAPE '\\'").run();
-    // Start ids from 1 again; standard categories keep theirs.
-    db.prepare("DELETE FROM sqlite_sequence WHERE name != 'categories'").run();
+    db.prepare('UPDATE users SET active_tax_year_id = NULL').run();
+    // Start ids from 1 again; standard categories and users keep theirs.
+    db.prepare("DELETE FROM sqlite_sequence WHERE name NOT IN ('categories', 'users')").run();
   })();
 
   const previous = path.join(dataDir, 'uploads.pre-reset');

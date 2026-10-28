@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router';
 import { Download, Pencil, Trash2 } from 'lucide-react';
 import { displayTaxYear, formatDisplayDate, formatGBP } from '@crafty/shared';
 import { ConfirmDialog } from '../components/ConfirmDialog';
-import { BackLink } from '../components/FormShell';
+import { BackLink, recordedBy } from '../components/FormShell';
 import { PageBody, PageHeader } from '../components/PageHeader';
 import { Alert, Button, ButtonLink, Card, DetailRow, PaymentBadge, Spinner } from '../components/ui';
 import { documentUrl } from '../lib/api';
@@ -71,6 +71,10 @@ export function IncomeView() {
                   )}
                 </DetailRow>
                 <DetailRow label="Notes">{income.notes && <span className="whitespace-pre-wrap">{income.notes}</span>}</DetailRow>
+                <DetailRow label="Added by">{recordedBy(income.createdBy, income.createdAt)}</DetailRow>
+                {income.updatedAt !== income.createdAt && (
+                  <DetailRow label="Last changed by">{recordedBy(income.updatedBy, income.updatedAt)}</DetailRow>
+                )}
               </dl>
             </Card>
           </>

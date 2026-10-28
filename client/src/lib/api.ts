@@ -10,13 +10,19 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * Identifies this browser tab to the server, which then doesn't send the tab
+ * live updates about its own changes (see useLiveUpdates).
+ */
+export const CLIENT_ID = Array.from(crypto.getRandomValues(new Uint8Array(12)), (b) => b.toString(16).padStart(2, '0')).join('');
+
 let onUnauthorized: () => void = () => {};
 export function setUnauthorizedHandler(handler: () => void) {
   onUnauthorized = handler;
 }
 
 async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
-  const init: RequestInit = { method, credentials: 'same-origin', headers: {} };
+  const init: RequestInit = { method, credentials: 'same-origin', headers: { 'X-Client-Id': CLIENT_ID } };
   if (body instanceof FormData) {
     init.body = body;
   } else if (body !== undefined) {

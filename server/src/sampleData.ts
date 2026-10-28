@@ -207,7 +207,7 @@ export function hasData(db: Db): boolean {
 export function clearData(db: Db, uploadsDir: string): void {
   db.transaction(() => {
     db.prepare('DELETE FROM tax_years').run();
-    db.prepare("DELETE FROM settings WHERE key = 'active_tax_year_id'").run();
+    db.prepare('UPDATE users SET active_tax_year_id = NULL').run();
   })();
   for (const name of fs.readdirSync(uploadsDir)) fs.rmSync(path.join(uploadsDir, name), { force: true });
 }
@@ -348,7 +348,8 @@ export function generateSampleData(db: Db, uploadsDir: string, today = todayIso(
         result.submissions++;
       }
     }
-    setSetting(db, 'active_tax_year_id', String(currentYearId));
+    // Everyone starts on the current year.
+    db.prepare('UPDATE users SET active_tax_year_id = ?').run(currentYearId);
     // Lets the dashboard remind you this is sample data until it's cleared.
     setSetting(db, 'sample_data_loaded', '1');
   })();

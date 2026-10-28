@@ -95,6 +95,30 @@ CREATE INDEX idx_expenses_year_date ON expenses (tax_year_id, date);
 CREATE INDEX idx_line_items_expense ON expense_line_items (expense_id);
 `,
   },
+  // Sign-ins for each person. Users belong to the install and survive a restore
+  // (see backup.ts), so transactions record names as text rather than user ids,
+  // and a user's active tax year is checked when read rather than by a foreign key.
+  {
+    version: 2,
+    sql: `
+CREATE TABLE users (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  password_hash TEXT NOT NULL,
+  active_tax_year_id INTEGER,
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+);
+
+CREATE UNIQUE INDEX idx_users_name ON users (name COLLATE NOCASE);
+
+ALTER TABLE incomes ADD COLUMN created_by TEXT;
+ALTER TABLE incomes ADD COLUMN updated_by TEXT;
+ALTER TABLE expenses ADD COLUMN created_by TEXT;
+ALTER TABLE expenses ADD COLUMN updated_by TEXT;
+
+DELETE FROM settings WHERE key = 'active_tax_year_id';
+`,
+  },
 ];
 
 export const CURRENT_SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;

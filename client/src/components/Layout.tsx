@@ -10,11 +10,12 @@ import {
   Menu,
   Settings,
   TrendingUp,
+  UserRound,
   Wallet,
   X,
 } from 'lucide-react';
 import { APP_NAME, APP_VERSION, displayTaxYear, taxYearStartYearForDate, todayIso } from '@crafty/shared';
-import { useLogout, useTaxYearMutations, useTaxYears } from '../lib/queries';
+import { useLiveUpdates, useLogout, useMe, useTaxYearMutations, useTaxYears } from '../lib/queries';
 
 function Brand() {
   return (
@@ -104,6 +105,7 @@ function NavItem({
 
 function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const { data } = useTaxYears();
+  const { data: me } = useMe();
   const active = data?.taxYears.find((y) => y.id === data.activeTaxYearId);
 
   return (
@@ -133,8 +135,16 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
         <NavItem to="/mtd" icon={<FileSpreadsheet className="size-5 text-muted" aria-hidden />} label="MTD Quarterly" />
         <NavItem to="/settings" icon={<Settings className="size-5 text-muted" aria-hidden />} label="Settings" />
       </nav>
-      <div className="border-t border-line px-5 py-4 text-xs font-semibold text-ink/80">
-        {APP_NAME} v{APP_VERSION}
+      <div className="space-y-1 border-t border-line px-5 py-4 text-xs">
+        {me?.user && (
+          <div className="flex items-center gap-1.5 text-muted">
+            <UserRound className="size-3.5" aria-hidden />
+            Signed in as <span className="font-semibold text-ink">{me.user.name}</span>
+          </div>
+        )}
+        <div className="font-semibold text-ink/80">
+          {APP_NAME} v{APP_VERSION}
+        </div>
       </div>
     </div>
   );
@@ -164,6 +174,7 @@ export function Layout() {
   const [menuOpen, setMenuOpen] = useState(false);
   const location = useLocation();
   useEffect(() => setMenuOpen(false), [location.pathname]);
+  useLiveUpdates();
 
   return (
     <div className="min-h-screen lg:grid lg:grid-cols-[300px_1fr] print:block">

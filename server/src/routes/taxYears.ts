@@ -1,21 +1,27 @@
-import { Router } from 'express';
+import { Router, type Request } from 'express';
 import { createTaxYearSchema, setActiveTaxYearSchema, taxYearFromStartYear, type TaxYearsResponse } from '@crafty/shared';
 import type { AppContext } from '../context';
 import { setSetting } from '../db';
 import { removeDocumentFile } from '../documents';
 import { HttpError, parseId, parseWith } from '../http';
 import { getTaxYear, listTaxYears, resolveActiveTaxYearId } from '../repo';
+import { getUser } from '../users';
 
 export function taxYearsRouter(ctx: AppContext): Router {
   const router = Router();
 
-  const respond = (): TaxYearsResponse => ({
+  // Each person has their own active tax year.
+  const activeId = (req: Request) => resolveActiveTaxYearId(ctx.db, getUser(ctx.db, req.user!.id)?.activeTaxYearId ?? null);
+  const setActive = (req: Request, taxYearId: number) =>
+    ctx.db.prepare('UPDATE users SET active_tax_year_id = ? WHERE id = ?').run(taxYearId, req.user!.id);
+
+  const respond = (req: Request): TaxYearsResponse => ({
     taxYears: listTaxYears(ctx.db),
-    activeTaxYearId: resolveActiveTaxYearId(ctx.db),
+    activeTaxYearId: activeId(req),
   });
 
-  router.get('/', (_req, res) => {
-    res.json(respond());
+  router.get('/', (req, res) => {
+    res.json(respond(req));
   });
 
   router.post('/', (req, res) => {
@@ -25,19 +31,20 @@ export function taxYearsRouter(ctx: AppContext): Router {
     if (db.prepare('SELECT 1 FROM tax_years WHERE label = ?').get(year.label)) {
       throw new HttpError(409, `Tax year ${year.label.replace('-', '/')} already exists`);
     }
-    const hadActive = resolveActiveTaxYearId(db) !== null;
+    // Keep the year you were viewing (or switch to the new one if it's the first).
+    const before = activeId(req);
     const { lastInsertRowid } = db
       .prepare('INSERT INTO tax_years (label, start_date, end_date) VALUES (?, ?, ?)')
       .run(year.label, year.startDate, year.endDate);
-    if (!hadActive) setSetting(db, 'active_tax_year_id', String(lastInsertRowid));
-    res.status(201).json({ ...respond(), createdId: Number(lastInsertRowid) });
+    setActive(req, before ?? Number(lastInsertRowid));
+    res.status(201).json({ ...respond(req), createdId: Number(lastInsertRowid) });
   });
 
   router.put('/active', (req, res) => {
     const { taxYearId } = parseWith(setActiveTaxYearSchema, req.body);
     if (!getTaxYear(ctx.db, taxYearId)) throw new HttpError(404, 'Tax year not found');
-    setSetting(ctx.db, 'active_tax_year_id', String(taxYearId));
-    res.json(respond());
+    setActive(req, taxYearId);
+    res.json(respond(req));
   });
 
   router.delete('/:id', (req, res) => {
@@ -62,7 +69,7 @@ export function taxYearsRouter(ctx: AppContext): Router {
     for (const name of documents) removeDocumentFile(ctx, name);
 
     res.json({
-      ...respond(),
+      ...respond(req),
       deleted: { incomes: year.incomeCount, expenses: year.expenseCount, documents: documents.length },
     });
   });

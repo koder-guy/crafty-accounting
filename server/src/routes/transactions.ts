@@ -39,6 +39,16 @@ function checkCategory(ctx: AppContext, categoryId: number, type: CategoryType):
   }
 }
 
+/**
+ * Refuses an edit made from an out-of-date copy, so one person can't silently
+ * overwrite another's changes. Forms send the updatedAt they were loaded with.
+ */
+function checkUnchanged(existing: { updatedAt: string; updatedBy: string | null }, expectedUpdatedAt: string | undefined): void {
+  if (expectedUpdatedAt === undefined || expectedUpdatedAt === existing.updatedAt) return;
+  const who = existing.updatedBy ?? 'someone else';
+  throw new HttpError(409, `${who} changed this transaction while you were editing it, so your changes weren't saved. Load their version, then make yours again.`);
+}
+
 const csvFilename = (kind: string, year: TaxYear | null) => `${kind}-${year?.label ?? 'export'}.csv`;
 
 export function incomesRouter(ctx: AppContext): Router {
@@ -84,8 +94,8 @@ export function incomesRouter(ctx: AppContext): Router {
       const result = ctx.db
         .prepare(
           `INSERT INTO incomes (tax_year_id, date, description, source, reference, payment_method,
-             amount_pence, category_id, notes, document_filename)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+             amount_pence, category_id, notes, document_filename, created_by, updated_by)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         )
         .run(
           input.taxYearId,
@@ -98,6 +108,8 @@ export function incomesRouter(ctx: AppContext): Router {
           input.categoryId,
           input.notes,
           filename,
+          req.user!.name,
+          req.user!.name,
         );
       return Number(result.lastInsertRowid);
     });
@@ -109,6 +121,7 @@ export function incomesRouter(ctx: AppContext): Router {
     const existing = getIncome(ctx.db, id);
     if (!existing) throw new HttpError(404, 'Transaction not found');
     const input = parseWith(incomeInputSchema, readPayload(req));
+    checkUnchanged(existing, input.expectedUpdatedAt);
     if (input.taxYearId !== existing.taxYearId) throw new HttpError(422, 'A transaction cannot be moved to another tax year');
     checkTaxYearAndDate(ctx, existing.taxYearId, input.date);
     checkCategory(ctx, input.categoryId, 'INCOME');
@@ -116,7 +129,7 @@ export function incomesRouter(ctx: AppContext): Router {
       ctx.db
         .prepare(
           `UPDATE incomes SET date = ?, description = ?, source = ?, reference = ?, payment_method = ?,
-             amount_pence = ?, category_id = ?, notes = ?, document_filename = ?,
+             amount_pence = ?, category_id = ?, notes = ?, document_filename = ?, updated_by = ?,
              updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
            WHERE id = ?`,
         )
@@ -130,6 +143,7 @@ export function incomesRouter(ctx: AppContext): Router {
           input.categoryId,
           input.notes,
           filename,
+          req.user!.name,
           id,
         ),
     );
@@ -206,8 +220,8 @@ export function expensesRouter(ctx: AppContext): Router {
         const result = ctx.db
           .prepare(
             `INSERT INTO expenses (tax_year_id, date, payee, invoice_number, order_number, description,
-               payment_method, total_pence, notes, document_filename)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+               payment_method, total_pence, notes, document_filename, created_by, updated_by)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           )
           .run(
             input.taxYearId,
@@ -220,6 +234,8 @@ export function expensesRouter(ctx: AppContext): Router {
             input.totalPence,
             input.notes,
             filename,
+            req.user!.name,
+            req.user!.name,
           );
         const expenseId = Number(result.lastInsertRowid);
         const insert = insertLine(expenseId);
@@ -235,6 +251,7 @@ export function expensesRouter(ctx: AppContext): Router {
     const existing = getExpense(ctx.db, id);
     if (!existing) throw new HttpError(404, 'Transaction not found');
     const input = parseWith(expenseInputSchema, readPayload(req));
+    checkUnchanged(existing, input.expectedUpdatedAt);
     if (input.taxYearId !== existing.taxYearId) throw new HttpError(422, 'A transaction cannot be moved to another tax year');
     checkTaxYearAndDate(ctx, existing.taxYearId, input.date);
     input.lineItems.forEach((item) => checkCategory(ctx, item.categoryId, 'EXPENSE'));
@@ -250,7 +267,7 @@ export function expensesRouter(ctx: AppContext): Router {
         ctx.db
           .prepare(
             `UPDATE expenses SET date = ?, payee = ?, invoice_number = ?, order_number = ?, description = ?,
-               payment_method = ?, total_pence = ?, notes = ?, document_filename = ?,
+               payment_method = ?, total_pence = ?, notes = ?, document_filename = ?, updated_by = ?,
                updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
              WHERE id = ?`,
           )
@@ -264,6 +281,7 @@ export function expensesRouter(ctx: AppContext): Router {
             input.totalPence,
             input.notes,
             filename,
+            req.user!.name,
             id,
           );
         const keep = new Set(input.lineItems.flatMap((item) => (item.id ? [item.id] : [])));

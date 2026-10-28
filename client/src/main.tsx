@@ -23,6 +23,7 @@ import { SettingsLayout } from './pages/settings/SettingsLayout';
 import { TaxYearsSettings } from './pages/settings/TaxYearsSettings';
 import { CustomCategories } from './pages/settings/CustomCategories';
 import { BackupSettings } from './pages/settings/BackupSettings';
+import { People } from './pages/settings/People';
 import { NotFound } from './pages/NotFound';
 
 const queryClient = new QueryClient({
@@ -61,6 +62,7 @@ function App() {
           <Route index element={<Navigate to="tax-years" replace />} />
           <Route path="tax-years" element={<TaxYearsSettings />} />
           <Route path="categories" element={<CustomCategories />} />
+          <Route path="people" element={<People />} />
           <Route path="backup" element={<BackupSettings />} />
         </Route>
         <Route path="backup" element={<Navigate to="/settings/backup" replace />} />

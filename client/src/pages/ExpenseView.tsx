@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router';
 import { Download, ListOrdered, Pencil, Trash2 } from 'lucide-react';
 import { displayTaxYear, formatDisplayDate, formatGBP } from '@crafty/shared';
 import { ConfirmDialog } from '../components/ConfirmDialog';
-import { BackLink } from '../components/FormShell';
+import { BackLink, recordedBy } from '../components/FormShell';
 import { PageBody, PageHeader } from '../components/PageHeader';
 import { Alert, Badge, Button, ButtonLink, Card, CardHeader, DetailRow, PaymentBadge, Spinner } from '../components/ui';
 import { documentUrl } from '../lib/api';
@@ -75,6 +75,10 @@ export function ExpenseView() {
                   )}
                 </DetailRow>
                 <DetailRow label="Notes">{expense.notes && <span className="whitespace-pre-wrap">{expense.notes}</span>}</DetailRow>
+                <DetailRow label="Added by">{recordedBy(expense.createdBy, expense.createdAt)}</DetailRow>
+                {expense.updatedAt !== expense.createdAt && (
+                  <DetailRow label="Last changed by">{recordedBy(expense.updatedBy, expense.updatedAt)}</DetailRow>
+                )}
               </dl>
             </Card>
 
