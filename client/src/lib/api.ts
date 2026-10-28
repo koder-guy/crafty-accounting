@@ -64,11 +64,11 @@ export function toQuery(params: Record<string, string | number | undefined | nul
   return text ? `?${text}` : '';
 }
 
-/** Multipart body: the record as JSON in "data", plus the optional document. */
-export function transactionForm(data: unknown, document: File | null): FormData {
+/** Multipart body: the record as JSON in "data", plus any new documents. */
+export function transactionForm(data: unknown, documents: File[]): FormData {
   const form = new FormData();
   form.append('data', JSON.stringify(data));
-  if (document) form.append('document', document, document.name);
+  for (const file of documents) form.append('documents', file, file.name);
   return form;
 }
 

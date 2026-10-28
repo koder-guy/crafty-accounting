@@ -38,6 +38,7 @@ export function createApp(ctx: AppContext) {
     // Remove any uploaded temp file the handler didn't consume (e.g. on a validation error).
     res.on('finish', () => {
       if (req.file) fs.rm(req.file.path, { force: true }, () => {});
+      if (Array.isArray(req.files)) for (const f of req.files) fs.rm(f.path, { force: true }, () => {});
     });
     next();
   });

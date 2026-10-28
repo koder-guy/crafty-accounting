@@ -12,6 +12,7 @@ import {
   todayIso,
   type CategoryTotal,
   type DashboardData,
+  type TransactionDocument,
 } from '@crafty/shared';
 import { SampleDataNotice, Welcome } from '../components/Welcome';
 import { PageBody, PageHeader } from '../components/PageHeader';
@@ -141,7 +142,7 @@ function RecentList({
   icon: ReactNode;
   viewAll: string;
   empty: string;
-  items: { key: number; to: string; name: string; sub: string; amount: string; tone: 'in' | 'out'; doc: string | null }[];
+  items: { key: number; to: string; name: string; sub: string; amount: string; tone: 'in' | 'out'; docs: TransactionDocument[] }[];
 }) {
   return (
     <Card>
@@ -168,7 +169,7 @@ function RecentList({
                   <div className="min-w-0">
                     <div className="flex items-center gap-1.5 font-medium text-ink">
                       <span className="truncate">{item.name}</span>
-                      <DocIndicator filename={item.doc} />
+                      <DocIndicator documents={item.docs} />
                     </div>
                     <div className="truncate text-xs text-muted">{item.sub}</div>
                   </div>
@@ -355,7 +356,7 @@ export function Dashboard() {
                   sub: `${formatDisplayDate(i.date)} · ${PAYMENT_METHOD_LABELS[i.paymentMethod]}`,
                   amount: formatGBP(i.amountPence),
                   tone: 'in',
-                  doc: i.documentFilename,
+                  docs: i.documents,
                 }))}
               />
               <RecentList
@@ -370,7 +371,7 @@ export function Dashboard() {
                   sub: `${formatDisplayDate(e.date)} · ${PAYMENT_METHOD_LABELS[e.paymentMethod]}`,
                   amount: formatGBP(e.totalPence),
                   tone: 'out',
-                  doc: e.documentFilename,
+                  docs: e.documents,
                 }))}
               />
             </div>

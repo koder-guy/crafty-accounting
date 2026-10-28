@@ -35,6 +35,12 @@ export const createTaxYearSchema = z.object({
 
 export const setActiveTaxYearSchema = z.object({ taxYearId: id });
 
+/** Most documents one transaction can have. */
+export const MAX_DOCUMENTS = 10;
+
+/** On an edit, the attached documents to remove (new ones come as files alongside). */
+const removeDocumentIds = z.array(id).max(MAX_DOCUMENTS).optional();
+
 export const incomeInputSchema = z.object({
   taxYearId: id,
   date: isoDate,
@@ -45,7 +51,7 @@ export const incomeInputSchema = z.object({
   amountPence: pence,
   categoryId: id,
   notes: optionalText(2000),
-  removeDocument: z.boolean().optional(),
+  removeDocumentIds,
   /** On an edit, the updatedAt the form was loaded with; the save is refused if it has changed since. */
   expectedUpdatedAt: z.string().optional(),
 });
@@ -72,7 +78,7 @@ export const expenseInputSchema = z
     totalPence: pence,
     notes: optionalText(2000),
     lineItems: z.array(lineItemInputSchema).min(1, 'Add at least one line item'),
-    removeDocument: z.boolean().optional(),
+    removeDocumentIds,
     expectedUpdatedAt: z.string().optional(),
   })
   .superRefine((value, ctx) => {

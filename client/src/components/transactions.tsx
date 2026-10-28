@@ -3,12 +3,14 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import { ChevronDown, ChevronsUpDown, ChevronUp, Download, Eye, FileText, Paperclip, Pencil, Search, Trash2 } from 'lucide-react';
 import {
+  MAX_DOCUMENTS,
   PAYMENT_METHOD_LABELS,
   PAYMENT_METHODS,
   type Category,
   type CategoryType,
   type PaymentMethod,
   type TaxYear,
+  type TransactionDocument,
   type TransactionFilters,
 } from '@crafty/shared';
 import { documentUrl } from '../lib/api';
@@ -235,23 +237,53 @@ export function ExportCsvButton({ href }: { href: string }) {
   );
 }
 
-export function DocIndicator({ filename }: { filename: string | null }) {
-  if (!filename) return null;
-  return <Paperclip className="inline size-3.5 shrink-0 text-accent-soft" aria-label={`Document: ${filename}`} />;
+/** "its attached document" / "its 3 attached documents", for delete confirmations. */
+export const attachedDocuments = (count: number) => (count === 1 ? 'its attached document' : `its ${count} attached documents`);
+
+/** The documents on a transaction page, each a download link. */
+export function DocumentLinks({ documents }: { documents: TransactionDocument[] }) {
+  if (documents.length === 0) return null;
+  return (
+    <ul className="space-y-1.5">
+      {documents.map((d) => (
+        <li key={d.id}>
+          <a href={documentUrl(d.filename, true)} className="inline-flex items-center gap-1.5 break-all text-accent-soft hover:underline">
+            <Download className="size-4 shrink-0" aria-hidden />
+            {d.filename}
+          </a>
+        </li>
+      ))}
+    </ul>
+  );
 }
 
-/** Paperclip that downloads the attached document (for table rows that aren't links themselves). */
-export function DocDownloadLink({ filename }: { filename: string | null }) {
-  if (!filename) return null;
+export function DocIndicator({ documents }: { documents: TransactionDocument[] }) {
+  if (documents.length === 0) return null;
+  const label = documents.length === 1 ? `Document: ${documents[0].filename}` : `${documents.length} documents`;
+  return <Paperclip className="inline size-3.5 shrink-0 text-accent-soft" aria-label={label} />;
+}
+
+/**
+ * The paperclip in a list row: downloads the document if there's one, or
+ * opens the transaction to list them if there are several.
+ */
+export function DocDownloadLink({ documents, viewTo }: { documents: TransactionDocument[]; viewTo: string }) {
+  if (documents.length === 0) return null;
+  // Same box and hover as the row's action icons; the negative margin keeps the row height unchanged.
+  const box =
+    '-my-2 inline-flex h-8 min-w-8 shrink-0 items-center justify-center gap-0.5 rounded-md px-1 text-accent-soft transition-colors hover:bg-accent-bg hover:text-accent-soft';
+  if (documents.length > 1) {
+    const names = documents.map((d) => d.filename).join(', ');
+    return (
+      <Link to={viewTo} title={`${documents.length} documents: ${names}`} aria-label={`${documents.length} documents`} className={box}>
+        <Paperclip className="size-4" aria-hidden />
+        <span className="tabular text-xs">{documents.length}</span>
+      </Link>
+    );
+  }
+  const { filename } = documents[0];
   return (
-    <a
-      href={documentUrl(filename, true)}
-      download={filename}
-      title={`Download ${filename}`}
-      aria-label={`Download ${filename}`}
-      // Same box and hover as the row's action icons; the negative margin keeps the row height unchanged.
-      className="-my-2 inline-flex size-8 shrink-0 items-center justify-center rounded-md text-accent-soft transition-colors hover:bg-accent-bg hover:text-accent-soft"
-    >
+    <a href={documentUrl(filename, true)} download={filename} title={`Download ${filename}`} aria-label={`Download ${filename}`} className={box}>
       <Paperclip className="size-4" aria-hidden />
     </a>
   );
@@ -285,94 +317,121 @@ export function documentProblem(file: File): string | null {
   return null;
 }
 
-/** Picks a new document, or keeps/removes the current one. */
+const fileSize = (bytes: number) =>
+  bytes < 1024 * 1024 ? `${Math.max(1, Math.round(bytes / 1024))} KB` : `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+
+/**
+ * The documents on a transaction: the ones already attached (each can be marked
+ * for removal) and new files picked to add when it's saved.
+ */
 export function DocumentField({
   current,
-  file,
-  remove,
-  onFile,
-  onRemove,
+  files,
+  removeIds,
+  onFiles,
+  onRemoveIds,
 }: {
-  current: string | null;
-  file: File | null;
-  remove: boolean;
-  onFile: (file: File | null) => void;
-  onRemove: (remove: boolean) => void;
+  current: TransactionDocument[];
+  files: File[];
+  removeIds: number[];
+  onFiles: (files: File[]) => void;
+  onRemoveIds: (ids: number[]) => void;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [error, setError] = useState<string | null>(null);
+  const kept = current.length - removeIds.length;
+  const room = MAX_DOCUMENTS - kept - files.length;
 
-  const choose = (picked: File | undefined) => {
+  const choose = (picked: FileList | null) => {
     setError(null);
-    if (!picked) return;
-    const problem = documentProblem(picked);
-    if (problem) {
-      setError(problem);
-      if (inputRef.current) inputRef.current.value = '';
-      return;
+    const chosen = [...(picked ?? [])];
+    if (inputRef.current) inputRef.current.value = '';
+    if (chosen.length === 0) return;
+    const taken = new Set([...current.map((d) => d.filename), ...files.map((f) => f.name)]);
+    for (const file of chosen) {
+      const problem = documentProblem(file) ?? (taken.has(file.name) ? 'A document with this name is already attached' : null);
+      if (problem) return setError(`${file.name}: ${problem}`);
+      taken.add(file.name);
     }
-    onFile(picked);
+    if (chosen.length > room) return setError(`A transaction can have at most ${MAX_DOCUMENTS} documents`);
+    onFiles([...files, ...chosen]);
   };
 
-  const showCurrent = current && !file && !remove;
+  const toggleRemove = (docId: number) =>
+    onRemoveIds(removeIds.includes(docId) ? removeIds.filter((x) => x !== docId) : [...removeIds, docId]);
 
   return (
     <div>
-      <div className="flex flex-wrap items-center gap-3 rounded-lg border border-dashed border-line-strong bg-surface-2/60 px-4 py-3">
-        <FileText className="size-5 text-faint" aria-hidden />
-        <div className="min-w-0 flex-1 text-sm">
-          {file ? (
-            <span className="break-all text-ink">{file.name}</span>
-          ) : showCurrent ? (
-            <a href={documentUrl(current)} target="_blank" rel="noreferrer" className="break-all text-accent-soft hover:underline">
-              {current}
-            </a>
-          ) : (
-            <span className="text-muted">{remove ? 'Document will be removed when you save' : 'No document attached'}</span>
-          )}
-        </div>
-        <input
-          ref={inputRef}
-          id="document"
-          type="file"
-          accept={ACCEPT}
-          className="sr-only"
-          onChange={(e) => choose(e.target.files?.[0])}
-        />
-        <label
-          htmlFor="document"
-          className="cursor-pointer rounded-md border border-line-strong bg-surface px-3 py-1.5 text-sm text-ink hover:border-accent-soft/60"
-        >
-          {file || showCurrent ? 'Replace' : 'Choose file'}
-        </label>
-        {file && (
-          <Button
-            type="button"
-            variant="ghost"
-            className="px-2 py-1.5"
-            onClick={() => {
-              onFile(null);
-              if (inputRef.current) inputRef.current.value = '';
-            }}
-          >
-            Undo
-          </Button>
-        )}
-        {!file && current && (
-          // Same box as the Replace label beside it.
-          <button
-            type="button"
-            className={`rounded-md border px-3 py-1.5 text-sm transition-colors ${
-              remove
-                ? 'border-line-strong bg-surface text-ink hover:border-accent-soft/60'
-                : 'border-out bg-surface text-out-soft hover:bg-out-bg hover:text-red-300'
+      <ul className="divide-y divide-line rounded-lg border border-dashed border-line-strong bg-surface-2/60">
+        {current.map((doc) => {
+          const removing = removeIds.includes(doc.id);
+          return (
+            <li key={doc.id} className="flex flex-wrap items-center gap-3 px-4 py-2.5">
+              <FileText className="size-5 shrink-0 text-faint" aria-hidden />
+              <div className="min-w-0 flex-1 text-sm">
+                {removing ? (
+                  <span className="break-all text-muted line-through">{doc.filename}</span>
+                ) : (
+                  <a href={documentUrl(doc.filename)} target="_blank" rel="noreferrer" className="break-all text-accent-soft hover:underline">
+                    {doc.filename}
+                  </a>
+                )}
+                {removing && <span className="ml-2 text-xs text-out-soft">Removed when you save</span>}
+              </div>
+              <button
+                type="button"
+                className={`rounded-md border px-3 py-1.5 text-sm transition-colors ${
+                  removing
+                    ? 'border-line-strong bg-surface text-ink hover:border-accent-soft/60'
+                    : 'border-out bg-surface text-out-soft hover:bg-out-bg hover:text-red-300'
+                }`}
+                onClick={() => toggleRemove(doc.id)}
+              >
+                {removing ? 'Keep' : 'Remove'}
+              </button>
+            </li>
+          );
+        })}
+        {files.map((file, i) => (
+          <li key={`${file.name}-${i}`} className="flex flex-wrap items-center gap-3 px-4 py-2.5">
+            <FileText className="size-5 shrink-0 text-accent-soft" aria-hidden />
+            <div className="min-w-0 flex-1 text-sm">
+              <span className="break-all text-ink">{file.name}</span>
+              <span className="ml-2 text-xs text-muted">
+                {fileSize(file.size)} · added when you save
+              </span>
+            </div>
+            <Button type="button" variant="ghost" className="px-2 py-1.5" onClick={() => onFiles(files.filter((_, j) => j !== i))}>
+              Undo
+            </Button>
+          </li>
+        ))}
+        <li className="flex flex-wrap items-center gap-3 px-4 py-2.5">
+          <span className="min-w-0 flex-1 text-sm text-muted">
+            {current.length === 0 && files.length === 0
+              ? 'No documents attached'
+              : `${kept + files.length} of ${MAX_DOCUMENTS} documents`}
+          </span>
+          <input
+            ref={inputRef}
+            id="document"
+            type="file"
+            multiple
+            accept={ACCEPT}
+            className="sr-only"
+            disabled={room <= 0}
+            onChange={(e) => choose(e.target.files)}
+          />
+          <label
+            htmlFor="document"
+            className={`rounded-md border border-line-strong bg-surface px-3 py-1.5 text-sm text-ink ${
+              room > 0 ? 'cursor-pointer hover:border-accent-soft/60' : 'cursor-not-allowed opacity-50'
             }`}
-            onClick={() => onRemove(!remove)}
           >
-            {remove ? 'Keep' : 'Remove'}
-          </button>
-        )}
-      </div>
+            {current.length || files.length ? 'Add more' : 'Choose files'}
+          </label>
+        </li>
+      </ul>
       {error && <p className="mt-1.5 text-xs text-out-soft">{error}</p>}
     </div>
   );

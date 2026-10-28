@@ -266,7 +266,7 @@ describe('tax years', () => {
 
   it('deletes all transactions and documents in the year', async () => {
     const yearId = await createYear();
-    await agent.post('/api/incomes').field('data', JSON.stringify(income(yearId))).attach('document', PDF, 'receipt-1.pdf').expect(201);
+    await agent.post('/api/incomes').field('data', JSON.stringify(income(yearId))).attach('documents', PDF, 'receipt-1.pdf').expect(201);
     await agent.post('/api/expenses').send(expense(yearId)).expect(201);
     expect(fs.existsSync(path.join(dataDir, 'uploads', 'receipt-1.pdf'))).toBe(true);
 
@@ -284,7 +284,7 @@ describe('tax years', () => {
 describe('read-only people', () => {
   it('can view, export and download documents, but not change anything', async () => {
     const yearId = await createYear();
-    const saved = (await agent.post('/api/incomes').field('data', JSON.stringify(income(yearId))).attach('document', PDF, 'payout.pdf').expect(201)).body;
+    const saved = (await agent.post('/api/incomes').field('data', JSON.stringify(income(yearId))).attach('documents', PDF, 'payout.pdf').expect(201)).body;
     const viewer = await addPerson('Accountant', 'read-only-password', 'viewer');
     expect((await viewer.get('/api/auth/me')).body.user).toMatchObject({ name: 'Accountant', role: 'viewer' });
 
@@ -451,14 +451,14 @@ describe('incomes', () => {
     const first = await agent
       .post('/api/incomes')
       .field('data', JSON.stringify(income(yearId)))
-      .attach('document', PDF, 'Square payout 14-06-2025.pdf')
+      .attach('documents', PDF, 'Square payout 14-06-2025.pdf')
       .expect(201);
-    expect(first.body.documentFilename).toBe('Square payout 14-06-2025.pdf');
+    expect(first.body.documents).toMatchObject([{ filename: 'Square payout 14-06-2025.pdf' }]);
 
     const dup = await agent
       .post('/api/incomes')
       .field('data', JSON.stringify(income(yearId)))
-      .attach('document', PDF, 'Square payout 14-06-2025.pdf')
+      .attach('documents', PDF, 'Square payout 14-06-2025.pdf')
       .expect(409);
     expect(dup.body.error).toMatch(/already stored/);
     expect((await agent.get('/api/incomes').query({ taxYearId: yearId })).body).toHaveLength(1);
@@ -469,25 +469,101 @@ describe('incomes', () => {
 
   it('rejects disallowed file types', async () => {
     const yearId = await createYear();
-    await agent.post('/api/incomes').field('data', JSON.stringify(income(yearId))).attach('document', PDF, 'notes.exe').expect(400);
+    await agent.post('/api/incomes').field('data', JSON.stringify(income(yearId))).attach('documents', PDF, 'notes.exe').expect(400);
   });
 
-  it('replaces and removes documents on edit, and deletes them with the record', async () => {
+  it('attaches several documents, adds and removes them on edit, and deletes them with the record', async () => {
     const yearId = await createYear();
-    const created = await agent
+    const exists = (name: string) => fs.existsSync(path.join(dataDir, 'uploads', name));
+    const created = (
+      await agent
+        .post('/api/incomes')
+        .field('data', JSON.stringify(income(yearId)))
+        .attach('documents', PDF, 'a.pdf')
+        .attach('documents', PDF, 'b.pdf')
+        .expect(201)
+    ).body;
+    expect(created.documents.map((d: { filename: string }) => d.filename)).toEqual(['a.pdf', 'b.pdf']);
+    const [a, b] = created.documents;
+
+    // Remove one and add another in the same save.
+    const edited = (
+      await agent
+        .put(`/api/incomes/${created.id}`)
+        .field('data', JSON.stringify(income(yearId, { removeDocumentIds: [a.id] })))
+        .attach('documents', PDF, 'c.pdf')
+        .expect(200)
+    ).body;
+    expect(edited.documents.map((d: { filename: string }) => d.filename)).toEqual(['b.pdf', 'c.pdf']);
+    expect([exists('a.pdf'), exists('b.pdf'), exists('c.pdf')]).toEqual([false, true, true]);
+
+    // A plain save without removals keeps them.
+    await agent.put(`/api/incomes/${created.id}`).send(income(yearId)).expect(200);
+    expect((await agent.get(`/api/incomes/${created.id}`)).body.documents).toHaveLength(2);
+    // Another transaction's document can't be removed through this one.
+    const other = (await agent.post('/api/incomes').field('data', JSON.stringify(income(yearId))).attach('documents', PDF, 'd.pdf')).body;
+    await agent.put(`/api/incomes/${created.id}`).send(income(yearId, { removeDocumentIds: [other.documents[0].id] })).expect(422);
+
+    expect((await agent.get('/api/incomes').query({ taxYearId: yearId, search: 'c.pdf' })).body.map((i: { id: number }) => i.id)).toEqual([
+      created.id,
+    ]);
+    expect((await agent.get('/api/tax-years')).body.taxYears[0].documentCount).toBe(3);
+    const csv = (await agent.get('/api/incomes/export.csv').query({ taxYearId: yearId })).text;
+    expect(csv).toContain('b.pdf; c.pdf');
+
+    await agent.delete(`/api/incomes/${created.id}`).expect(204);
+    expect([exists('b.pdf'), exists('c.pdf'), exists('d.pdf')]).toEqual([false, false, true]);
+    await agent.get('/api/documents/b.pdf').expect(404);
+    expect(b.filename).toBe('b.pdf');
+  });
+
+  it('refuses clashing names, and more than the limit, without keeping any of the files', async () => {
+    const yearId = await createYear();
+    const exists = (name: string) => fs.existsSync(path.join(dataDir, 'uploads', name));
+    await agent
       .post('/api/incomes')
       .field('data', JSON.stringify(income(yearId)))
-      .attach('document', PDF, 'a.pdf')
-      .expect(201);
-    const id = created.body.id;
-    await agent.put(`/api/incomes/${id}`).field('data', JSON.stringify(income(yearId))).attach('document', PDF, 'b.pdf').expect(200);
-    expect(fs.existsSync(path.join(dataDir, 'uploads', 'a.pdf'))).toBe(false);
-    expect(fs.existsSync(path.join(dataDir, 'uploads', 'b.pdf'))).toBe(true);
-    await agent.put(`/api/incomes/${id}`).send(income(yearId, { removeDocument: true })).expect(200);
-    expect(fs.existsSync(path.join(dataDir, 'uploads', 'b.pdf'))).toBe(false);
-    await agent.put(`/api/incomes/${id}`).field('data', JSON.stringify(income(yearId))).attach('document', PDF, 'c.pdf').expect(200);
-    await agent.delete(`/api/incomes/${id}`).expect(204);
-    expect(fs.existsSync(path.join(dataDir, 'uploads', 'c.pdf'))).toBe(false);
+      .attach('documents', PDF, 'same.pdf')
+      .attach('documents', PDF, 'same.pdf')
+      .expect(409);
+    await agent
+      .post('/api/incomes')
+      .field('data', JSON.stringify(income(yearId)))
+      .attach('documents', PDF, 'fine.pdf')
+      .attach('documents', PDF, 'bad.exe')
+      .expect(400);
+    expect([exists('same.pdf'), exists('fine.pdf')]).toEqual([false, false]);
+
+    let req = agent.post('/api/incomes').field('data', JSON.stringify(income(yearId)));
+    for (let n = 1; n <= 10; n++) req = req.attach('documents', PDF, `doc-${n}.pdf`);
+    const full = (await req.expect(201)).body;
+    const more = await agent
+      .put(`/api/incomes/${full.id}`)
+      .field('data', JSON.stringify(income(yearId)))
+      .attach('documents', PDF, 'doc-11.pdf')
+      .expect(422);
+    expect(more.body.error).toMatch(/at most 10 documents/);
+    expect(exists('doc-11.pdf')).toBe(false);
+    expect((await agent.get('/api/incomes').query({ taxYearId: yearId })).body).toHaveLength(1);
+  });
+
+  it('stores documents on outgoing too', async () => {
+    const yearId = await createYear();
+    const created = (
+      await agent
+        .post('/api/expenses')
+        .field('data', JSON.stringify(expense(yearId)))
+        .attach('documents', PDF, 'invoice.pdf')
+        .attach('documents', PDF, 'delivery note.pdf')
+        .expect(201)
+    ).body;
+    expect(created.documents.map((d: { filename: string }) => d.filename)).toEqual(['invoice.pdf', 'delivery note.pdf']);
+    const edited = (
+      await agent.put(`/api/expenses/${created.id}`).send(expense(yearId, { removeDocumentIds: [created.documents[1].id] })).expect(200)
+    ).body;
+    expect(edited.documents.map((d: { filename: string }) => d.filename)).toEqual(['invoice.pdf']);
+    await agent.delete(`/api/expenses/${created.id}`).expect(204);
+    expect(fs.readdirSync(path.join(dataDir, 'uploads'))).toEqual([]);
   });
 
   it('filters and exports only the filtered rows to CSV', async () => {
@@ -1083,7 +1159,7 @@ describe('backup and restore', () => {
     await agent
       .post('/api/incomes')
       .field('data', JSON.stringify(income(yearId, { notes: "Line one\nIt's line two" })))
-      .attach('document', PDF, 'payout.pdf')
+      .attach('documents', PDF, 'payout.pdf')
       .expect(201);
     await agent.post('/api/expenses').send(expense(yearId)).expect(201);
     return yearId;
@@ -1193,8 +1269,8 @@ describe('backup and restore', () => {
     old.prepare("INSERT INTO settings (key, value) VALUES ('active_tax_year_id', '1')").run();
     old
       .prepare(
-        `INSERT INTO incomes (tax_year_id, date, description, payment_method, amount_pence, category_id)
-         VALUES (1, '2025-06-14', 'Market sales', 'cash', 1500, ?)`,
+        `INSERT INTO incomes (tax_year_id, date, description, payment_method, amount_pence, category_id, document_filename)
+         VALUES (1, '2025-06-14', 'Market sales', 'cash', 1500, ?, 'old receipt.pdf')`,
       )
       .run(cat('turnover'));
     const dump = dumpSql(old);
@@ -1203,8 +1279,9 @@ describe('backup and restore', () => {
 
     await agent.post('/api/restore').attach('file', Buffer.from(dump), 'backup.sql').expect(200);
     expect((await agent.get('/api/incomes').query({ taxYearId: 1 }).expect(200)).body).toMatchObject([
-      { description: 'Market sales', createdBy: null, updatedBy: null },
+      { description: 'Market sales', createdBy: null, updatedBy: null, documents: [{ filename: 'old receipt.pdf' }] },
     ]);
+    expect(ctx.db.prepare('SELECT COUNT(*) AS n FROM incomes WHERE document_filename IS NOT NULL').get()).toEqual({ n: 0 });
     expect((await agent.get('/api/tax-years')).body).toMatchObject({ activeTaxYearId: 1, taxYears: [{ otherIncomePence: 0, mileageCount: 0 }] });
     expect((await agent.get('/api/mileage').query({ taxYearId: 1 }).expect(200)).body.trips).toEqual([]);
     expect((await agent.get('/api/use-of-home').query({ taxYearId: 1 }).expect(200)).body.totals.claimPence).toBe(0);
@@ -1243,8 +1320,7 @@ describe('sample data', () => {
     expect(outOfYear.n).toBe(0);
     const docs = ctx.db
       .prepare(
-        `SELECT document_filename AS name FROM incomes WHERE document_filename IS NOT NULL
-         UNION ALL SELECT document_filename FROM expenses WHERE document_filename IS NOT NULL`,
+        'SELECT filename AS name FROM documents',
       )
       .all() as { name: string }[];
     expect(docs).toHaveLength(result.documents);

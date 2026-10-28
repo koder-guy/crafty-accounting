@@ -163,6 +163,30 @@ CREATE TABLE home_working_months (
 ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'editor' CHECK (role IN ('editor', 'viewer'));
 `,
   },
+  // Several documents per transaction. Existing attachments move into the new
+  // table. The old document_filename columns stay (SQLite can't drop a UNIQUE
+  // column) but are always NULL from here on.
+  {
+    version: 6,
+    sql: `
+CREATE TABLE documents (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  filename TEXT NOT NULL UNIQUE,
+  income_id INTEGER REFERENCES incomes(id) ON DELETE CASCADE,
+  expense_id INTEGER REFERENCES expenses(id) ON DELETE CASCADE,
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  CHECK ((income_id IS NULL) != (expense_id IS NULL))
+);
+
+CREATE INDEX idx_documents_income ON documents (income_id);
+CREATE INDEX idx_documents_expense ON documents (expense_id);
+
+INSERT INTO documents (filename, income_id) SELECT document_filename, id FROM incomes WHERE document_filename IS NOT NULL ORDER BY id;
+INSERT INTO documents (filename, expense_id) SELECT document_filename, id FROM expenses WHERE document_filename IS NOT NULL ORDER BY id;
+UPDATE incomes SET document_filename = NULL;
+UPDATE expenses SET document_filename = NULL;
+`,
+  },
 ];
 
 export const CURRENT_SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;

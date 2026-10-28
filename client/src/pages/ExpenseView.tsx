@@ -1,12 +1,12 @@
 import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
-import { Copy, Download, ListOrdered, Pencil, Trash2 } from 'lucide-react';
+import { Copy, ListOrdered, Pencil, Trash2 } from 'lucide-react';
 import { displayTaxYear, formatDisplayDate, formatGBP } from '@crafty/shared';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { BackLink, recordedBy } from '../components/FormShell';
+import { attachedDocuments, DocumentLinks } from '../components/transactions';
 import { PageBody, PageHeader } from '../components/PageHeader';
 import { Alert, Badge, Button, ButtonLink, Card, CardHeader, DetailRow, PaymentBadge, Spinner } from '../components/ui';
-import { documentUrl } from '../lib/api';
 import { useCanEdit, useDeleteTransaction, useExpense, useTaxYears } from '../lib/queries';
 
 export function ExpenseView() {
@@ -69,16 +69,8 @@ export function ExpenseView() {
                 <DetailRow label="Order number">{expense.orderNumber}</DetailRow>
                 <DetailRow label="Description">{expense.description}</DetailRow>
                 <DetailRow label="Tax year">{year ? displayTaxYear(year.label) : null}</DetailRow>
-                <DetailRow label="Document">
-                  {expense.documentFilename && (
-                    <a
-                      href={documentUrl(expense.documentFilename, true)}
-                      className="inline-flex items-center gap-1.5 break-all text-accent-soft hover:underline"
-                    >
-                      <Download className="size-4 shrink-0" aria-hidden />
-                      {expense.documentFilename}
-                    </a>
-                  )}
+                <DetailRow label={expense.documents.length > 1 ? 'Documents' : 'Document'}>
+                  <DocumentLinks documents={expense.documents} />
                 </DetailRow>
                 <DetailRow label="Notes">{expense.notes && <span className="whitespace-pre-wrap">{expense.notes}</span>}</DetailRow>
                 <DetailRow label="Added by">{recordedBy(expense.createdBy, expense.createdAt)}</DetailRow>
@@ -142,7 +134,8 @@ export function ExpenseView() {
         }}
       >
         <p>
-          This permanently deletes the transaction, its line items{expense?.documentFilename ? ' and its attached document' : ''}.
+          This permanently deletes the transaction, its line items
+          {expense?.documents.length ? ` and ${attachedDocuments(expense.documents.length)}` : ''}.
           This can't be undone.
         </p>
       </ConfirmDialog>

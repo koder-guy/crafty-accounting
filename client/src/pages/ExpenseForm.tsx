@@ -66,8 +66,9 @@ export function ExpenseForm() {
 
   const taxYear = id ? (years?.taxYears.find((y) => y.id === existing?.taxYearId) ?? null) : activeYear;
 
-  const [file, setFile] = useState<File | null>(null);
-  const [removeDoc, setRemoveDoc] = useState(false);
+  // New documents to add, and attached ones to remove, when the form is saved.
+  const [files, setFiles] = useState<File[]>([]);
+  const [removeIds, setRemoveIds] = useState<number[]>([]);
 
   const {
     register,
@@ -114,6 +115,7 @@ export function ExpenseForm() {
       })),
     });
     setLoaded(record);
+    setRemoveIds([]);
   };
 
   // Fill the form once: live updates refetch the data, and that mustn't wipe what you've typed.
@@ -186,7 +188,7 @@ export function ExpenseForm() {
       paymentMethod: values.paymentMethod,
       totalPence: parsePoundsToPence(values.total),
       notes: values.notes,
-      removeDocument: removeDoc,
+      removeDocumentIds: removeIds,
       expectedUpdatedAt: id ? loaded?.updatedAt : undefined,
       lineItems: values.lineItems.map((li) => ({
         id: li.lineId,
@@ -197,7 +199,7 @@ export function ExpenseForm() {
       })),
     };
     save.mutate(
-      { id: id ?? undefined, form: transactionForm(payload, file) },
+      { id: id ?? undefined, form: transactionForm(payload, files) },
       {
         onSuccess: (saved) => navigate(`/outgoing/${saved.id}`),
         onError: (err) => {
@@ -444,13 +446,13 @@ export function ExpenseForm() {
               <Field label="Notes" htmlFor="notes">
                 <textarea id="notes" rows={3} className="field" {...register('notes', { maxLength: 2000 })} />
               </Field>
-              <Field label="Document">
+              <Field label="Documents">
                 <DocumentField
-                  current={existing?.documentFilename ?? null}
-                  file={file}
-                  remove={removeDoc}
-                  onFile={setFile}
-                  onRemove={setRemoveDoc}
+                  current={existing?.documents ?? []}
+                  files={files}
+                  removeIds={removeIds}
+                  onFiles={setFiles}
+                  onRemoveIds={setRemoveIds}
                 />
               </Field>
             </div>

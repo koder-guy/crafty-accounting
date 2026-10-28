@@ -1,12 +1,12 @@
 import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
-import { Copy, Download, Pencil, Trash2 } from 'lucide-react';
+import { Copy, Pencil, Trash2 } from 'lucide-react';
 import { displayTaxYear, formatDisplayDate, formatGBP } from '@crafty/shared';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { BackLink, recordedBy } from '../components/FormShell';
+import { attachedDocuments, DocumentLinks } from '../components/transactions';
 import { PageBody, PageHeader } from '../components/PageHeader';
 import { Alert, Button, ButtonLink, Card, DetailRow, PaymentBadge, Spinner } from '../components/ui';
-import { documentUrl } from '../lib/api';
 import { useCanEdit, useDeleteTransaction, useIncome, useTaxYears } from '../lib/queries';
 
 export function IncomeView() {
@@ -65,16 +65,8 @@ export function IncomeView() {
                   {income.categoryName} <span className="ml-1 font-mono text-xs text-faint">{income.hmrcCode}</span>
                 </DetailRow>
                 <DetailRow label="Tax year">{year ? displayTaxYear(year.label) : null}</DetailRow>
-                <DetailRow label="Document">
-                  {income.documentFilename && (
-                    <a
-                      href={documentUrl(income.documentFilename, true)}
-                      className="inline-flex items-center gap-1.5 break-all text-accent-soft hover:underline"
-                    >
-                      <Download className="size-4 shrink-0" aria-hidden />
-                      {income.documentFilename}
-                    </a>
-                  )}
+                <DetailRow label={income.documents.length > 1 ? 'Documents' : 'Document'}>
+                  <DocumentLinks documents={income.documents} />
                 </DetailRow>
                 <DetailRow label="Notes">{income.notes && <span className="whitespace-pre-wrap">{income.notes}</span>}</DetailRow>
                 <DetailRow label="Added by">{recordedBy(income.createdBy, income.createdAt)}</DetailRow>
@@ -98,7 +90,8 @@ export function IncomeView() {
         }}
       >
         <p>
-          This permanently deletes the transaction{income?.documentFilename ? ' and its attached document' : ''}. This can't be undone.
+          This permanently deletes the transaction{income?.documents.length ? ` and ${attachedDocuments(income.documents.length)}` : ''}. This
+          can't be undone.
         </p>
       </ConfirmDialog>
     </>

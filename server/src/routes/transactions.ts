@@ -6,15 +6,17 @@ import {
   formatDisplayDate,
   incomeInputSchema,
   isDateInTaxYear,
+  MAX_DOCUMENTS,
   PAYMENT_METHOD_LABELS,
   penceToPounds,
   transactionFiltersSchema,
   type CategoryType,
   type TaxYear,
+  type TransactionDocument,
 } from '@crafty/shared';
 import type { AppContext } from '../context';
 import { toCsv } from '../csv';
-import { createUploader, removeDocumentFile, saveWithDocument } from '../documents';
+import { createUploader, removeDocumentFile, saveWithDocuments, uploadedFiles } from '../documents';
 import { HttpError, parseId, parseWith, readPayload } from '../http';
 import { getCategory, getExpense, getIncome, getTaxYear, listExpenses, listIncomes } from '../repo';
 
@@ -53,6 +55,44 @@ export function checkUnchanged(
   throw new HttpError(409, `${who} changed this ${noun} while you were editing it, so your changes weren't saved. Load their version, then make yours again.`);
 }
 
+/**
+ * Checks an edit's document changes: the documents to remove must belong to
+ * the transaction, and it can't end up with more than MAX_DOCUMENTS.
+ * Returns the documents being removed.
+ */
+function documentRemovals(
+  existing: { documents: TransactionDocument[] },
+  removeIds: number[] | undefined,
+  adding: number,
+): TransactionDocument[] {
+  const owned = new Map(existing.documents.map((d) => [d.id, d]));
+  const removing = (removeIds ?? []).map((docId) => {
+    const doc = owned.get(docId);
+    if (!doc) throw new HttpError(422, 'A document does not belong to this transaction');
+    return doc;
+  });
+  if (existing.documents.length - removing.length + adding > MAX_DOCUMENTS) {
+    throw new HttpError(422, `A transaction can have at most ${MAX_DOCUMENTS} documents`);
+  }
+  return removing;
+}
+
+/** Records newly placed documents against a transaction, and drops removed ones. */
+function storeDocuments(
+  ctx: AppContext,
+  owner: 'income_id' | 'expense_id',
+  ownerId: number,
+  added: string[],
+  removed: TransactionDocument[],
+): void {
+  const insert = ctx.db.prepare(`INSERT INTO documents (filename, ${owner}) VALUES (?, ?)`);
+  for (const name of added) insert.run(name, ownerId);
+  const remove = ctx.db.prepare('DELETE FROM documents WHERE id = ?');
+  for (const doc of removed) remove.run(doc.id);
+}
+
+const documentNames = (t: { documents: TransactionDocument[] }) => t.documents.map((d) => d.filename);
+
 const csvFilename = (kind: string, year: TaxYear | null) => `${kind}-${year?.label ?? 'export'}.csv`;
 
 export function incomesRouter(ctx: AppContext): Router {
@@ -74,11 +114,11 @@ export function incomesRouter(ctx: AppContext): Router {
       i.hmrcCode,
       PAYMENT_METHOD_LABELS[i.paymentMethod],
       penceToPounds(i.amountPence),
-      i.documentFilename,
+      documentNames(i).join('; '),
       i.notes,
     ]);
     const csv = toCsv(
-      ['Date', 'Description', 'Source', 'Reference', 'Category', 'HMRC code', 'Payment method', 'Amount (GBP)', 'Document', 'Notes'],
+      ['Date', 'Description', 'Source', 'Reference', 'Category', 'HMRC code', 'Payment method', 'Amount (GBP)', 'Documents', 'Notes'],
       rows,
     );
     res.attachment(csvFilename('incoming', getTaxYear(ctx.db, filters.taxYearId))).type('text/csv').send(csv);
@@ -90,37 +130,41 @@ export function incomesRouter(ctx: AppContext): Router {
     res.json(income);
   });
 
-  router.post('/', upload.single('document'), (req, res) => {
+  router.post('/', upload.array('documents', MAX_DOCUMENTS), (req, res) => {
     const input = parseWith(incomeInputSchema, readPayload(req));
     checkTaxYearAndDate(ctx, input.taxYearId, input.date);
     checkCategory(ctx, input.categoryId, 'INCOME');
-    const id = saveWithDocument(ctx, { file: req.file, current: null, remove: false }, (filename) => {
-      const result = ctx.db
-        .prepare(
-          `INSERT INTO incomes (tax_year_id, date, description, source, reference, payment_method,
-             amount_pence, category_id, notes, document_filename, created_by, updated_by)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        )
-        .run(
-          input.taxYearId,
-          input.date,
-          input.description,
-          input.source,
-          input.reference,
-          input.paymentMethod,
-          input.amountPence,
-          input.categoryId,
-          input.notes,
-          filename,
-          req.user!.name,
-          req.user!.name,
-        );
-      return Number(result.lastInsertRowid);
-    });
+    const files = uploadedFiles(req.files);
+    const id = saveWithDocuments(ctx, { files, removing: [] }, (filenames) =>
+      ctx.db.transaction(() => {
+        const result = ctx.db
+          .prepare(
+            `INSERT INTO incomes (tax_year_id, date, description, source, reference, payment_method,
+               amount_pence, category_id, notes, created_by, updated_by)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          )
+          .run(
+            input.taxYearId,
+            input.date,
+            input.description,
+            input.source,
+            input.reference,
+            input.paymentMethod,
+            input.amountPence,
+            input.categoryId,
+            input.notes,
+            req.user!.name,
+            req.user!.name,
+          );
+        const incomeId = Number(result.lastInsertRowid);
+        storeDocuments(ctx, 'income_id', incomeId, filenames, []);
+        return incomeId;
+      })(),
+    );
     res.status(201).json(getIncome(ctx.db, id));
   });
 
-  router.put('/:id', upload.single('document'), (req, res) => {
+  router.put('/:id', upload.array('documents', MAX_DOCUMENTS), (req, res) => {
     const id = parseId(req.params.id);
     const existing = getIncome(ctx.db, id);
     if (!existing) throw new HttpError(404, 'Transaction not found');
@@ -129,27 +173,31 @@ export function incomesRouter(ctx: AppContext): Router {
     if (input.taxYearId !== existing.taxYearId) throw new HttpError(422, 'A transaction cannot be moved to another tax year');
     checkTaxYearAndDate(ctx, existing.taxYearId, input.date);
     checkCategory(ctx, input.categoryId, 'INCOME');
-    saveWithDocument(ctx, { file: req.file, current: existing.documentFilename, remove: input.removeDocument }, (filename) =>
-      ctx.db
-        .prepare(
-          `UPDATE incomes SET date = ?, description = ?, source = ?, reference = ?, payment_method = ?,
-             amount_pence = ?, category_id = ?, notes = ?, document_filename = ?, updated_by = ?,
-             updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
-           WHERE id = ?`,
-        )
-        .run(
-          input.date,
-          input.description,
-          input.source,
-          input.reference,
-          input.paymentMethod,
-          input.amountPence,
-          input.categoryId,
-          input.notes,
-          filename,
-          req.user!.name,
-          id,
-        ),
+    const files = uploadedFiles(req.files);
+    const removing = documentRemovals(existing, input.removeDocumentIds, files.length);
+    saveWithDocuments(ctx, { files, removing: removing.map((d) => d.filename) }, (filenames) =>
+      ctx.db.transaction(() => {
+        ctx.db
+          .prepare(
+            `UPDATE incomes SET date = ?, description = ?, source = ?, reference = ?, payment_method = ?,
+               amount_pence = ?, category_id = ?, notes = ?, updated_by = ?,
+               updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+             WHERE id = ?`,
+          )
+          .run(
+            input.date,
+            input.description,
+            input.source,
+            input.reference,
+            input.paymentMethod,
+            input.amountPence,
+            input.categoryId,
+            input.notes,
+            req.user!.name,
+            id,
+          );
+        storeDocuments(ctx, 'income_id', id, filenames, removing);
+      })(),
     );
     res.json(getIncome(ctx.db, id));
   });
@@ -158,8 +206,9 @@ export function incomesRouter(ctx: AppContext): Router {
     const id = parseId(req.params.id);
     const existing = getIncome(ctx.db, id);
     if (!existing) throw new HttpError(404, 'Transaction not found');
+    // Its documents' rows go via ON DELETE CASCADE; then the files.
     ctx.db.prepare('DELETE FROM incomes WHERE id = ?').run(id);
-    removeDocumentFile(ctx, existing.documentFilename);
+    for (const name of documentNames(existing)) removeDocumentFile(ctx, name);
     res.status(204).end();
   });
 
@@ -185,11 +234,11 @@ export function expensesRouter(ctx: AppContext): Router {
       PAYMENT_METHOD_LABELS[e.paymentMethod],
       penceToPounds(e.totalPence),
       penceToPounds(e.disallowablePence),
-      e.documentFilename,
+      documentNames(e).join('; '),
       e.notes,
     ]);
     const csv = toCsv(
-      ['Date', 'Payee', 'Invoice number', 'Order number', 'Description', 'Payment method', 'Amount (GBP)', 'Disallowable (GBP)', 'Document', 'Notes'],
+      ['Date', 'Payee', 'Invoice number', 'Order number', 'Description', 'Payment method', 'Amount (GBP)', 'Disallowable (GBP)', 'Documents', 'Notes'],
       rows,
     );
     res.attachment(csvFilename('outgoing', getTaxYear(ctx.db, filters.taxYearId))).type('text/csv').send(csv);
@@ -215,17 +264,18 @@ export function expensesRouter(ctx: AppContext): Router {
     sortOrder,
   });
 
-  router.post('/', upload.single('document'), (req, res) => {
+  router.post('/', upload.array('documents', MAX_DOCUMENTS), (req, res) => {
     const input = parseWith(expenseInputSchema, readPayload(req));
     checkTaxYearAndDate(ctx, input.taxYearId, input.date);
     input.lineItems.forEach((item) => checkCategory(ctx, item.categoryId, 'EXPENSE'));
-    const id = saveWithDocument(ctx, { file: req.file, current: null, remove: false }, (filename) =>
+    const files = uploadedFiles(req.files);
+    const id = saveWithDocuments(ctx, { files, removing: [] }, (filenames) =>
       ctx.db.transaction(() => {
         const result = ctx.db
           .prepare(
             `INSERT INTO expenses (tax_year_id, date, payee, invoice_number, order_number, description,
-               payment_method, total_pence, notes, document_filename, created_by, updated_by)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+               payment_method, total_pence, notes, created_by, updated_by)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           )
           .run(
             input.taxYearId,
@@ -237,20 +287,20 @@ export function expensesRouter(ctx: AppContext): Router {
             input.paymentMethod,
             input.totalPence,
             input.notes,
-            filename,
             req.user!.name,
             req.user!.name,
           );
         const expenseId = Number(result.lastInsertRowid);
         const insert = insertLine(expenseId);
         input.lineItems.forEach((item, index) => insert.run(lineParams(item, index)));
+        storeDocuments(ctx, 'expense_id', expenseId, filenames, []);
         return expenseId;
       })(),
     );
     res.status(201).json(getExpense(ctx.db, id));
   });
 
-  router.put('/:id', upload.single('document'), (req, res) => {
+  router.put('/:id', upload.array('documents', MAX_DOCUMENTS), (req, res) => {
     const id = parseId(req.params.id);
     const existing = getExpense(ctx.db, id);
     if (!existing) throw new HttpError(404, 'Transaction not found');
@@ -266,12 +316,14 @@ export function expensesRouter(ctx: AppContext): Router {
       }
     }
 
-    saveWithDocument(ctx, { file: req.file, current: existing.documentFilename, remove: input.removeDocument }, (filename) =>
+    const files = uploadedFiles(req.files);
+    const removing = documentRemovals(existing, input.removeDocumentIds, files.length);
+    saveWithDocuments(ctx, { files, removing: removing.map((d) => d.filename) }, (filenames) =>
       ctx.db.transaction(() => {
         ctx.db
           .prepare(
             `UPDATE expenses SET date = ?, payee = ?, invoice_number = ?, order_number = ?, description = ?,
-               payment_method = ?, total_pence = ?, notes = ?, document_filename = ?, updated_by = ?,
+               payment_method = ?, total_pence = ?, notes = ?, updated_by = ?,
                updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
              WHERE id = ?`,
           )
@@ -284,10 +336,10 @@ export function expensesRouter(ctx: AppContext): Router {
             input.paymentMethod,
             input.totalPence,
             input.notes,
-            filename,
             req.user!.name,
             id,
           );
+        storeDocuments(ctx, 'expense_id', id, filenames, removing);
         const keep = new Set(input.lineItems.flatMap((item) => (item.id ? [item.id] : [])));
         const remove = ctx.db.prepare('DELETE FROM expense_line_items WHERE id = ?');
         for (const lineId of existingIds) if (!keep.has(lineId)) remove.run(lineId);
@@ -309,8 +361,9 @@ export function expensesRouter(ctx: AppContext): Router {
     const id = parseId(req.params.id);
     const existing = getExpense(ctx.db, id);
     if (!existing) throw new HttpError(404, 'Transaction not found');
+    // Line items and document rows go via ON DELETE CASCADE; then the files.
     ctx.db.prepare('DELETE FROM expenses WHERE id = ?').run(id);
-    removeDocumentFile(ctx, existing.documentFilename);
+    for (const name of documentNames(existing)) removeDocumentFile(ctx, name);
     res.status(204).end();
   });
 

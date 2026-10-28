@@ -8,6 +8,7 @@ import type {
   MileageCheck,
   MileageTrip,
   TaxYear,
+  TransactionDocument,
   TransactionFilters,
   UseOfHomeResponse,
 } from '@crafty/shared';
@@ -33,8 +34,10 @@ const TAX_YEAR_SELECT = `
   SELECT t.*,
     (SELECT COUNT(*) FROM incomes i WHERE i.tax_year_id = t.id) AS income_count,
     (SELECT COUNT(*) FROM expenses e WHERE e.tax_year_id = t.id) AS expense_count,
-    (SELECT COUNT(*) FROM incomes i WHERE i.tax_year_id = t.id AND i.document_filename IS NOT NULL)
-      + (SELECT COUNT(*) FROM expenses e WHERE e.tax_year_id = t.id AND e.document_filename IS NOT NULL) AS document_count,
+    (SELECT COUNT(*) FROM documents d
+      LEFT JOIN incomes i ON i.id = d.income_id
+      LEFT JOIN expenses e ON e.id = d.expense_id
+      WHERE COALESCE(i.tax_year_id, e.tax_year_id) = t.id) AS document_count,
     (SELECT COUNT(*) FROM mileage_trips m WHERE m.tax_year_id = t.id) AS mileage_count
   FROM tax_years t`;
 
@@ -175,7 +178,7 @@ const mapIncome = (row: Row): Income => ({
   categoryName: row.category_name,
   hmrcCode: row.hmrc_code,
   notes: row.notes,
-  documentFilename: row.document_filename,
+  documents: [],
   createdAt: row.created_at,
   updatedAt: row.updated_at,
   createdBy: row.created_by,
@@ -187,7 +190,8 @@ export function listIncomes(db: Db, filters: TransactionFilters, limit?: number)
     'i',
     'amount_pence',
     filters,
-    ['i.description', 'i.source', 'i.reference', 'i.notes', 'i.document_filename', 'c.name'],
+    ['i.description', 'i.source', 'i.reference', 'i.notes', 'c.name'],
+    [{ sql: documentSearch('income_id', 'i'), termCount: 1 }],
   );
   let sql = `${INCOME_SELECT} WHERE ${where}`;
   if (filters.categoryId) {
@@ -196,12 +200,12 @@ export function listIncomes(db: Db, filters: TransactionFilters, limit?: number)
   }
   sql += ' ORDER BY i.date DESC, i.id DESC';
   if (limit) sql += ` LIMIT ${Math.floor(limit)}`;
-  return (db.prepare(sql).all(...params) as Row[]).map(mapIncome);
+  return withDocuments(db, 'income_id', (db.prepare(sql).all(...params) as Row[]).map(mapIncome));
 }
 
 export function getIncome(db: Db, id: number): Income | null {
   const row = db.prepare(`${INCOME_SELECT} WHERE i.id = ?`).get(id) as Row | undefined;
-  return row ? mapIncome(row) : null;
+  return row ? withDocuments(db, 'income_id', [mapIncome(row)])[0] : null;
 }
 
 // ---- Expenses ----
@@ -229,7 +233,7 @@ function mapExpense(row: Row, categoryNames: Map<number, string>): Expense {
     totalPence: row.total_pence,
     disallowablePence: row.disallowable_pence,
     notes: row.notes,
-    documentFilename: row.document_filename,
+    documents: [],
     lineItemCount: row.line_item_count,
     categoryNames: ids.map((id) => categoryNames.get(id) ?? 'Unknown'),
     createdAt: row.created_at,
@@ -248,8 +252,11 @@ export function listExpenses(db: Db, filters: TransactionFilters, limit?: number
     'e',
     'total_pence',
     filters,
-    ['e.payee', 'e.invoice_number', 'e.order_number', 'e.description', 'e.notes', 'e.document_filename'],
-    [{ sql: lineSearch, termCount: 2 }],
+    ['e.payee', 'e.invoice_number', 'e.order_number', 'e.description', 'e.notes'],
+    [
+      { sql: lineSearch, termCount: 2 },
+      { sql: documentSearch('expense_id', 'e'), termCount: 1 },
+    ],
   );
   let sql = `${EXPENSE_SELECT} WHERE ${where}`;
   if (filters.categoryId) {
@@ -261,7 +268,7 @@ export function listExpenses(db: Db, filters: TransactionFilters, limit?: number
   const names = categoryNameMap(db);
   const expenses = (db.prepare(sql).all(...params) as Row[]).map((row) => mapExpense(row, names));
   const lines = lineItemsFor(db, expenses.map((e) => e.id));
-  return expenses.map((e) => ({ ...e, lineItems: lines.get(e.id) ?? [] }));
+  return withDocuments(db, 'expense_id', expenses).map((e) => ({ ...e, lineItems: lines.get(e.id) ?? [] }));
 }
 
 const mapLineItem = (li: Row): LineItem => ({
@@ -298,19 +305,37 @@ export function getExpense(db: Db, id: number): ExpenseWithLineItems | null {
   const row = db.prepare(`${EXPENSE_SELECT} WHERE e.id = ?`).get(id) as Row | undefined;
   if (!row) return null;
   const lineItems = lineItemsFor(db, [id]).get(id) ?? [];
-  return { ...mapExpense(row, categoryNameMap(db)), lineItems };
+  return { ...withDocuments(db, 'expense_id', [mapExpense(row, categoryNameMap(db))])[0], lineItems };
 }
 
 // ---- Documents ----
 
 export function isDocumentNameInUse(db: Db, filename: string): boolean {
-  const row = db
-    .prepare(
-      `SELECT 1 FROM incomes WHERE document_filename = ?
-       UNION ALL SELECT 1 FROM expenses WHERE document_filename = ? LIMIT 1`,
-    )
-    .get(filename, filename);
-  return row !== undefined;
+  return db.prepare('SELECT 1 FROM documents WHERE filename = ?').get(filename) !== undefined;
+}
+
+// ---- Documents ----
+
+type DocumentOwner = 'income_id' | 'expense_id';
+
+/** Search clause matching transactions with a document whose name contains the term. */
+const documentSearch = (owner: DocumentOwner, alias: string) =>
+  `EXISTS (SELECT 1 FROM documents d WHERE d.${owner} = ${alias}.id AND d.filename LIKE ? ESCAPE '\\')`;
+
+/** Each transaction's documents, keyed by its id, oldest first. */
+export function documentsFor(db: Db, owner: DocumentOwner, ids: number[]): Map<number, TransactionDocument[]> {
+  const map = new Map<number, TransactionDocument[]>();
+  if (ids.length === 0) return map;
+  const rows = db
+    .prepare(`SELECT id, filename, ${owner} AS owner FROM documents WHERE ${owner} IN (SELECT value FROM json_each(?)) ORDER BY id`)
+    .all(JSON.stringify(ids)) as Row[];
+  for (const r of rows) map.set(r.owner, [...(map.get(r.owner) ?? []), { id: r.id, filename: r.filename }]);
+  return map;
+}
+
+function withDocuments<T extends { id: number; documents: TransactionDocument[] }>(db: Db, owner: DocumentOwner, items: T[]): T[] {
+  const docs = documentsFor(db, owner, items.map((t) => t.id));
+  return items.map((t) => ({ ...t, documents: docs.get(t.id) ?? [] }));
 }
 
 // ---- Mileage ----

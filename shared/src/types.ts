@@ -48,6 +48,12 @@ export interface Category {
   usageCount: number;
 }
 
+export interface TransactionDocument {
+  id: number;
+  /** The original filename, which is also how it's stored and downloaded. */
+  filename: string;
+}
+
 export interface Income {
   id: number;
   taxYearId: number;
@@ -61,7 +67,8 @@ export interface Income {
   categoryName: string;
   hmrcCode: string;
   notes: string | null;
-  documentFilename: string | null;
+  /** Attached documents (receipts, invoices…), in the order they were added. */
+  documents: TransactionDocument[];
   createdAt: string;
   updatedAt: string;
   /** Name of the person who added it (null for records made before sign-ins, or by sample data). */
@@ -92,7 +99,8 @@ export interface Expense {
   totalPence: number;
   disallowablePence: number;
   notes: string | null;
-  documentFilename: string | null;
+  /** Attached documents (receipts, invoices…), in the order they were added. */
+  documents: TransactionDocument[];
   lineItemCount: number;
   categoryNames: string[];
   createdAt: string;

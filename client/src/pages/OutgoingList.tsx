@@ -6,6 +6,7 @@ import { ConfirmDialog } from '../components/ConfirmDialog';
 import { NoTaxYear } from '../components/NoTaxYear';
 import { PageBody, PageHeader } from '../components/PageHeader';
 import {
+  attachedDocuments,
   DocDownloadLink,
   ExportCsvButton,
   FilterBar,
@@ -132,7 +133,7 @@ export function OutgoingList() {
                             <td className="max-w-xs px-4 py-3">
                               <div className="flex items-center gap-1.5 font-medium text-ink">
                                 <span className="truncate">{row.payee}</span>
-                                <DocDownloadLink filename={row.documentFilename} />
+                                <DocDownloadLink documents={row.documents} viewTo={`/outgoing/${row.id}`} />
                               </div>
                               <div className="truncate text-xs text-muted">
                                 {[row.invoiceNumber, row.orderNumber, row.description].filter(Boolean).join(' · ') ||
@@ -194,7 +195,7 @@ export function OutgoingList() {
               <strong className="text-ink">{toDelete.payee}</strong> on {formatDisplayDate(toDelete.date)} for{' '}
               <strong className="text-ink">{formatGBP(toDelete.totalPence)}</strong> will be permanently deleted, with its{' '}
               {toDelete.lineItemCount} line {toDelete.lineItemCount === 1 ? 'item' : 'items'}
-              {toDelete.documentFilename ? ' and attached document' : ''}.
+              {toDelete.documents.length ? ` and ${attachedDocuments(toDelete.documents.length)}` : ''}.
             </p>
             <p>This can't be undone.</p>
           </>

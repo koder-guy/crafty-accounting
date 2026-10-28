@@ -65,11 +65,12 @@ export function taxYearsRouter(ctx: AppContext): Router {
     const documents = (
       db
         .prepare(
-          `SELECT document_filename AS name FROM incomes WHERE tax_year_id = ? AND document_filename IS NOT NULL
-           UNION ALL
-           SELECT document_filename FROM expenses WHERE tax_year_id = ? AND document_filename IS NOT NULL`,
+          `SELECT d.filename AS name FROM documents d
+           LEFT JOIN incomes i ON i.id = d.income_id
+           LEFT JOIN expenses e ON e.id = d.expense_id
+           WHERE COALESCE(i.tax_year_id, e.tax_year_id) = ?`,
         )
-        .all(id, id) as { name: string }[]
+        .all(id) as { name: string }[]
     ).map((row) => row.name);
 
     // Transactions and line items go via ON DELETE CASCADE.

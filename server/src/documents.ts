@@ -4,6 +4,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import multer from 'multer';
+import { MAX_DOCUMENTS } from '@crafty/shared';
 import type { AppContext } from './context';
 import { HttpError } from './http';
 import { isDocumentNameInUse } from './repo';
@@ -44,7 +45,7 @@ export function documentPath(ctx: AppContext, name: string): string {
 export function createUploader(ctx: AppContext) {
   return multer({
     dest: ctx.paths.tmpDir,
-    limits: { fileSize: ctx.config.maxUploadMb * 1024 * 1024, files: 1 },
+    limits: { fileSize: ctx.config.maxUploadMb * 1024 * 1024, files: MAX_DOCUMENTS },
     fileFilter: (_req, file, cb) => {
       const ext = path.extname(decodeUploadName(file.originalname)).toLowerCase();
       if (ext in ALLOWED_EXTENSIONS) cb(null, true);
@@ -62,49 +63,48 @@ export function removeDocumentFile(ctx: AppContext, name: string | null | undefi
   }
 }
 
-interface DocumentChange {
-  file: Express.Multer.File | undefined;
-  current: string | null;
-  remove: boolean | undefined;
-}
+/** Files uploaded with a transaction (multer puts them on req.files). */
+export const uploadedFiles = (files: unknown): Express.Multer.File[] => (Array.isArray(files) ? files : []);
 
 /**
- * Places an uploaded document, runs the database write with the resulting
- * filename, then tidies up: the new file is removed if the write fails, and the
- * replaced file is removed if it succeeds.
+ * Places uploaded documents under their original names, runs the database
+ * write with those names, then tidies up: the new files are removed if the
+ * write fails, and the `removing` files (documents dropped by the write) are
+ * deleted if it succeeds. Every name is checked before anything is written.
  */
-export function saveWithDocument<T>(ctx: AppContext, change: DocumentChange, write: (filename: string | null) => T): T {
-  const { file, current, remove } = change;
+export function saveWithDocuments<T>(
+  ctx: AppContext,
+  change: { files: Express.Multer.File[]; removing: string[] },
+  write: (filenames: string[]) => T,
+): T {
+  const placed: string[] = [];
   try {
-    let filename = remove ? null : current;
-    if (file) {
-      const name = decodeUploadName(file.originalname);
+    const names = change.files.map((f) => decodeUploadName(f.originalname));
+    for (const [i, name] of names.entries()) {
       const problem = documentNameProblem(name);
-      if (problem) throw new HttpError(400, problem);
-      if (isDocumentNameInUse(ctx.db, name) || fs.existsSync(documentPath(ctx, name))) {
-        throw new HttpError(409, `A document called "${name}" is already stored. Rename the file and try again.`);
-      }
+      if (problem) throw new HttpError(400, `${name}: ${problem}`);
+      const clash = names.indexOf(name) !== i || isDocumentNameInUse(ctx.db, name) || fs.existsSync(documentPath(ctx, name));
+      if (clash) throw new HttpError(409, `A document called "${name}" is already stored. Rename the file and try again.`);
+    }
+    for (const [i, file] of change.files.entries()) {
       try {
-        fs.copyFileSync(file.path, documentPath(ctx, name), fs.constants.COPYFILE_EXCL);
+        fs.copyFileSync(file.path, documentPath(ctx, names[i]), fs.constants.COPYFILE_EXCL);
       } catch (err) {
         if ((err as NodeJS.ErrnoException).code === 'EEXIST') {
-          throw new HttpError(409, `A document called "${name}" is already stored. Rename the file and try again.`);
+          throw new HttpError(409, `A document called "${names[i]}" is already stored. Rename the file and try again.`);
         }
         throw err;
       }
-      filename = name;
+      placed.push(names[i]);
     }
 
-    let result: T;
-    try {
-      result = write(filename);
-    } catch (err) {
-      if (file && filename) removeDocumentFile(ctx, filename);
-      throw err;
-    }
-    if (current && current !== filename) removeDocumentFile(ctx, current);
+    const result = write(names);
+    for (const name of change.removing) removeDocumentFile(ctx, name);
+    placed.length = 0;
     return result;
   } finally {
-    if (file) fs.rmSync(file.path, { force: true });
+    // Only still set if something failed after the files were placed.
+    for (const name of placed) removeDocumentFile(ctx, name);
+    for (const file of change.files) fs.rmSync(file.path, { force: true });
   }
 }

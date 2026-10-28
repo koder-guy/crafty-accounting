@@ -38,8 +38,9 @@ export function IncomeForm() {
 
   const taxYear = id ? (years?.taxYears.find((y) => y.id === existing?.taxYearId) ?? null) : activeYear;
 
-  const [file, setFile] = useState<File | null>(null);
-  const [removeDoc, setRemoveDoc] = useState(false);
+  // New documents to add, and attached ones to remove, when the form is saved.
+  const [files, setFiles] = useState<File[]>([]);
+  const [removeIds, setRemoveIds] = useState<number[]>([]);
 
   const {
     register,
@@ -73,6 +74,7 @@ export function IncomeForm() {
       notes: record.notes ?? '',
     });
     setLoaded(record);
+    setRemoveIds([]);
   };
 
   // Fill the form once the record (edit) or the defaults (new) are known. Only
@@ -125,11 +127,11 @@ export function IncomeForm() {
       amountPence: parsePoundsToPence(values.amount),
       categoryId: Number(values.categoryId),
       notes: values.notes,
-      removeDocument: removeDoc,
+      removeDocumentIds: removeIds,
       expectedUpdatedAt: id ? loaded?.updatedAt : undefined,
     };
     save.mutate(
-      { id: id ?? undefined, form: transactionForm(payload, file) },
+      { id: id ?? undefined, form: transactionForm(payload, files) },
       {
         onSuccess: (saved) => navigate(`/incoming/${saved.id}`),
         onError: (err) => {
@@ -249,13 +251,13 @@ export function IncomeForm() {
               <Field label="Notes" htmlFor="notes" className="sm:col-span-2">
                 <textarea id="notes" rows={3} className="field" {...register('notes', { maxLength: 2000 })} />
               </Field>
-              <Field label="Document" className="sm:col-span-2">
+              <Field label="Documents" className="sm:col-span-2" hint="Receipts, invoices or delivery notes: PDF or images">
                 <DocumentField
-                  current={existing?.documentFilename ?? null}
-                  file={file}
-                  remove={removeDoc}
-                  onFile={setFile}
-                  onRemove={setRemoveDoc}
+                  current={existing?.documents ?? []}
+                  files={files}
+                  removeIds={removeIds}
+                  onFiles={setFiles}
+                  onRemoveIds={setRemoveIds}
                 />
               </Field>
             </div>
