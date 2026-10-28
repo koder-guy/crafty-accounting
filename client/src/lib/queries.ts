@@ -1,4 +1,3 @@
-import { useEffect } from 'react';
 import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import type {
   AutoBackupStatus,
@@ -20,7 +19,7 @@ import type {
   User,
   YearEndSummaryResponse,
 } from '@crafty/shared';
-import { api, CLIENT_ID, toQuery } from './api';
+import { api, toQuery } from './api';
 
 // ---- Auth ----
 
@@ -54,31 +53,6 @@ export function useLogout() {
       qc.setQueryData(['me'], { authenticated: false });
     },
   });
-}
-
-// ---- Live updates ----
-
-/**
- * Listens for changes made in other browsers (another person, or another tab)
- * and refetches, so everyone sees the same books without reloading. Forms
- * don't lose what you've typed: they only fill themselves once.
- */
-export function useLiveUpdates() {
-  const qc = useQueryClient();
-  useEffect(() => {
-    const source = new EventSource(`/api/events?client=${CLIENT_ID}`);
-    const refetch = (area?: string) =>
-      qc.invalidateQueries({ predicate: (q) => q.queryKey[0] !== 'me' || area === 'users' });
-    source.addEventListener('changed', (e) => refetch((JSON.parse((e as MessageEvent).data) as { area: string }).area));
-    // After a dropped connection (e.g. the server restarted), catch up on anything missed.
-    let dropped = false;
-    source.addEventListener('error', () => (dropped = true));
-    source.addEventListener('open', () => {
-      if (dropped) refetch();
-      dropped = false;
-    });
-    return () => source.close();
-  }, [qc]);
 }
 
 // ---- People ----

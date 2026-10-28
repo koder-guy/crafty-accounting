@@ -15,6 +15,7 @@ import {
 import { SectionHeading } from '../../components/SectionLayout';
 import { Alert, Badge, Button, Card, CardHeader, EmptyState, IconButton, Spinner } from '../../components/ui';
 import { useBreakdown, useBreakdownItems, type BreakdownSelection } from '../../lib/queries';
+import { printPage } from '../../lib/liveUpdates';
 
 // ---- Periods ----
 
@@ -355,7 +356,7 @@ export function Breakdown() {
         title="Breakdown"
         description="Income and spending by category and payee for any period. Click a row to see what's behind it."
         actions={
-          <Button onClick={() => window.print()} disabled={!data}>
+          <Button onClick={printPage} disabled={!data}>
             <Printer className="size-4" aria-hidden />
             Print / Save as PDF
           </Button>

@@ -19,6 +19,7 @@ import { NoTaxYear } from '../../components/NoTaxYear';
 import { SectionHeading } from '../../components/SectionLayout';
 import { Alert, Button, Card, CardHeader, Field, Spinner } from '../../components/ui';
 import { useActiveTaxYear, useTaxEstimate, useTaxSettings } from '../../lib/queries';
+import { printPage } from '../../lib/liveUpdates';
 
 const whole = (pence: number) => formatGBP(pence).replace(/\.00$/, '');
 const percent = (rate: number) => `${Math.round(rate * 1000) / 10}%`;
@@ -92,7 +93,7 @@ export function TaxEstimate() {
         description="A guide to the Income Tax and Class 4 National Insurance on your profit, so you know how much to put aside."
         actions={
           data && (
-            <Button onClick={() => window.print()}>
+            <Button onClick={printPage}>
               <Printer className="size-4" aria-hidden />
               Print / Save as PDF
             </Button>

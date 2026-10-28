@@ -16,6 +16,7 @@ import { NoTaxYear } from '../../components/NoTaxYear';
 import { SectionHeading } from '../../components/SectionLayout';
 import { Alert, Button, Card, CardHeader, Spinner } from '../../components/ui';
 import { useActiveTaxYear, useCategories, useYearEndSummary } from '../../lib/queries';
+import { printPage } from '../../lib/liveUpdates';
 
 function BoxRow({ box, label, amount, strong = false }: { box: string; label: ReactNode; amount: number; strong?: boolean }) {
   return (
@@ -167,7 +168,7 @@ export function YearEndSummary() {
         description="Figures for the Self Assessment self-employment (short) pages for the active tax year."
         actions={
           data && (
-            <Button onClick={() => window.print()}>
+            <Button onClick={printPage}>
               <Printer className="size-4" aria-hidden />
               Print / Save as PDF
             </Button>

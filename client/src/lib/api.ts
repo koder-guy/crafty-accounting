@@ -12,7 +12,7 @@ export class ApiError extends Error {
 
 /**
  * Identifies this browser tab to the server, which then doesn't send the tab
- * live updates about its own changes (see useLiveUpdates).
+ * live updates about its own changes (see useLiveUpdates in liveUpdates.ts).
  */
 export const CLIENT_ID = Array.from(crypto.getRandomValues(new Uint8Array(12)), (b) => b.toString(16).padStart(2, '0')).join('');
 

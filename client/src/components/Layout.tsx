@@ -16,7 +16,8 @@ import {
   X,
 } from 'lucide-react';
 import { APP_NAME, APP_VERSION, displayTaxYear, taxYearStartYearForDate, todayIso } from '@crafty/shared';
-import { useLiveUpdates, useLogout, useMe, useTaxYearMutations, useTaxYears } from '../lib/queries';
+import { useLiveUpdates } from '../lib/liveUpdates';
+import { useLogout, useMe, useTaxYearMutations, useTaxYears } from '../lib/queries';
 
 function Brand() {
   return (
