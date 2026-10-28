@@ -607,7 +607,20 @@ describe('mileage', () => {
 
     const range = { from: '2025-04-06', to: '2026-04-05' };
     const breakdown = (await agent.get('/api/reports/breakdown').query(range).expect(200)).body;
-    expect(breakdown.expenses.groups[0]).toMatchObject({ hmrcCode: 'carVanTravelExpenses', totalPence: 1350, count: 1 });
+    expect(breakdown.expenses.groups[0]).toMatchObject({
+      hmrcCode: 'carVanTravelExpenses',
+      totalPence: 1350,
+      count: 1,
+      standard: { totalPence: 0, count: 0 },
+      flatRates: [{ kind: 'mileage', name: 'Mileage at HMRC rates', totalPence: 1350, count: 1 }],
+    });
+    const onlyMileage = (await agent.get('/api/reports/breakdown/items').query({ ...range, flatRate: 'mileage' }).expect(200)).body;
+    expect(onlyMileage).toMatchObject([{ kind: 'mileage', amountPence: 1350 }]);
+    // The standard category on its own is just the outgoing recorded against it.
+    expect(
+      (await agent.get('/api/reports/breakdown/items').query({ ...range, categoryId: cat('carVanTravelExpenses'), group: '0' }).expect(200)).body,
+    ).toEqual([]);
+    await agent.get('/api/reports/breakdown/items').query({ ...range, flatRate: 'mileage', payee: 'Shell' }).expect(400);
     const items = (
       await agent.get('/api/reports/breakdown/items').query({ ...range, categoryId: cat('carVanTravelExpenses'), group: '1' }).expect(200)
     ).body;
@@ -690,7 +703,11 @@ describe('use of home', () => {
 
     const range = { from: '2025-04-06', to: '2025-06-30' };
     const breakdown = (await agent.get('/api/reports/breakdown').query(range).expect(200)).body;
-    expect(breakdown.expenses.groups[0]).toMatchObject({ hmrcCode: 'premisesRunningCosts', totalPence: 1000, count: 1 });
+    expect(breakdown.expenses.groups[0]).toMatchObject({
+      hmrcCode: 'premisesRunningCosts',
+      totalPence: 1000,
+      flatRates: [{ kind: 'home', totalPence: 1000, count: 1 }],
+    });
     const items = (
       await agent.get('/api/reports/breakdown/items').query({ ...range, categoryId: cat('premisesRunningCosts'), group: '1' }).expect(200)
     ).body;

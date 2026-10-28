@@ -12,12 +12,14 @@ import {
   type TaxEstimateResponse,
   type TaxYear,
   type BreakdownCategory,
+  type BreakdownFlatRate,
   type BreakdownGroup,
   type BreakdownItem,
   type BreakdownResponse,
   type BreakdownSection,
   type Category,
   type CategoryType,
+  type FlatRateKind,
   type YearEndSummaryResponse,
 } from '@crafty/shared';
 import type { AppContext } from '../context';
@@ -39,7 +41,14 @@ interface Entry {
   categoryId: number;
   amountPence: number;
   disallowable: boolean;
+  /** Set for mileage and use of home claims, which get their own row in their group. */
+  flatRate?: FlatRateKind;
 }
+
+const FLAT_RATE_NAMES: Record<FlatRateKind, string> = {
+  mileage: 'Mileage at HMRC rates',
+  home: 'Use of home at HMRC flat rate',
+};
 
 /**
  * Totals by category for one side (income or expenses). Custom categories are
@@ -50,7 +59,16 @@ function buildSection(categories: Category[], type: CategoryType, entries: Entry
   for (const c of categories.filter((c) => c.type === type)) {
     totals.set(c.id, { categoryId: c.id, name: c.name, isCustom: c.isCustom, totalPence: 0, disallowablePence: 0, count: 0 });
   }
+  const flatRates = new Map<string, BreakdownFlatRate>();
   for (const e of entries) {
+    if (e.flatRate) {
+      const key = `${e.categoryId}:${e.flatRate}`;
+      const f = flatRates.get(key) ?? { kind: e.flatRate, name: FLAT_RATE_NAMES[e.flatRate], totalPence: 0, count: 0 };
+      f.totalPence += e.amountPence;
+      f.count += 1;
+      flatRates.set(key, f);
+      continue;
+    }
     const t = totals.get(e.categoryId);
     if (!t) continue;
     t.totalPence += e.amountPence;
@@ -66,13 +84,15 @@ function buildSection(categories: Category[], type: CategoryType, entries: Entry
         .map((c) => totals.get(c.id)!)
         .filter((c) => c.count > 0);
       const standard = totals.get(std.id)!;
-      const all = [standard, ...custom];
+      const flat = (['mileage', 'home'] as const).flatMap((kind) => flatRates.get(`${std.id}:${kind}`) ?? []);
+      const all = [standard, ...custom, ...flat];
       return {
         hmrcCode: std.hmrcCode,
         standard,
         custom,
+        flatRates: flat,
         totalPence: all.reduce((acc, c) => acc + c.totalPence, 0),
-        disallowablePence: all.reduce((acc, c) => acc + c.disallowablePence, 0),
+        disallowablePence: [standard, ...custom].reduce((acc, c) => acc + c.disallowablePence, 0),
         count: all.reduce((acc, c) => acc + c.count, 0),
       };
     })
@@ -158,7 +178,14 @@ export function reportsRouter(ctx: AppContext): Router {
       )
       .all(from, to) as { categoryId: number; amountPence: number; disallowable: number }[];
     const inRange = (c: { date: string }) => c.date >= from && c.date <= to;
-    const claims = [...mileageClaimLines(db).filter(inRange), ...useOfHomeClaimLines(db).filter(inRange)];
+    const claims: Entry[] = [
+      ...mileageClaimLines(db)
+        .filter(inRange)
+        .map((c) => ({ ...c, flatRate: 'mileage' as const })),
+      ...useOfHomeClaimLines(db)
+        .filter(inRange)
+        .map((c) => ({ ...c, flatRate: 'home' as const })),
+    ];
     const payees = db
       .prepare(
         `SELECT MIN(payee) AS payee, SUM(total_pence) AS totalPence, COUNT(*) AS count
@@ -183,7 +210,9 @@ export function reportsRouter(ctx: AppContext): Router {
     const db = ctx.db;
     const items: BreakdownItem[] = [];
 
-    if (q.payee) {
+    if (q.flatRate) {
+      items.push(...flatRateItems(db, q.flatRate, q.from, q.to));
+    } else if (q.payee) {
       const rows = db
         .prepare(
           `SELECT e.id, e.date, e.payee, li.description, li.amount_pence, li.disallowable, c.name AS category_name
@@ -239,36 +268,10 @@ export function reportsRouter(ctx: AppContext): Router {
           )
           .all(q.from, q.to, idList) as Record<string, any>[];
         for (const r of rows) items.push(lineItem(r));
-        // Mileage claims count under the standard car, van and travel category.
-        const mileageCategory = mileageCategoryId(db);
-        if (ids.includes(mileageCategory)) {
-          for (const m of mileageClaimLines(db).filter((m) => m.date >= q.from && m.date <= q.to)) {
-            items.push({
-              kind: 'mileage',
-              transactionId: m.tripId,
-              date: m.date,
-              payee: null,
-              description: m.description,
-              categoryName: 'Mileage at HMRC rates',
-              amountPence: m.amountPence,
-              disallowable: false,
-            });
-          }
-        }
-        // Use of home claims count under the standard rent, rates, power and insurance category.
-        if (ids.includes(useOfHomeCategoryId(db))) {
-          for (const h of useOfHomeClaimLines(db).filter((h) => h.date >= q.from && h.date <= q.to)) {
-            items.push({
-              kind: 'home',
-              transactionId: h.taxYearId,
-              date: h.date,
-              payee: null,
-              description: h.description,
-              categoryName: 'Use of home at HMRC flat rate',
-              amountPence: h.amountPence,
-              disallowable: false,
-            });
-          }
+        // The whole group includes the flat-rate claims that count towards it.
+        if (q.group === '1') {
+          if (ids.includes(mileageCategoryId(db))) items.push(...flatRateItems(db, 'mileage', q.from, q.to));
+          if (ids.includes(useOfHomeCategoryId(db))) items.push(...flatRateItems(db, 'home', q.from, q.to));
         }
         items.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
       }
@@ -277,6 +280,26 @@ export function reportsRouter(ctx: AppContext): Router {
   });
 
   return router;
+}
+
+/** Mileage trips or use of home months in a date range, as drill-down rows. */
+function flatRateItems(db: Db, kind: FlatRateKind, from: string, to: string): BreakdownItem[] {
+  const claims =
+    kind === 'mileage'
+      ? mileageClaimLines(db).map((m) => ({ id: m.tripId, date: m.date, description: m.description, amountPence: m.amountPence }))
+      : useOfHomeClaimLines(db).map((h) => ({ id: h.taxYearId, date: h.date, description: h.description, amountPence: h.amountPence }));
+  return claims
+    .filter((c) => c.date >= from && c.date <= to)
+    .map((c) => ({
+      kind,
+      transactionId: c.id,
+      date: c.date,
+      payee: null,
+      description: c.description,
+      categoryName: FLAT_RATE_NAMES[kind],
+      amountPence: c.amountPence,
+      disallowable: false,
+    }));
 }
 
 const lineItem = (r: Record<string, any>): BreakdownItem => ({

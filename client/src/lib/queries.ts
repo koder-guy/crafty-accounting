@@ -6,6 +6,7 @@ import type {
   Category,
   DashboardData,
   ExpenseWithLineItems,
+  FlatRateKind,
   Income,
   MeResponse,
   MileageInput,
@@ -373,7 +374,7 @@ export const useBreakdown = (from: string, to: string) =>
     placeholderData: (prev) => prev,
   });
 
-export type BreakdownSelection = { categoryId: number; group: boolean } | { payee: string };
+export type BreakdownSelection = { categoryId: number; group: boolean } | { payee: string } | { flatRate: FlatRateKind };
 
 export const useBreakdownItems = (from: string, to: string, selection: BreakdownSelection | null) =>
   useQuery({
@@ -381,9 +382,11 @@ export const useBreakdownItems = (from: string, to: string, selection: Breakdown
     queryFn: () =>
       api.get<BreakdownItem[]>(
         `/reports/breakdown/items${toQuery(
-          selection && 'payee' in selection
+          'payee' in selection!
             ? { from, to, payee: selection.payee }
-            : { from, to, categoryId: selection!.categoryId, group: selection!.group ? '1' : '0' },
+            : 'flatRate' in selection!
+              ? { from, to, flatRate: selection.flatRate }
+              : { from, to, categoryId: selection!.categoryId, group: selection!.group ? '1' : '0' },
         )}`,
       ),
     enabled: selection !== null && Boolean(from && to && from <= to),

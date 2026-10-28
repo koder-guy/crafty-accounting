@@ -175,11 +175,24 @@ export interface BreakdownCategory {
 }
 
 /** One standard MTD category, with any custom categories mapped to it. */
+export type FlatRateKind = 'mileage' | 'home';
+
+/** Claims worked out at an HMRC flat rate rather than recorded as outgoing. */
+export interface BreakdownFlatRate {
+  kind: FlatRateKind;
+  name: string;
+  totalPence: number;
+  /** Trips or months. */
+  count: number;
+}
+
 export interface BreakdownGroup {
   hmrcCode: string;
   /** The standard category itself (amounts recorded directly against it). */
   standard: BreakdownCategory;
   custom: BreakdownCategory[];
+  /** Mileage (car, van and travel) or use of home (premises costs) in this group, if any. */
+  flatRates: BreakdownFlatRate[];
   totalPence: number;
   disallowablePence: number;
   count: number;

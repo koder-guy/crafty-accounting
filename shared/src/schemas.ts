@@ -137,8 +137,13 @@ export const breakdownItemsSchema = z
     categoryId: z.coerce.number().int().positive().optional(),
     group: z.enum(['0', '1']).optional(),
     payee: z.string().trim().min(1).optional(),
+    /** Mileage or use of home claims on their own. */
+    flatRate: z.enum(['mileage', 'home']).optional(),
   })
-  .refine((q) => (q.categoryId === undefined) !== (q.payee === undefined), 'Choose a category or a payee');
+  .refine(
+    (q) => [q.categoryId, q.payee, q.flatRate].filter((v) => v !== undefined).length === 1,
+    'Choose a category, a payee or a flat rate',
+  );
 
 export const mileageInputSchema = z.object({
   taxYearId: id,

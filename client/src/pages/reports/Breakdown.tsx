@@ -42,19 +42,21 @@ function presets(today: string) {
   ];
 }
 
-// ---- Selection (kept in the URL as e.g. "group:3", "cat:21", "payee:Bead World") ----
+// ---- Selection (kept in the URL as e.g. "group:3", "cat:21", "payee:Bead World", "flat:mileage") ----
 
 function parseSelection(value: string | null): BreakdownSelection | null {
   if (!value) return null;
   const [kind, ...rest] = value.split(':');
   const arg = rest.join(':');
   if (kind === 'payee' && arg) return { payee: arg };
+  if (kind === 'flat' && (arg === 'mileage' || arg === 'home')) return { flatRate: arg };
   const id = Number(arg);
   if ((kind === 'cat' || kind === 'group') && Number.isInteger(id) && id > 0) return { categoryId: id, group: kind === 'group' };
   return null;
 }
 
-const selectionKey = (s: BreakdownSelection) => ('payee' in s ? `payee:${s.payee}` : `${s.group ? 'group' : 'cat'}:${s.categoryId}`);
+const selectionKey = (s: BreakdownSelection) =>
+  'payee' in s ? `payee:${s.payee}` : 'flatRate' in s ? `flat:${s.flatRate}` : `${s.group ? 'group' : 'cat'}:${s.categoryId}`;
 
 // ---- Tables ----
 
@@ -167,12 +169,13 @@ function CategoryTable({
         <tbody className="divide-y divide-line">
           {section.groups.map((g) => {
             const sel = { categoryId: g.standard.categoryId, group: true };
+            const hasChildren = g.custom.length > 0 || g.flatRates.length > 0;
             return [
               <Row
                 key={`g${g.standard.categoryId}`}
                 name={g.standard.name}
                 amount={g.totalPence}
-                disallowable={g.custom.length ? 0 : g.disallowablePence}
+                disallowable={hasChildren ? 0 : g.disallowablePence}
                 count={g.count}
                 total={section.totalPence}
                 tone={tone}
@@ -180,10 +183,30 @@ function CategoryTable({
                 selected={selectedKey === selectionKey(sel)}
                 onSelect={() => onSelect(sel)}
               />,
-              ...(g.custom.length
+              ...(hasChildren
                 ? [
                     ...g.custom.map((c) => child(c)),
-                    ...(g.standard.count > 0 ? [child(g.standard, 'not in a custom category')] : []),
+                    ...g.flatRates.map((f) => {
+                      const flatSel = { flatRate: f.kind };
+                      return (
+                        <Row
+                          key={`f${f.kind}`}
+                          name={f.name}
+                          note={f.kind === 'mileage' ? 'trips' : 'months'}
+                          amount={f.totalPence}
+                          disallowable={0}
+                          count={f.count}
+                          total={section.totalPence}
+                          tone={tone}
+                          depth={1}
+                          selected={selectedKey === selectionKey(flatSel)}
+                          onSelect={() => onSelect(flatSel)}
+                        />
+                      );
+                    }),
+                    ...(g.standard.count > 0
+                      ? [child(g.standard, g.custom.length ? 'not in a custom category' : 'recorded in Outgoing')]
+                      : []),
                   ]
                 : []),
             ];
@@ -345,8 +368,12 @@ export function Breakdown() {
   const selectionTitle = (() => {
     if (!selection || !data) return '';
     if ('payee' in selection) return selection.payee;
+    if ('flatRate' in selection) return selection.flatRate === 'mileage' ? 'Mileage at HMRC rates' : 'Use of home at HMRC flat rate';
     for (const g of [...data.expenses.groups, ...data.income.groups]) {
-      if (g.standard.categoryId === selection.categoryId) return selection.group ? g.standard.name : `${g.standard.name} (not in a custom category)`;
+      if (g.standard.categoryId === selection.categoryId) {
+        if (selection.group) return g.standard.name;
+        return `${g.standard.name} (${g.custom.length ? 'not in a custom category' : 'recorded in Outgoing'})`;
+      }
       const c = g.custom.find((x) => x.categoryId === selection.categoryId);
       if (c) return c.name;
     }
