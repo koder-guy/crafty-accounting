@@ -6,7 +6,7 @@ import { SignOutButton } from './Layout';
 export function PageHeader({ title, subtitle, actions }: { title: string; subtitle?: ReactNode; actions?: ReactNode }) {
   const { taxYear } = useActiveTaxYear();
   return (
-    <header className="flex flex-col gap-4 border-b border-line px-4 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-8 lg:py-6">
+    <header className="flex flex-col gap-4 border-b border-line px-4 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-8 lg:py-[18px]">
       <div className="min-w-0">
         <h1 className="text-2xl font-bold tracking-tight text-white">{title}</h1>
         <p className="mt-1 text-sm text-muted">

@@ -102,7 +102,7 @@ function niceMax(rows: { incoming: number; outgoing: number }[]): number {
 function MonthlyChart({ data }: { data: DashboardData['monthly'] }) {
   const rows = data.map((m) => ({ ...m, incoming: m.incomePence / 100, outgoing: m.expensesPence / 100 }));
   return (
-    <div className="h-52 px-2 pb-4 sm:px-4">
+    <div className="h-[228px] px-2 pb-4 sm:px-4">
       <ResponsiveContainer width="100%" height="100%">
         <BarChart data={rows} margin={{ top: 10, right: 16, left: 4, bottom: 0 }} barGap={4}>
           <CartesianGrid strokeDasharray="3 3" stroke="#2a2d3a" vertical={false} />
