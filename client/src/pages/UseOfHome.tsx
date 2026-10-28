@@ -175,7 +175,7 @@ export function UseOfHome() {
 
   return (
     <>
-      <PageHeader title="Use of home" />
+      <PageHeader title="Use of Home" />
       <PageBody>
         {yearLoading || (taxYear && isLoading) ? (
           <Spinner />

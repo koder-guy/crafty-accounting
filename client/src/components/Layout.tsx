@@ -140,9 +140,9 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
           label="Mileage"
           count={active?.mileageCount}
         />
-        <NavItem to="/use-of-home" icon={<House className="size-5 text-muted" aria-hidden />} label="Use of home" />
+        <NavItem to="/use-of-home" icon={<House className="size-5 text-muted" aria-hidden />} label="Use of Home" />
         <NavItem to="/reports" icon={<ChartPie className="size-5 text-muted" aria-hidden />} label="Reports" />
-        <NavItem to="/mtd" icon={<FileSpreadsheet className="size-5 text-muted" aria-hidden />} label="MTD quarterly" />
+        <NavItem to="/mtd" icon={<FileSpreadsheet className="size-5 text-muted" aria-hidden />} label="MTD Quarterly" />
         <NavItem to="/settings" icon={<Settings className="size-5 text-muted" aria-hidden />} label="Settings" />
       </nav>
       <div className="space-y-1 border-t border-line px-5 py-4 text-xs">
