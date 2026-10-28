@@ -439,21 +439,21 @@ export function Breakdown() {
           )}
 
           <Card className="print:break-inside-avoid">
-            <CardHeader icon={<ArrowUpRight className="size-5 text-out-soft" />} title="Expenses by category" />
-            {data.expenses.groups.length === 0 ? (
-              <EmptyState title="No expenses in this period" />
+            <CardHeader icon={<ArrowDownRight className="size-5 text-in-soft" />} title="Income by category" />
+            {data.income.groups.length === 0 ? (
+              <EmptyState title="No income in this period" />
             ) : (
-              <CategoryTable section={data.expenses} tone="out" selectedKey={selectedKey} onSelect={select} />
+              <CategoryTable section={data.income} tone="in" selectedKey={selectedKey} onSelect={select} />
             )}
           </Card>
 
           <div className="space-y-6">
             <Card className="print:break-inside-avoid">
-              <CardHeader icon={<ArrowDownRight className="size-5 text-in-soft" />} title="Income by category" />
-              {data.income.groups.length === 0 ? (
-                <EmptyState title="No income in this period" />
+              <CardHeader icon={<ArrowUpRight className="size-5 text-out-soft" />} title="Expenses by category" />
+              {data.expenses.groups.length === 0 ? (
+                <EmptyState title="No expenses in this period" />
               ) : (
-                <CategoryTable section={data.income} tone="in" selectedKey={selectedKey} onSelect={select} />
+                <CategoryTable section={data.expenses} tone="out" selectedKey={selectedKey} onSelect={select} />
               )}
             </Card>
 
