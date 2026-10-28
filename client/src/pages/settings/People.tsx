@@ -6,40 +6,56 @@ import { Alert, Badge, Button, Card, CardHeader, Field, IconButton, Spinner } fr
 import { useCanEdit, useMe, useUserMutations, useUsers } from '../../lib/queries';
 import { SettingsHeading } from './SettingsLayout';
 
-function RoleChoice({ value, onChange }: { value: Role; onChange: (role: Role) => void }) {
+function RoleChoice({
+  value,
+  onChange,
+  mustStayEditor,
+}: {
+  value: Role;
+  onChange: (role: Role) => void;
+  /** The person is the only editor, so they can't be made read-only. */
+  mustStayEditor: boolean;
+}) {
   return (
     <fieldset className="md:col-span-2">
       <legend className="mb-1.5 text-sm font-medium">Access</legend>
       <div className="grid gap-3 sm:grid-cols-2">
-        {ROLES.map((role) => (
-          <label
-            key={role}
-            className={`flex cursor-pointer gap-3 rounded-lg border p-3 text-sm transition-colors ${
-              value === role ? 'border-accent/60 bg-accent-bg' : 'border-line hover:border-line-strong'
-            }`}
-          >
-            <input
-              type="radio"
-              name="person-role"
-              value={role}
-              aria-label={ROLE_LABELS[role]}
-              className="mt-0.5 accent-indigo-500"
-              checked={value === role}
-              onChange={() => onChange(role)}
-            />
-            <span>
-              <span className="font-medium text-ink">{ROLE_LABELS[role]}</span>
-              <span className="mt-0.5 block text-xs text-muted">{ROLE_DESCRIPTIONS[role]}</span>
-            </span>
-          </label>
-        ))}
+        {ROLES.map((role) => {
+          const disabled = mustStayEditor && role === 'viewer';
+          return (
+            <label
+              key={role}
+              className={`flex gap-3 rounded-lg border p-3 text-sm transition-colors ${
+                disabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'
+              } ${value === role ? 'border-accent/60 bg-accent-bg' : `border-line ${disabled ? '' : 'hover:border-line-strong'}`}`}
+            >
+              <input
+                type="radio"
+                name="person-role"
+                value={role}
+                aria-label={ROLE_LABELS[role]}
+                className="mt-0.5 accent-indigo-500"
+                checked={value === role}
+                disabled={disabled}
+                onChange={() => onChange(role)}
+              />
+              <span>
+                <span className="font-medium text-ink">{ROLE_LABELS[role]}</span>
+                <span className="mt-0.5 block text-xs text-muted">{ROLE_DESCRIPTIONS[role]}</span>
+              </span>
+            </label>
+          );
+        })}
       </div>
+      {mustStayEditor && (
+        <p className="mt-1.5 text-xs text-muted">This is the only editor, and there must always be one. Make someone else an editor first.</p>
+      )}
     </fieldset>
   );
 }
 
 /** Adds a person, or edits someone: name, access and optionally a new password. */
-function PersonForm({ editing, onDone }: { editing: User | null; onDone: () => void }) {
+function PersonForm({ editing, editorCount, onDone }: { editing: User | null; editorCount: number; onDone: () => void }) {
   const { create, update } = useUserMutations();
   const { data: me } = useMe();
   const [name, setName] = useState(editing?.name ?? '');
@@ -94,7 +110,7 @@ function PersonForm({ editing, onDone }: { editing: User | null; onDone: () => v
             onChange={(e) => setPassword(e.target.value)}
           />
         </Field>
-        <RoleChoice value={role} onChange={setRole} />
+        <RoleChoice value={role} onChange={setRole} mustStayEditor={editing?.role === 'editor' && editorCount === 1} />
       </div>
       {(error || mutation.error) && <Alert>{error ?? mutation.error?.message}</Alert>}
       <div className="flex gap-2">
@@ -184,7 +200,12 @@ export function People() {
                 icon={editing ? <Pencil className="size-5 text-accent-soft" /> : <UserPlus className="size-5 text-accent-soft" />}
                 title={editing ? `Edit ${editing.name}` : 'Add a person'}
               />
-              <PersonForm key={editing?.id ?? 'new'} editing={editing} onDone={() => setEditing(null)} />
+              <PersonForm
+                key={editing?.id ?? 'new'}
+                editing={editing}
+                editorCount={(users ?? []).filter((u) => u.role === 'editor').length}
+                onDone={() => setEditing(null)}
+              />
             </Card>
           ) : (
             me?.user && (
