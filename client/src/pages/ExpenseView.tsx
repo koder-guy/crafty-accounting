@@ -25,24 +25,21 @@ export function ExpenseView() {
         title={expense ? expense.payee : 'Outgoing'}
         subtitle={expense ? `Outgoing · ${formatDisplayDate(expense.date)}` : undefined}
         actions={
-          expense && (
+          expense &&
+          canEdit && (
             <>
-              {canEdit && (
-                <>
-                  <ButtonLink to={`/outgoing/${id}/edit`}>
-                    <Pencil className="size-4" aria-hidden />
-                    Edit
-                  </ButtonLink>
-                  <ButtonLink to={`/outgoing/new?copy=${id}`} title="Start a new transaction with the same details">
-                    <Copy className="size-4" aria-hidden />
-                    Duplicate
-                  </ButtonLink>
-                  <Button variant="ghost" className="hover:text-out-soft!" onClick={() => setConfirming(true)}>
-                    <Trash2 className="size-4" aria-hidden />
-                    Delete
-                  </Button>
-                </>
-              )}
+              <ButtonLink to={`/outgoing/${id}/edit`}>
+                <Pencil className="size-4" aria-hidden />
+                Edit
+              </ButtonLink>
+              <ButtonLink to={`/outgoing/new?copy=${id}`} title="Start a new transaction with the same details">
+                <Copy className="size-4" aria-hidden />
+                Duplicate
+              </ButtonLink>
+              <Button variant="ghost" className="hover:text-out-soft!" onClick={() => setConfirming(true)}>
+                <Trash2 className="size-4" aria-hidden />
+                Delete
+              </Button>
             </>
           )
         }

@@ -25,24 +25,21 @@ export function IncomeView() {
         title={income ? income.description : 'Incoming'}
         subtitle={income ? `Incoming · ${formatDisplayDate(income.date)}` : undefined}
         actions={
-          income && (
+          income &&
+          canEdit && (
             <>
-              {canEdit && (
-                <>
-                  <ButtonLink to={`/incoming/${id}/edit`}>
-                    <Pencil className="size-4" aria-hidden />
-                    Edit
-                  </ButtonLink>
-                  <ButtonLink to={`/incoming/new?copy=${id}`} title="Start a new transaction with the same details">
-                    <Copy className="size-4" aria-hidden />
-                    Duplicate
-                  </ButtonLink>
-                  <Button variant="ghost" className="hover:text-out-soft!" onClick={() => setConfirming(true)}>
-                    <Trash2 className="size-4" aria-hidden />
-                    Delete
-                  </Button>
-                </>
-              )}
+              <ButtonLink to={`/incoming/${id}/edit`}>
+                <Pencil className="size-4" aria-hidden />
+                Edit
+              </ButtonLink>
+              <ButtonLink to={`/incoming/new?copy=${id}`} title="Start a new transaction with the same details">
+                <Copy className="size-4" aria-hidden />
+                Duplicate
+              </ButtonLink>
+              <Button variant="ghost" className="hover:text-out-soft!" onClick={() => setConfirming(true)}>
+                <Trash2 className="size-4" aria-hidden />
+                Delete
+              </Button>
             </>
           )
         }
