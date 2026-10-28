@@ -115,7 +115,7 @@ export function IncomingList() {
                         <td className="max-w-xs px-4 py-3">
                           <div className="flex items-center gap-1.5 font-medium text-ink">
                             <span className="truncate">{row.description}</span>
-                            <DocDownloadLink documents={row.documents} viewTo={`/incoming/${row.id}`} />
+                            <DocDownloadLink documents={row.documents} />
                           </div>
                         </td>
                         <td className="max-w-[220px] truncate px-4 py-3 text-muted" title={row.categoryName}>

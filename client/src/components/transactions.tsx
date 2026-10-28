@@ -1,5 +1,6 @@
 // Building blocks shared by the Incoming and Outgoing pages.
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { Link, useSearchParams } from 'react-router';
 import { ChevronDown, ChevronsUpDown, ChevronUp, Download, Eye, FileText, Paperclip, Pencil, Search, Trash2 } from 'lucide-react';
 import {
@@ -263,27 +264,133 @@ export function DocIndicator({ documents }: { documents: TransactionDocument[] }
   return <Paperclip className="inline size-3.5 shrink-0 text-accent-soft" aria-label={label} />;
 }
 
+// Same box and hover as a row's action icons; the negative margin keeps the row height unchanged.
+const paperclipBox =
+  '-my-2 inline-flex h-8 min-w-8 shrink-0 items-center justify-center gap-0.5 rounded-md px-1 text-accent-soft transition-colors hover:bg-accent-bg hover:text-accent-soft';
+
 /**
- * The paperclip in a list row: downloads the document if there's one, or
- * opens the transaction to list them if there are several.
+ * A paperclip with a count that opens a menu of the transaction's documents,
+ * each one a download. The menu is drawn over the page (so the table's
+ * scrolling can't clip it) and closes on a click elsewhere, Esc, or scrolling.
  */
-export function DocDownloadLink({ documents, viewTo }: { documents: TransactionDocument[]; viewTo: string }) {
-  if (documents.length === 0) return null;
-  // Same box and hover as the row's action icons; the negative margin keeps the row height unchanged.
-  const box =
-    '-my-2 inline-flex h-8 min-w-8 shrink-0 items-center justify-center gap-0.5 rounded-md px-1 text-accent-soft transition-colors hover:bg-accent-bg hover:text-accent-soft';
-  if (documents.length > 1) {
-    const names = documents.map((d) => d.filename).join(', ');
-    return (
-      <Link to={viewTo} title={`${documents.length} documents: ${names}`} aria-label={`${documents.length} documents`} className={box}>
+function DocumentMenu({ documents }: { documents: TransactionDocument[] }) {
+  const [anchor, setAnchor] = useState<DOMRect | null>(null);
+  const [position, setPosition] = useState<{ top: number; left: number } | null>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const close = (refocus = false) => {
+    setAnchor(null);
+    setPosition(null);
+    if (refocus) buttonRef.current?.focus();
+  };
+
+  // Below the button (or above it near the bottom of the window), kept on screen.
+  useLayoutEffect(() => {
+    const menu = menuRef.current;
+    if (!anchor || !menu) return;
+    const gap = 4;
+    const margin = 8;
+    const below = anchor.bottom + gap + menu.offsetHeight <= window.innerHeight - margin;
+    setPosition({
+      top: below ? anchor.bottom + gap : Math.max(margin, anchor.top - gap - menu.offsetHeight),
+      left: Math.max(margin, Math.min(anchor.left, window.innerWidth - margin - menu.offsetWidth)),
+    });
+  }, [anchor]);
+
+  // Once it's placed (and visible), start keyboard users on the first document.
+  const placed = position !== null;
+  useEffect(() => {
+    if (placed) menuRef.current?.querySelector<HTMLElement>('[role=menuitem]')?.focus({ preventScroll: true });
+  }, [placed]);
+
+  useEffect(() => {
+    if (!anchor) return;
+    const onPointer = (e: PointerEvent) => {
+      const target = e.target as Node;
+      if (!menuRef.current?.contains(target) && !buttonRef.current?.contains(target)) close();
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') close(true);
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        const items = [...(menuRef.current?.querySelectorAll<HTMLElement>('[role=menuitem]') ?? [])];
+        const at = items.indexOf(document.activeElement as HTMLElement);
+        items[(at + (e.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length]?.focus({ preventScroll: true });
+      }
+    };
+    const onMove = () => close();
+    document.addEventListener('pointerdown', onPointer);
+    document.addEventListener('keydown', onKey);
+    window.addEventListener('scroll', onMove, true);
+    window.addEventListener('resize', onMove);
+    return () => {
+      document.removeEventListener('pointerdown', onPointer);
+      document.removeEventListener('keydown', onKey);
+      window.removeEventListener('scroll', onMove, true);
+      window.removeEventListener('resize', onMove);
+    };
+  }, [anchor]);
+
+  return (
+    <>
+      <button
+        ref={buttonRef}
+        type="button"
+        aria-haspopup="menu"
+        aria-expanded={anchor !== null}
+        aria-label={`${documents.length} documents`}
+        title={`${documents.length} documents`}
+        className={`${paperclipBox} ${anchor ? 'bg-accent-bg' : ''}`}
+        onClick={() => (anchor ? close() : setAnchor(buttonRef.current!.getBoundingClientRect()))}
+      >
         <Paperclip className="size-4" aria-hidden />
         <span className="tabular text-xs">{documents.length}</span>
-      </Link>
-    );
-  }
+      </button>
+      {anchor &&
+        createPortal(
+          <div
+            ref={menuRef}
+            role="menu"
+            aria-label="Download a document"
+            // Clicks inside mustn't reach the table row (which would open the transaction).
+            onClick={(e) => e.stopPropagation()}
+            style={{ position: 'fixed', top: position?.top ?? anchor.bottom + 4, left: position?.left ?? anchor.left }}
+            className={`z-50 w-max max-w-80 min-w-56 rounded-lg border border-line-strong bg-surface p-1 shadow-2xl ${position ? '' : 'invisible'}`}
+          >
+            <div className="px-3 pt-1.5 pb-1 text-xs text-muted">Download a document</div>
+            {documents.map((d) => (
+              <a
+                key={d.id}
+                role="menuitem"
+                href={documentUrl(d.filename, true)}
+                download={d.filename}
+                onClick={() => close(true)}
+                className="flex items-start gap-2 rounded-md px-3 py-2 text-sm text-ink outline-none hover:bg-surface-2 focus-visible:bg-surface-2"
+              >
+                <Download className="mt-0.5 size-4 shrink-0 text-accent-soft" aria-hidden />
+                <span className="min-w-0 break-words">{d.filename}</span>
+              </a>
+            ))}
+          </div>,
+          document.body,
+        )}
+    </>
+  );
+}
+
+/** The paperclip in a list row: downloads the document if there's one, or offers a menu of them if there are several. */
+export function DocDownloadLink({ documents }: { documents: TransactionDocument[] }) {
+  if (documents.length === 0) return null;
+  if (documents.length > 1) return <DocumentMenu documents={documents} />;
   const { filename } = documents[0];
   return (
-    <a href={documentUrl(filename, true)} download={filename} title={`Download ${filename}`} aria-label={`Download ${filename}`} className={box}>
+    <a
+      href={documentUrl(filename, true)}
+      download={filename}
+      title={`Download ${filename}`}
+      aria-label={`Download ${filename}`}
+      className={paperclipBox}
+    >
       <Paperclip className="size-4" aria-hidden />
     </a>
   );

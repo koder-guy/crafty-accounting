@@ -133,7 +133,7 @@ export function OutgoingList() {
                             <td className="max-w-xs px-4 py-3">
                               <div className="flex items-center gap-1.5 font-medium text-ink">
                                 <span className="truncate">{row.payee}</span>
-                                <DocDownloadLink documents={row.documents} viewTo={`/outgoing/${row.id}`} />
+                                <DocDownloadLink documents={row.documents} />
                               </div>
                               <div className="truncate text-xs text-muted">
                                 {[row.invoiceNumber, row.orderNumber, row.description].filter(Boolean).join(' · ') ||
