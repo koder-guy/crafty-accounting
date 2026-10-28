@@ -9,6 +9,7 @@ import { backupRouter } from './routes/backup';
 import { categoriesRouter } from './routes/categories';
 import { dashboardRouter } from './routes/dashboard';
 import { documentsRouter } from './routes/documents';
+import { mileageRouter } from './routes/mileage';
 import { mtdRouter } from './routes/mtd';
 import { reportsRouter } from './routes/reports';
 import { sampleDataRouter } from './routes/sampleData';
@@ -80,6 +81,7 @@ export function createApp(ctx: AppContext) {
   app.use('/api/categories', categoriesRouter(ctx));
   app.use('/api/incomes', incomesRouter(ctx));
   app.use('/api/expenses', expensesRouter(ctx));
+  app.use('/api/mileage', mileageRouter(ctx));
   app.use('/api/documents', documentsRouter(ctx));
   app.use('/api/dashboard', dashboardRouter(ctx));
   app.use('/api/mtd', mtdRouter(ctx));

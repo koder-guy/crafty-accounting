@@ -17,6 +17,7 @@ export interface SampleDataResult {
   expenses: number;
   documents: number;
   submissions: number;
+  trips: number;
 }
 
 const FAIRS = [
@@ -80,13 +81,6 @@ const PURCHASES: Purchase[] = [
       { description: 'PLA filament 1kg', code: 'costOfGoods', custom: 'Printer filament', min: 2200, max: 6600 },
       { description: 'PETG filament 1kg', code: 'costOfGoods', custom: 'Printer filament', min: 2500, max: 5000 },
       { description: 'Shipping', code: 'adminCosts', min: 495, max: 995 },
-    ],
-  },
-  {
-    payee: 'Shell Garage',
-    lines: [
-      { description: 'Fuel to craft fair', code: 'carVanTravelExpenses', min: 2500, max: 6000 },
-      { description: 'Snacks', code: 'otherExpenses', min: 250, max: 800, disallowable: true },
     ],
   },
   {
@@ -215,7 +209,7 @@ export function clearData(db: Db, uploadsDir: string): void {
 export function generateSampleData(db: Db, uploadsDir: string, today = todayIso()): SampleDataResult {
   if (hasData(db)) throw new Error('The database already has data. Use --reset to replace it.');
   const rnd = random(20260406);
-  const result: SampleDataResult = { taxYears: 0, incomes: 0, expenses: 0, documents: 0, submissions: 0 };
+  const result: SampleDataResult = { taxYears: 0, incomes: 0, expenses: 0, documents: 0, submissions: 0, trips: 0 };
 
   const category = new Map(
     (db.prepare('SELECT id, hmrc_code FROM categories WHERE is_custom = 0').all() as { id: number; hmrc_code: string }[]).map(
@@ -240,6 +234,9 @@ export function generateSampleData(db: Db, uploadsDir: string, today = todayIso(
   const insertLine = db.prepare(
     `INSERT INTO expense_line_items (expense_id, description, amount_pence, category_id, disallowable, sort_order)
      VALUES (?, ?, ?, ?, ?, ?)`,
+  );
+  const insertTrip = db.prepare(
+    'INSERT INTO mileage_trips (tax_year_id, date, description, vehicle, distance_tenths) VALUES (?, ?, ?, ?, ?)',
   );
   const insertSubmission = db.prepare('INSERT INTO mtd_submissions (tax_year_id, quarter, submitted_on, reference) VALUES (?, ?, ?, ?)');
 
@@ -308,7 +305,9 @@ export function generateSampleData(db: Db, uploadsDir: string, today = todayIso(
           payment: 'bank_transfer',
           lines: [{ description: 'Stall fee', code: 'premisesRunningCosts', custom: 'Stall fees', min: 2500, max: 6500 }],
         });
-        if (rnd.chance(0.6)) addExpense(yearId, date, PURCHASES[3]);
+        // Driving there is claimed as mileage, so there are no fuel receipts for the car.
+        insertTrip.run(yearId, date, `Home to ${fair} and back`, 'car', rnd.int(80, 600));
+        result.trips++;
       }
 
       // Monthly Etsy payouts, purchases and bills.
@@ -323,7 +322,7 @@ export function generateSampleData(db: Db, uploadsDir: string, today = todayIso(
         }
         for (let i = rnd.int(1, 3); i > 0; i--) {
           const date = addDays(monthStart, rnd.int(0, 27));
-          if (date <= end) addExpense(yearId, date, rnd.pick(PURCHASES.filter((p) => p.payee !== 'Shell Garage')));
+          if (date <= end) addExpense(yearId, date, rnd.pick(PURCHASES));
         }
       }
 

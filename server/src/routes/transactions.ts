@@ -18,7 +18,7 @@ import { createUploader, removeDocumentFile, saveWithDocument } from '../documen
 import { HttpError, parseId, parseWith, readPayload } from '../http';
 import { getCategory, getExpense, getIncome, getTaxYear, listExpenses, listIncomes } from '../repo';
 
-function checkTaxYearAndDate(ctx: AppContext, taxYearId: number, date: string): TaxYear {
+export function checkTaxYearAndDate(ctx: AppContext, taxYearId: number, date: string): TaxYear {
   const year = getTaxYear(ctx.db, taxYearId);
   if (!year) throw new HttpError(422, 'That tax year no longer exists');
   if (!isDateInTaxYear(date, year)) {
@@ -43,10 +43,14 @@ function checkCategory(ctx: AppContext, categoryId: number, type: CategoryType):
  * Refuses an edit made from an out-of-date copy, so one person can't silently
  * overwrite another's changes. Forms send the updatedAt they were loaded with.
  */
-function checkUnchanged(existing: { updatedAt: string; updatedBy: string | null }, expectedUpdatedAt: string | undefined): void {
+export function checkUnchanged(
+  existing: { updatedAt: string; updatedBy: string | null },
+  expectedUpdatedAt: string | undefined,
+  noun = 'transaction',
+): void {
   if (expectedUpdatedAt === undefined || expectedUpdatedAt === existing.updatedAt) return;
   const who = existing.updatedBy ?? 'someone else';
-  throw new HttpError(409, `${who} changed this transaction while you were editing it, so your changes weren't saved. Load their version, then make yours again.`);
+  throw new HttpError(409, `${who} changed this ${noun} while you were editing it, so your changes weren't saved. Load their version, then make yours again.`);
 }
 
 const csvFilename = (kind: string, year: TaxYear | null) => `${kind}-${year?.label ?? 'export'}.csv`;

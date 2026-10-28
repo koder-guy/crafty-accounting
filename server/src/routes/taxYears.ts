@@ -1,5 +1,5 @@
 import { Router, type Request } from 'express';
-import { createTaxYearSchema, setActiveTaxYearSchema, taxYearFromStartYear, type TaxYearsResponse } from '@crafty/shared';
+import { createTaxYearSchema, setActiveTaxYearSchema, taxSettingsSchema, taxYearFromStartYear, type TaxYearsResponse } from '@crafty/shared';
 import type { AppContext } from '../context';
 import { setSetting } from '../db';
 import { removeDocumentFile } from '../documents';
@@ -44,6 +44,15 @@ export function taxYearsRouter(ctx: AppContext): Router {
     const { taxYearId } = parseWith(setActiveTaxYearSchema, req.body);
     if (!getTaxYear(ctx.db, taxYearId)) throw new HttpError(404, 'Tax year not found');
     setActive(req, taxYearId);
+    res.json(respond(req));
+  });
+
+  /** Settings the tax estimate uses, such as other taxable income for the year. */
+  router.put('/:id/tax-settings', (req, res) => {
+    const id = parseId(req.params.id);
+    if (!getTaxYear(ctx.db, id)) throw new HttpError(404, 'Tax year not found');
+    const { otherIncomePence } = parseWith(taxSettingsSchema, req.body);
+    ctx.db.prepare('UPDATE tax_years SET other_income_pence = ? WHERE id = ?').run(otherIncomePence, id);
     res.json(respond(req));
   });
 

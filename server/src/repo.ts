@@ -1,7 +1,9 @@
 // Data access: SQL rows in, API shapes (camelCase, shared types) out.
-import type { Category, Expense, ExpenseWithLineItems, Income, LineItem, TaxYear, TransactionFilters } from '@crafty/shared';
-import { taxYearStartYearForDate, todayIso } from '@crafty/shared';
+import type { Category, Expense, ExpenseWithLineItems, Income, LineItem, MileageTrip, TaxYear, TransactionFilters } from '@crafty/shared';
+import { MILEAGE_HMRC_CODE, mileageClaims, taxYearStartYearForDate, todayIso } from '@crafty/shared';
 import type { Db } from './db';
+
+export type { Db };
 
 type Row = Record<string, any>;
 
@@ -12,7 +14,8 @@ const TAX_YEAR_SELECT = `
     (SELECT COUNT(*) FROM incomes i WHERE i.tax_year_id = t.id) AS income_count,
     (SELECT COUNT(*) FROM expenses e WHERE e.tax_year_id = t.id) AS expense_count,
     (SELECT COUNT(*) FROM incomes i WHERE i.tax_year_id = t.id AND i.document_filename IS NOT NULL)
-      + (SELECT COUNT(*) FROM expenses e WHERE e.tax_year_id = t.id AND e.document_filename IS NOT NULL) AS document_count
+      + (SELECT COUNT(*) FROM expenses e WHERE e.tax_year_id = t.id AND e.document_filename IS NOT NULL) AS document_count,
+    (SELECT COUNT(*) FROM mileage_trips m WHERE m.tax_year_id = t.id) AS mileage_count
   FROM tax_years t`;
 
 const mapTaxYear = (row: Row): TaxYear => ({
@@ -23,6 +26,8 @@ const mapTaxYear = (row: Row): TaxYear => ({
   incomeCount: row.income_count,
   expenseCount: row.expense_count,
   documentCount: row.document_count,
+  mileageCount: row.mileage_count,
+  otherIncomePence: row.other_income_pence,
 });
 
 export function listTaxYears(db: Db): TaxYear[] {
@@ -286,4 +291,118 @@ export function isDocumentNameInUse(db: Db, filename: string): boolean {
     )
     .get(filename, filename);
   return row !== undefined;
+}
+
+// ---- Mileage ----
+
+const mapTrip = (row: Row, claimPence: number): MileageTrip => ({
+  id: row.id,
+  taxYearId: row.tax_year_id,
+  date: row.date,
+  description: row.description,
+  vehicle: row.vehicle,
+  distanceTenths: row.distance_tenths,
+  claimPence,
+  notes: row.notes,
+  createdAt: row.created_at,
+  updatedAt: row.updated_at,
+  createdBy: row.created_by,
+  updatedBy: row.updated_by,
+});
+
+/** Every trip in the given tax years (all years if omitted), each with its claim, newest first. */
+export function listMileage(db: Db, taxYearIds?: number[]): MileageTrip[] {
+  const rows = (
+    taxYearIds
+      ? db.prepare('SELECT * FROM mileage_trips WHERE tax_year_id IN (SELECT value FROM json_each(?))').all(JSON.stringify(taxYearIds))
+      : db.prepare('SELECT * FROM mileage_trips').all()
+  ) as Row[];
+  // The car and van threshold runs per tax year, so work the claims out a year at a time.
+  const byYear = new Map<number, Row[]>();
+  for (const row of rows) byYear.set(row.tax_year_id, [...(byYear.get(row.tax_year_id) ?? []), row]);
+  const claims = new Map<number, number>();
+  for (const yearRows of byYear.values()) {
+    const yearClaims = mileageClaims(
+      yearRows.map((r) => ({ id: r.id, date: r.date, vehicle: r.vehicle, distanceTenths: r.distance_tenths })),
+    );
+    for (const [id, pence] of yearClaims) claims.set(id, pence);
+  }
+  return rows
+    .map((row) => mapTrip(row, claims.get(row.id) ?? 0))
+    .sort((a, b) => (a.date === b.date ? b.id - a.id : a.date < b.date ? 1 : -1));
+}
+
+export function getMileageTrip(db: Db, id: number): MileageTrip | null {
+  const row = db.prepare('SELECT tax_year_id FROM mileage_trips WHERE id = ?').get(id) as Row | undefined;
+  return row ? (listMileage(db, [row.tax_year_id]).find((t) => t.id === id) ?? null) : null;
+}
+
+/** The standard "Car, van and travel expenses" category, which mileage claims count towards. */
+export function mileageCategoryId(db: Db): number {
+  const row = db.prepare('SELECT id FROM categories WHERE is_custom = 0 AND type = ? AND hmrc_code = ?').get('EXPENSE', MILEAGE_HMRC_CODE) as Row;
+  return row.id;
+}
+
+/**
+ * Mileage claims shaped like expense line items, so they count in every total
+ * alongside outgoing transactions (MTD figures, dashboard, reports).
+ */
+export function mileageClaimLines(db: Db, taxYearIds?: number[]) {
+  const categoryId = mileageCategoryId(db);
+  return listMileage(db, taxYearIds).map((t) => ({
+    tripId: t.id,
+    date: t.date,
+    description: t.description,
+    amountPence: t.claimPence,
+    disallowable: false,
+    categoryId,
+    hmrcCode: MILEAGE_HMRC_CODE,
+  }));
+}
+
+// ---- Figures ----
+
+export interface IncomeEntry {
+  date: string;
+  amountPence: number;
+  paymentMethod: string;
+  categoryId: number;
+  hmrcCode: string;
+}
+
+export interface ExpenseEntry {
+  date: string;
+  amountPence: number;
+  disallowable: boolean;
+  categoryId: number;
+  hmrcCode: string;
+}
+
+/**
+ * Every income and every expense line in a tax year, with mileage claims
+ * included as expense lines: the raw material for MTD and Self Assessment figures.
+ */
+export function yearEntries(db: Db, taxYearId: number): { incomes: IncomeEntry[]; lines: ExpenseEntry[] } {
+  const incomes = db
+    .prepare(
+      `SELECT i.date, i.amount_pence AS amountPence, i.payment_method AS paymentMethod, i.category_id AS categoryId,
+              c.hmrc_code AS hmrcCode
+       FROM incomes i JOIN categories c ON c.id = i.category_id WHERE i.tax_year_id = ?`,
+    )
+    .all(taxYearId) as IncomeEntry[];
+  const lines = (
+    db
+      .prepare(
+        `SELECT e.date, li.amount_pence AS amountPence, li.disallowable, li.category_id AS categoryId, c.hmrc_code AS hmrcCode
+         FROM expense_line_items li
+         JOIN expenses e ON e.id = li.expense_id
+         JOIN categories c ON c.id = li.category_id
+         WHERE e.tax_year_id = ?`,
+      )
+      .all(taxYearId) as (Omit<ExpenseEntry, 'disallowable'> & { disallowable: number })[]
+  ).map((line): ExpenseEntry => ({ ...line, disallowable: line.disallowable === 1 }));
+  for (const claim of mileageClaimLines(db, [taxYearId])) {
+    lines.push({ date: claim.date, amountPence: claim.amountPence, disallowable: false, categoryId: claim.categoryId, hmrcCode: claim.hmrcCode });
+  }
+  return { incomes, lines };
 }

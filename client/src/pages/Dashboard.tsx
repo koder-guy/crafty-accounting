@@ -295,9 +295,12 @@ export function Dashboard() {
                 label="Total outgoing"
                 value={formatGBP(data.totals.allowableExpensesPence)}
                 sub={
-                  data.totals.disallowablePence > 0
-                    ? `Excludes ${formatGBP(data.totals.disallowablePence)} disallowable`
-                    : 'Allowable expenses'
+                  [
+                    data.mileagePence > 0 ? `Includes ${formatGBP(data.mileagePence)} mileage` : null,
+                    data.totals.disallowablePence > 0 ? `Excludes ${formatGBP(data.totals.disallowablePence)} disallowable` : null,
+                  ]
+                    .filter(Boolean)
+                    .join('. ') || 'Allowable expenses'
                 }
                 icon={
                   <IconChip className="bg-out-bg text-out-soft">
@@ -308,7 +311,14 @@ export function Dashboard() {
               <StatCard
                 label="Net profit"
                 value={formatGBP(data.totals.netProfitPence)}
-                sub="Income minus allowable outgoing"
+                sub={
+                  <>
+                    Income minus allowable outgoing.{' '}
+                    <Link to="/reports/tax-estimate" className="text-accent-soft hover:underline">
+                      Estimated tax {formatGBP(data.taxEstimate.totalPence)}
+                    </Link>
+                  </>
+                }
                 valueClass={data.totals.netProfitPence < 0 ? 'text-out-soft' : 'text-accent-soft'}
                 icon={
                   <IconChip className="bg-violet-500/15 text-violet-300">

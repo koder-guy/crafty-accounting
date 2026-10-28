@@ -2,21 +2,27 @@ import { describe, expect, it } from 'vitest';
 import {
   buildMtdPeriodSummary,
   buildSelfAssessmentSummary,
+  estimateTax,
   expenseInputSchema,
   formatGBP,
   isDateInTaxYear,
   isValidIsoDate,
+  mileageClaims,
   mtdPayload,
   mtdQuarters,
   mtdQuarterStatus,
+  parseMilesToTenths,
   parsePoundsToPence,
   penceToPounds,
   selfAssessmentDeadline,
   startYearFromLabel,
   taxMonthIndex,
   taxMonths,
+  taxPaymentDates,
+  taxRatesFor,
   taxYearFromStartYear,
   taxYearStartYearForDate,
+  tenthsToMiles,
 } from './index';
 
 describe('tax years', () => {
@@ -234,5 +240,85 @@ describe('MTD period summary', () => {
       allowableExpensesPence: 13000,
       netProfitPence: 39000,
     });
+  });
+});
+
+describe('mileage', () => {
+  const trip = (id: number, date: string, vehicle: 'car' | 'motorcycle' | 'bicycle', miles: number) => ({
+    id,
+    date,
+    vehicle,
+    distanceTenths: miles * 10,
+  });
+
+  it('claims 45p a mile for the first 10,000 car and van miles in date order, then 25p', () => {
+    const claims = mileageClaims([
+      trip(3, '2025-09-01', 'car', 100),
+      trip(1, '2025-05-01', 'car', 9_950),
+      trip(2, '2025-06-01', 'car', 100),
+    ]);
+    expect(claims.get(1)).toBe(447_750); // 9,950 × 45p
+    expect(claims.get(2)).toBe(50 * 45 + 50 * 25); // splits across the threshold
+    expect(claims.get(3)).toBe(100 * 25);
+  });
+
+  it('uses the flat rates for motorcycles and bicycles, which do not count towards the car threshold', () => {
+    const claims = mileageClaims([trip(1, '2025-05-01', 'motorcycle', 10), trip(2, '2025-05-01', 'bicycle', 10), trip(3, '2025-05-02', 'car', 10)]);
+    expect([claims.get(1), claims.get(2), claims.get(3)]).toEqual([240, 200, 450]);
+    expect(mileageClaims([{ id: 1, date: '2025-05-01', vehicle: 'car', distanceTenths: 235 }]).get(1)).toBe(1058); // 23.5 × 45p, rounded
+  });
+
+  it('reads distances to one decimal place', () => {
+    expect(parseMilesToTenths('23.5')).toBe(235);
+    expect(parseMilesToTenths('1,200')).toBe(12000);
+    expect(parseMilesToTenths('2.25')).toBeNull();
+    expect(parseMilesToTenths('0')).toBeNull();
+    expect(tenthsToMiles(230)).toBe('23');
+    expect(tenthsToMiles(235)).toBe('23.5');
+  });
+});
+
+describe('tax estimate', () => {
+  const pounds = (n: number) => Math.round(n * 100);
+
+  it('works out Income Tax and Class 4 on a basic-rate profit', () => {
+    const e = estimateTax({ label: '2025-26', profitPence: pounds(30_000), otherIncomePence: 0 });
+    expect(e.incomeTaxPence).toBe(pounds(3_486)); // (30,000 − 12,570) × 20%
+    expect(e.class4Pence).toBe(pounds(1_045.8)); // (30,000 − 12,570) × 6%
+    expect(e.totalPence).toBe(pounds(4_531.8));
+    expect(e.paymentOnAccountPence).toBe(pounds(2_265.9));
+    expect(e.ratesAssumed).toBe(false);
+  });
+
+  it('uses the higher rates above the basic rate band', () => {
+    const e = estimateTax({ label: '2026-27', profitPence: pounds(60_000), otherIncomePence: 0 });
+    expect(e.incomeTaxPence).toBe(pounds(37_700 * 0.2 + 9_730 * 0.4));
+    expect(e.class4MainPence).toBe(pounds(37_700 * 0.06));
+    expect(e.class4UpperPence).toBe(pounds(9_730 * 0.02));
+  });
+
+  it('counts only the extra tax the business causes on top of other income', () => {
+    const e = estimateTax({ label: '2025-26', profitPence: pounds(10_000), otherIncomePence: pounds(20_000) });
+    expect(e.incomeTaxPence).toBe(pounds(2_000)); // all £10,000 at 20%: the salary used the allowance
+    expect(e.class4Pence).toBe(0); // Class 4 is on profit alone, which is under the lower limit
+    expect(e.paymentOnAccountPence).toBe(pounds(1_000)); // a £2,000 bill is over £1,000
+  });
+
+  it('tapers the personal allowance above £100,000', () => {
+    const e = estimateTax({ label: '2025-26', profitPence: pounds(110_000), otherIncomePence: 0 });
+    expect(e.personalAllowancePence).toBe(pounds(7_570));
+    expect(e.incomeTaxPence).toBe(pounds(37_700 * 0.2 + (102_430 - 37_700) * 0.4));
+  });
+
+  it('owes nothing on a loss or a small profit, and needs no payments on account under £1,000', () => {
+    expect(estimateTax({ label: '2025-26', profitPence: -pounds(500), otherIncomePence: 0 }).totalPence).toBe(0);
+    const small = estimateTax({ label: '2025-26', profitPence: pounds(15_000), otherIncomePence: 0 });
+    expect(small.totalPence).toBe(pounds(2_430 * 0.26));
+    expect(small.paymentOnAccountPence).toBeNull();
+  });
+
+  it('assumes the latest known rates for a later year', () => {
+    expect(taxRatesFor('2030-31')).toMatchObject({ ratesLabel: '2026-27', assumed: true });
+    expect(taxPaymentDates(2026)).toEqual({ balancing: '2028-01-31', secondPaymentOnAccount: '2028-07-31' });
   });
 });

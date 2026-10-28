@@ -3,6 +3,8 @@ import type { CategoryType } from './categories';
 import type { PaymentMethod } from './schemas';
 import type { MtdPeriodSummary, MtdQuarter } from './mtd';
 import type { SelfAssessmentSummary } from './selfAssessment';
+import type { Vehicle } from './mileage';
+import type { TaxEstimate } from './taxEstimate';
 
 export interface TaxYear {
   id: number;
@@ -12,6 +14,9 @@ export interface TaxYear {
   incomeCount: number;
   expenseCount: number;
   documentCount: number;
+  mileageCount: number;
+  /** Other taxable income for the year (salary, pension…), used by the tax estimate. */
+  otherIncomePence: number;
 }
 
 export interface User {
@@ -126,6 +131,9 @@ export interface DashboardData {
   recentIncomes: Income[];
   recentExpenses: Expense[];
   mtd: MtdPeriodSummary;
+  /** Mileage claimed so far this year (included in the expenses above). */
+  mileagePence: number;
+  taxEstimate: TaxEstimate;
 }
 
 export interface MtdQuarterSubmission {
@@ -190,8 +198,8 @@ export interface BreakdownResponse {
 }
 
 export interface BreakdownItem {
-  kind: 'income' | 'expense';
-  /** The incoming or outgoing transaction to link to. */
+  kind: 'income' | 'expense' | 'mileage';
+  /** The incoming or outgoing transaction (or mileage trip) to link to. */
   transactionId: number;
   date: string;
   payee: string | null;
@@ -221,4 +229,43 @@ export interface AutoBackupStatus {
 export interface ApiErrorBody {
   error: string;
   details?: { path: string; message: string }[];
+}
+
+export interface MileageTrip {
+  id: number;
+  taxYearId: number;
+  date: string;
+  description: string;
+  vehicle: Vehicle;
+  distanceTenths: number;
+  /** Worked out at HMRC's rates, in date order through the tax year. */
+  claimPence: number;
+  notes: string | null;
+  createdAt: string;
+  updatedAt: string;
+  createdBy: string | null;
+  updatedBy: string | null;
+}
+
+export interface MileageResponse {
+  trips: MileageTrip[];
+  totals: {
+    distanceTenths: number;
+    claimPence: number;
+    /** Car and van miles, which count towards the 10,000-mile threshold. */
+    carDistanceTenths: number;
+  };
+}
+
+export interface TaxEstimateResponse {
+  taxYear: TaxYear;
+  estimate: TaxEstimate;
+  /** Whether the trading allowance gave a lower profit than expenses, so the estimate uses it. */
+  usesTradingAllowance: boolean;
+  /** Profit before choosing the trading allowance, and the loss if there is one. */
+  profitWithExpensesPence: number;
+  netLossPence: number;
+  dueDates: { balancing: string; secondPaymentOnAccount: string };
+  /** Last date with any transaction or trip, so the page can say the figures are "so far". */
+  recordedTo: string | null;
 }

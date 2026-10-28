@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { VEHICLES } from './mileage';
 import { isValidIsoDate } from './taxYear';
 
 export const PAYMENT_METHODS = ['cash', 'card', 'bank_transfer'] as const;
@@ -137,6 +138,26 @@ export const breakdownItemsSchema = z
     payee: z.string().trim().min(1).optional(),
   })
   .refine((q) => (q.categoryId === undefined) !== (q.payee === undefined), 'Choose a category or a payee');
+
+export const mileageInputSchema = z.object({
+  taxYearId: id,
+  date: isoDate,
+  description: z.string().trim().min(1, 'Say where you went and why').max(300),
+  vehicle: z.enum(VEHICLES, 'Choose a vehicle'),
+  distanceTenths: z
+    .number()
+    .int('Enter the distance to one decimal place')
+    .positive('Enter a distance above zero')
+    .max(100_000, 'That trip is too long'),
+  notes: optionalText(2000),
+  /** On an edit, the updatedAt the form was loaded with. */
+  expectedUpdatedAt: z.string().optional(),
+});
+export type MileageInput = z.infer<typeof mileageInputSchema>;
+
+export const taxSettingsSchema = z.object({
+  otherIncomePence: z.number().int().min(0, 'Enter zero or more').max(MAX_PENCE, 'Amount is too large'),
+});
 
 export const loginSchema = z.object({
   name: z.string().trim().min(1, 'Enter your name'),

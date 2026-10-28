@@ -547,6 +547,111 @@ describe('expenses', () => {
   });
 });
 
+describe('mileage', () => {
+  const trip = (taxYearId: number, overrides: Record<string, unknown> = {}) => ({
+    taxYearId,
+    date: '2025-06-14',
+    description: 'Home to Abingdon Market and back',
+    vehicle: 'car',
+    distanceTenths: 300,
+    ...overrides,
+  });
+
+  it('records trips, works out the claim, and refuses dates outside the tax year', async () => {
+    const yearId = await createYear();
+    const created = (await agent.post('/api/mileage').send(trip(yearId)).expect(201)).body;
+    expect(created).toMatchObject({ distanceTenths: 300, claimPence: 1350, createdBy: NAME });
+    await agent.post('/api/mileage').send(trip(yearId, { date: '2026-04-06' })).expect(422);
+    await agent.post('/api/mileage').send(trip(yearId, { vehicle: 'boat' })).expect(400);
+
+    const edited = (
+      await agent.put(`/api/mileage/${created.id}`).send(trip(yearId, { distanceTenths: 400, expectedUpdatedAt: created.updatedAt })).expect(200)
+    ).body;
+    expect(edited.claimPence).toBe(1800);
+    await agent.put(`/api/mileage/${created.id}`).send(trip(yearId, { expectedUpdatedAt: created.updatedAt })).expect(409);
+
+    const { body } = await agent.get('/api/mileage').query({ taxYearId: yearId }).expect(200);
+    expect(body.totals).toEqual({ distanceTenths: 400, claimPence: 1800, carDistanceTenths: 400 });
+    const csv = (await agent.get('/api/mileage/export.csv').query({ taxYearId: yearId }).expect(200)).text;
+    expect(csv).toContain('2025-06-14,Home to Abingdon Market and back,Car or van,40,18.00');
+
+    await agent.delete(`/api/mileage/${created.id}`).expect(204);
+    expect((await agent.get('/api/mileage').query({ taxYearId: yearId })).body.trips).toHaveLength(0);
+  });
+
+  it('switches to 25p once the car passes 10,000 miles in the tax year', async () => {
+    const yearId = await createYear();
+    await agent.post('/api/mileage').send(trip(yearId, { date: '2025-05-01', distanceTenths: 99_000 })).expect(201);
+    const later = (await agent.post('/api/mileage').send(trip(yearId, { date: '2025-07-01', distanceTenths: 2_000 })).expect(201)).body;
+    expect(later.claimPence).toBe(100 * 45 + 100 * 25);
+    // A trip dated earlier moves the threshold, so the later trip's claim changes.
+    await agent.post('/api/mileage').send(trip(yearId, { date: '2025-06-01', distanceTenths: 1_000 })).expect(201);
+    expect((await agent.get('/api/mileage').query({ taxYearId: yearId })).body.trips[0].claimPence).toBe(200 * 25);
+  });
+
+  it('counts claims as car, van and travel expenses in every set of figures', async () => {
+    const yearId = await createYear();
+    await agent.post('/api/incomes').send(income(yearId)).expect(201);
+    await agent.post('/api/mileage').send(trip(yearId)).expect(201);
+
+    const dashboard = (await agent.get('/api/dashboard').query({ taxYearId: yearId }).expect(200)).body;
+    expect(dashboard.mtd.periodExpenses).toEqual({ carVanTravelExpenses: 1350 });
+    expect(dashboard.totals.netProfitPence).toBe(38000 - 1350);
+    expect(dashboard.mileagePence).toBe(1350);
+
+    const quarters = (await agent.get('/api/mtd/quarters').query({ taxYearId: yearId }).expect(200)).body.quarters;
+    expect(quarters[0].period.periodExpenses.carVanTravelExpenses).toBe(1350);
+
+    const yearEnd = (await agent.get('/api/reports/year-end').query({ taxYearId: yearId }).expect(200)).body.summary;
+    expect(yearEnd.expenseBoxes.find((b: { box: string }) => b.box === '12').amountPence).toBe(1350);
+
+    const range = { from: '2025-04-06', to: '2026-04-05' };
+    const breakdown = (await agent.get('/api/reports/breakdown').query(range).expect(200)).body;
+    expect(breakdown.expenses.groups[0]).toMatchObject({ hmrcCode: 'carVanTravelExpenses', totalPence: 1350, count: 1 });
+    const items = (
+      await agent.get('/api/reports/breakdown/items').query({ ...range, categoryId: cat('carVanTravelExpenses'), group: '1' }).expect(200)
+    ).body;
+    expect(items).toMatchObject([{ kind: 'mileage', amountPence: 1350, description: 'Home to Abingdon Market and back' }]);
+  });
+
+  it('is deleted with its tax year', async () => {
+    const yearId = await createYear();
+    await agent.post('/api/mileage').send(trip(yearId)).expect(201);
+    expect((await agent.get('/api/tax-years')).body.taxYears[0].mileageCount).toBe(1);
+    await agent.delete(`/api/tax-years/${yearId}`).expect(200);
+    expect(ctx.db.prepare('SELECT COUNT(*) AS n FROM mileage_trips').get()).toEqual({ n: 0 });
+  });
+});
+
+describe('tax estimate', () => {
+  it('estimates tax on the year-end profit, including other income', async () => {
+    const yearId = await createYear();
+    await agent.post('/api/incomes').send(income(yearId, { amountPence: 3_000_000 })).expect(201);
+    const stock = [{ description: 'Stock', amountPence: 200_000, categoryId: cat('costOfGoods') }];
+    await agent.post('/api/expenses').send(expense(yearId, { totalPence: 200_000, lineItems: stock })).expect(201);
+    let { body } = await agent.get('/api/reports/tax-estimate').query({ taxYearId: yearId }).expect(200);
+    // £28,000 profit: (28,000 − 12,570) at 20% Income Tax and 6% Class 4.
+    expect(body.estimate).toMatchObject({ profitPence: 2_800_000, incomeTaxPence: 308_600, class4Pence: 92_580 });
+    expect(body).toMatchObject({ usesTradingAllowance: false, recordedTo: '2025-06-14', dueDates: { balancing: '2027-01-31' } });
+
+    await agent.put(`/api/tax-years/${yearId}/tax-settings`).send({ otherIncomePence: 2_000_000 }).expect(200);
+    await agent.put(`/api/tax-years/${yearId}/tax-settings`).send({ otherIncomePence: -1 }).expect(400);
+    ({ body } = await agent.get('/api/reports/tax-estimate').query({ taxYearId: yearId }).expect(200));
+    expect(body.estimate.otherIncomePence).toBe(2_000_000);
+    // Tax on £48,000 (£7,086) less tax on the £20,000 salary alone (£1,486).
+    expect(body.estimate.incomeTaxPence).toBe(560_000);
+    expect((await agent.get('/api/dashboard').query({ taxYearId: yearId })).body.taxEstimate.totalPence).toBe(body.estimate.totalPence);
+  });
+
+  it('uses the trading allowance when it gives a lower profit', async () => {
+    const yearId = await createYear();
+    await agent.post('/api/incomes').send(income(yearId, { amountPence: 1_500_000 })).expect(201);
+    const { body } = await agent.get('/api/reports/tax-estimate').query({ taxYearId: yearId }).expect(200);
+    expect(body.usesTradingAllowance).toBe(true);
+    expect(body.estimate.profitPence).toBe(1_400_000);
+  });
+});
+
 describe('dashboard', () => {
   it('summarises the tax year in MTD terms', async () => {
     const yearId = await createYear();
@@ -921,7 +1026,8 @@ describe('backup and restore', () => {
     expect((await agent.get('/api/incomes').query({ taxYearId: 1 }).expect(200)).body).toMatchObject([
       { description: 'Market sales', createdBy: null, updatedBy: null },
     ]);
-    expect((await agent.get('/api/tax-years')).body.activeTaxYearId).toBe(1);
+    expect((await agent.get('/api/tax-years')).body).toMatchObject({ activeTaxYearId: 1, taxYears: [{ otherIncomePence: 0, mileageCount: 0 }] });
+    expect((await agent.get('/api/mileage').query({ taxYearId: 1 }).expect(200)).body.trips).toEqual([]);
     expect(ctx.db.prepare("SELECT 1 FROM settings WHERE key = 'active_tax_year_id'").get()).toBeUndefined();
     expect((await agent.get('/api/users')).body.map((u: { name: string }) => u.name)).toEqual([NAME]);
   });
@@ -937,6 +1043,7 @@ describe('sample data', () => {
     expect(result.expenses).toBeGreaterThan(40);
     expect(result.documents).toBeGreaterThan(5);
     expect(result.submissions).toBe(5);
+    expect(result.trips).toBeGreaterThan(20);
 
     const mismatched = ctx.db
       .prepare(

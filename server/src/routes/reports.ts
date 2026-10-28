@@ -5,8 +5,12 @@ import {
   buildMtdPeriodSummary,
   buildSelfAssessmentSummary,
   reportRangeSchema,
+  estimateTax,
   selfAssessmentDeadline,
   startYearFromLabel,
+  taxPaymentDates,
+  type TaxEstimateResponse,
+  type TaxYear,
   type BreakdownCategory,
   type BreakdownGroup,
   type BreakdownItem,
@@ -18,7 +22,7 @@ import {
 } from '@crafty/shared';
 import type { AppContext } from '../context';
 import { HttpError, parseWith } from '../http';
-import { getCategory, getTaxYear, listCategories } from '../repo';
+import { getCategory, getTaxYear, listCategories, mileageCategoryId, mileageClaimLines, yearEntries, type Db } from '../repo';
 
 interface Entry {
   categoryId: number;
@@ -73,33 +77,52 @@ function buildSection(categories: Category[], type: CategoryType, entries: Entry
 
 const querySchema = z.object({ taxYearId: z.coerce.number().int().positive() });
 
+/**
+ * Income Tax and Class 4 estimate for a tax year, from the same profit as the
+ * Year-end Summary (using the trading allowance instead if that's lower).
+ */
+export function buildTaxEstimate(db: Db, taxYear: TaxYear): TaxEstimateResponse {
+  const { incomes, lines } = yearEntries(db, taxYear.id);
+  const summary = buildSelfAssessmentSummary(buildMtdPeriodSummary(incomes, lines));
+  const usesTradingAllowance = summary.tradingAllowance.better === 'allowance';
+  const profitPence = usesTradingAllowance ? summary.tradingAllowance.profitWithAllowancePence : summary.netProfitPence;
+  const recordedTo = db
+    .prepare(
+      `SELECT MAX(date) AS last FROM (
+         SELECT date FROM incomes WHERE tax_year_id = @id UNION ALL
+         SELECT date FROM expenses WHERE tax_year_id = @id UNION ALL
+         SELECT date FROM mileage_trips WHERE tax_year_id = @id)`,
+    )
+    .get({ id: taxYear.id }) as { last: string | null };
+  return {
+    taxYear,
+    estimate: estimateTax({ label: taxYear.label, profitPence, otherIncomePence: taxYear.otherIncomePence }),
+    usesTradingAllowance,
+    profitWithExpensesPence: summary.netProfitPence,
+    netLossPence: summary.netLossPence,
+    dueDates: taxPaymentDates(startYearFromLabel(taxYear.label)!),
+    recordedTo: recordedTo.last,
+  };
+}
+
 export function reportsRouter(ctx: AppContext): Router {
   const router = Router();
 
   /** Figures for the Self Assessment self-employment (short) pages. */
+  router.get('/tax-estimate', (req, res) => {
+    const { taxYearId } = parseWith(querySchema, req.query);
+    const taxYear = getTaxYear(ctx.db, taxYearId);
+    if (!taxYear) throw new HttpError(404, 'Tax year not found');
+    res.json(buildTaxEstimate(ctx.db, taxYear));
+  });
+
   router.get('/year-end', (req, res) => {
     const { taxYearId } = parseWith(querySchema, req.query);
     const db = ctx.db;
     const taxYear = getTaxYear(db, taxYearId);
     if (!taxYear) throw new HttpError(404, 'Tax year not found');
 
-    const incomes = db
-      .prepare(
-        `SELECT i.amount_pence AS amountPence, c.hmrc_code AS hmrcCode
-         FROM incomes i JOIN categories c ON c.id = i.category_id WHERE i.tax_year_id = ?`,
-      )
-      .all(taxYearId) as { amountPence: number; hmrcCode: string }[];
-    const lines = (
-      db
-        .prepare(
-          `SELECT li.amount_pence AS amountPence, li.disallowable, c.hmrc_code AS hmrcCode
-           FROM expense_line_items li
-           JOIN expenses e ON e.id = li.expense_id
-           JOIN categories c ON c.id = li.category_id
-           WHERE e.tax_year_id = ?`,
-        )
-        .all(taxYearId) as { amountPence: number; disallowable: number; hmrcCode: string }[]
-    ).map((line) => ({ ...line, disallowable: line.disallowable === 1 }));
+    const { incomes, lines } = yearEntries(db, taxYearId);
 
     const response: YearEndSummaryResponse = {
       taxYear,
@@ -122,6 +145,7 @@ export function reportsRouter(ctx: AppContext): Router {
          FROM expense_line_items li JOIN expenses e ON e.id = li.expense_id WHERE e.date BETWEEN ? AND ?`,
       )
       .all(from, to) as { categoryId: number; amountPence: number; disallowable: number }[];
+    const mileage = mileageClaimLines(db).filter((m) => m.date >= from && m.date <= to);
     const payees = db
       .prepare(
         `SELECT MIN(payee) AS payee, SUM(total_pence) AS totalPence, COUNT(*) AS count
@@ -134,7 +158,7 @@ export function reportsRouter(ctx: AppContext): Router {
       from,
       to,
       income: buildSection(categories, 'INCOME', incomes.map((i) => ({ ...i, disallowable: false }))),
-      expenses: buildSection(categories, 'EXPENSE', lines.map((l) => ({ ...l, disallowable: l.disallowable === 1 }))),
+      expenses: buildSection(categories, 'EXPENSE', [...lines.map((l) => ({ ...l, disallowable: l.disallowable === 1 })), ...mileage]),
       payees,
     };
     res.json(response);
@@ -202,6 +226,23 @@ export function reportsRouter(ctx: AppContext): Router {
           )
           .all(q.from, q.to, idList) as Record<string, any>[];
         for (const r of rows) items.push(lineItem(r));
+        // Mileage claims count under the standard car, van and travel category.
+        const mileageCategory = mileageCategoryId(db);
+        if (ids.includes(mileageCategory)) {
+          for (const m of mileageClaimLines(db).filter((m) => m.date >= q.from && m.date <= q.to)) {
+            items.push({
+              kind: 'mileage',
+              transactionId: m.tripId,
+              date: m.date,
+              payee: null,
+              description: m.description,
+              categoryName: 'Mileage at HMRC rates',
+              amountPence: m.amountPence,
+              disallowable: false,
+            });
+          }
+          items.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+        }
       }
     }
     res.json(items);

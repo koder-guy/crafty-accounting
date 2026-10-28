@@ -119,6 +119,29 @@ ALTER TABLE expenses ADD COLUMN updated_by TEXT;
 DELETE FROM settings WHERE key = 'active_tax_year_id';
 `,
   },
+  // Business mileage claimed at HMRC's rates, and other income for the tax estimate.
+  {
+    version: 3,
+    sql: `
+CREATE TABLE mileage_trips (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  tax_year_id INTEGER NOT NULL REFERENCES tax_years(id) ON DELETE CASCADE,
+  date TEXT NOT NULL,
+  description TEXT NOT NULL,
+  vehicle TEXT NOT NULL CHECK (vehicle IN ('car', 'motorcycle', 'bicycle')),
+  distance_tenths INTEGER NOT NULL CHECK (distance_tenths > 0),
+  notes TEXT,
+  created_by TEXT,
+  updated_by TEXT,
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+);
+
+CREATE INDEX idx_mileage_year_date ON mileage_trips (tax_year_id, date);
+
+ALTER TABLE tax_years ADD COLUMN other_income_pence INTEGER NOT NULL DEFAULT 0 CHECK (other_income_pence >= 0);
+`,
+  },
 ];
 
 export const CURRENT_SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;

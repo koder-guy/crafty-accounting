@@ -4,6 +4,7 @@ import {
   ArrowDownRight,
   ArrowUpRight,
   CalendarDays,
+  Car,
   FileSpreadsheet,
   ChartPie,
   LogOut,
@@ -130,6 +131,12 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
           icon={<ArrowUpRight className="size-5 text-out-soft" aria-hidden />}
           label="Outgoing"
           count={active?.expenseCount}
+        />
+        <NavItem
+          to="/mileage"
+          icon={<Car className="size-5 text-muted" aria-hidden />}
+          label="Mileage"
+          count={active?.mileageCount}
         />
         <NavItem to="/reports" icon={<ChartPie className="size-5 text-muted" aria-hidden />} label="Reports" />
         <NavItem to="/mtd" icon={<FileSpreadsheet className="size-5 text-muted" aria-hidden />} label="MTD Quarterly" />

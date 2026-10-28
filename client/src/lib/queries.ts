@@ -9,7 +9,11 @@ import type {
   ExpenseWithLineItems,
   Income,
   MeResponse,
+  MileageInput,
+  MileageResponse,
+  MileageTrip,
   MtdQuartersResponse,
+  TaxEstimateResponse,
   TaxYear,
   TaxYearsResponse,
   TransactionFilters,
@@ -207,7 +211,7 @@ export const useExpense = (id: number | null) =>
     enabled: id !== null,
   });
 
-function useInvalidateTransactions(kind: Kind) {
+function useInvalidateTransactions(kind: Kind | 'mileage') {
   const qc = useQueryClient();
   return () => {
     qc.invalidateQueries({ queryKey: [kind] });
@@ -313,6 +317,50 @@ export function useLoadSampleData() {
     mutationFn: () => api.post('/sample-data'),
     // Everything changes, so refetch it all (staying signed in).
     onSuccess: () => qc.resetQueries({ predicate: (q) => q.queryKey[0] !== 'me' }),
+  });
+}
+
+// ---- Mileage ----
+
+export const useMileage = (taxYearId: number | undefined) =>
+  useQuery({
+    queryKey: ['mileage', taxYearId],
+    queryFn: () => api.get<MileageResponse>(`/mileage${toQuery({ taxYearId })}`),
+    enabled: taxYearId !== undefined,
+  });
+
+export function useMileageMutations() {
+  // Claims count as travel expenses, so every total changes.
+  const invalidate = useInvalidateTransactions('mileage');
+  return {
+    save: useMutation({
+      mutationFn: ({ id, ...input }: MileageInput & { id?: number }) =>
+        id ? api.put<MileageTrip>(`/mileage/${id}`, input) : api.post<MileageTrip>('/mileage', input),
+      onSuccess: invalidate,
+    }),
+    remove: useMutation({ mutationFn: (id: number) => api.delete(`/mileage/${id}`), onSuccess: invalidate }),
+  };
+}
+
+// ---- Tax estimate ----
+
+export const useTaxEstimate = (taxYearId: number | undefined) =>
+  useQuery({
+    queryKey: ['reports', 'tax-estimate', taxYearId],
+    queryFn: () => api.get<TaxEstimateResponse>(`/reports/tax-estimate${toQuery({ taxYearId })}`),
+    enabled: taxYearId !== undefined,
+  });
+
+export function useTaxSettings() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ taxYearId, otherIncomePence }: { taxYearId: number; otherIncomePence: number }) =>
+      api.put<TaxYearsResponse>(`/tax-years/${taxYearId}/tax-settings`, { otherIncomePence }),
+    onSuccess: (data) => {
+      qc.setQueryData(['tax-years'], data);
+      qc.invalidateQueries({ queryKey: ['reports'] });
+      qc.invalidateQueries({ queryKey: ['dashboard'] });
+    },
   });
 }
 
