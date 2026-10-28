@@ -60,8 +60,8 @@ function TaxYearSwitcher() {
       >
         {data.taxYears.map((year) => (
           <option key={year.id} value={year.id}>
-            Tax Year {displayTaxYear(year.label)}
-            {Number(year.label.slice(0, 4)) === currentStart ? ' (Current)' : ''}
+            Tax year {displayTaxYear(year.label)}
+            {Number(year.label.slice(0, 4)) === currentStart ? ' (current)' : ''}
           </option>
         ))}
       </select>
@@ -139,7 +139,7 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
           count={active?.mileageCount}
         />
         <NavItem to="/reports" icon={<ChartPie className="size-5 text-muted" aria-hidden />} label="Reports" />
-        <NavItem to="/mtd" icon={<FileSpreadsheet className="size-5 text-muted" aria-hidden />} label="MTD Quarterly" />
+        <NavItem to="/mtd" icon={<FileSpreadsheet className="size-5 text-muted" aria-hidden />} label="MTD quarterly" />
         <NavItem to="/settings" icon={<Settings className="size-5 text-muted" aria-hidden />} label="Settings" />
       </nav>
       <div className="space-y-1 border-t border-line px-5 py-4 text-xs">

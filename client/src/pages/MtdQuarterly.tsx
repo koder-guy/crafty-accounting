@@ -237,7 +237,7 @@ export function MtdQuarterly() {
 
   return (
     <>
-      <PageHeader title="MTD Quarterly Summaries" />
+      <PageHeader title="MTD quarterly summaries" />
       <PageBody>
         {yearLoading || (taxYear && isLoading) ? (
           <Spinner />

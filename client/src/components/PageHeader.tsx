@@ -13,7 +13,7 @@ export function PageHeader({ title, subtitle, actions }: { title: string; subtit
           {subtitle ??
             (taxYear ? (
               <>
-                Viewing data for UK Tax Year{' '}
+                Viewing data for UK tax year{' '}
                 <span className="font-semibold text-accent-soft">{displayTaxYear(taxYear.label)}</span>
               </>
             ) : (

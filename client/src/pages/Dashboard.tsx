@@ -329,13 +329,13 @@ export function Dashboard() {
             </div>
 
             <Card>
-              <CardHeader icon={<TrendingUp className="size-5 text-accent-soft" />} title="Monthly Incoming vs Outgoing" />
+              <CardHeader icon={<TrendingUp className="size-5 text-accent-soft" />} title="Monthly incoming vs outgoing" />
               <MonthlyChart data={data.monthly} />
             </Card>
 
             <div className="grid gap-5 xl:grid-cols-2">
               <RecentList
-                title="Recent Incoming Sales"
+                title="Recent incoming sales"
                 icon={<ArrowDownRight className="size-5 text-in-soft" />}
                 viewAll="/incoming"
                 empty="No incoming records for this tax year."
@@ -350,7 +350,7 @@ export function Dashboard() {
                 }))}
               />
               <RecentList
-                title="Recent Outgoing Payments"
+                title="Recent outgoing payments"
                 icon={<ArrowUpRight className="size-5 text-out-soft" />}
                 viewAll="/outgoing"
                 empty="No outgoing records for this tax year."

@@ -8,7 +8,7 @@ Self-hosted bookkeeping for a UK sole trader, built for selling at craft fairs a
 - **Mileage**: business journeys claimed at HMRC's approved mileage rates (cars and vans 45p a mile for the first 10,000 miles in a tax year and 25p after, motorcycles 24p, bicycles 20p). Claims count as car, van and travel expenses everywhere: the dashboard, MTD figures, Breakdown and SA103S box 12. Export the log to CSV. HMRC doesn't allow the mileage rate and actual running costs (fuel, insurance, repairs) for the same vehicle, so if a tax year has both mileage and outgoing in car, van and travel expenses, the Mileage page and Year-end summary warn you and link to that outgoing to check. Parking, tolls and fares are fine alongside mileage.
 - **Lists**: search, filter and sort, then export the filtered rows to CSV.
 - **Dashboard**: totals, a monthly chart, a breakdown by HMRC category, and key dates.
-- **MTD Quarterly**: the four standard update periods for each tax year, with deadlines and status. It shows each quarter's figures and the year-to-date figures per MTD field, can export the figures as a JSON file for MTD bridging software, and records when each quarter was submitted.
+- **MTD quarterly**: the four standard update periods for each tax year, with deadlines and status. It shows each quarter's figures and the year-to-date figures per MTD field, can export the figures as a JSON file for MTD bridging software, and records when each quarter was submitted.
 - **Reports → Breakdown**: income and spending for any period (this month, last month, an MTD quarter, a tax year or custom dates, even across tax years). It's broken down by category, with custom categories grouped under their MTD category, and outgoing spending by payee. Click any row to list the transactions or line items behind it. Print or save as PDF.
 - **Reports → Year-end summary**: the figures for each box of the Self Assessment self-employment (short) pages (SA103S), on the cash basis, with net profit or loss, a list of disallowable amounts left off the form, and a trading allowance comparison. Print it or save it as a PDF from the page.
   - **Note:** the dashboard's net profit and the Breakdown report's profit count business entertaining and depreciation as ordinary expenses, while the Year-end summary leaves them out because HMRC never allows them. They only differ if you record expenses in either of those categories; use the Year-end summary figure for your return.
@@ -163,8 +163,8 @@ You can also back up the Docker volume itself.
 - Categories map to the MTD `periodIncome` / `periodExpenses` field names (`turnover`, `costOfGoods`, `adminCosts`, …).
 - Disallowable line items are included in `periodExpenses` and also reported under `<code>Disallowable`, matching SA103.
 - `shared/src/mtd.ts` (`buildMtdPeriodSummary`) already produces MTD-shaped totals for any set of transactions, so a future quarterly or annual submission can reuse it.
-- **Quarterly update periods** are the standard tax-year quarters: 6 Apr–5 Jul, 6 Jul–5 Oct, 6 Oct–5 Jan and 6 Jan–5 Apr. Each is due by the 7th of the following month. Updates are cumulative, so the **MTD Quarterly** page defaults to year-to-date figures. Calendar-quarter periods aren't supported.
-- **Submitting** directly to HMRC isn't built yet. For now, record each submission's date and reference on the MTD Quarterly page.
+- **Quarterly update periods** are the standard tax-year quarters: 6 Apr–5 Jul, 6 Jul–5 Oct, 6 Oct–5 Jan and 6 Jan–5 Apr. Each is due by the 7th of the following month. Updates are cumulative, so the **MTD quarterly** page defaults to year-to-date figures. Calendar-quarter periods aren't supported.
+- **Submitting** directly to HMRC isn't built yet. For now, record each submission's date and reference on the MTD quarterly page.
 
 ## Development
 
