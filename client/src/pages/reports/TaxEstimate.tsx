@@ -52,11 +52,17 @@ function OtherIncomeForm({ data }: { data: TaxEstimateResponse }) {
   return (
     <form onSubmit={submit} noValidate className="space-y-4 px-5 pb-6 sm:px-6 print:hidden">
       <p className="text-sm text-muted">
-        A salary, pension or other taxable income uses up some of your tax-free allowance and lower tax bands, so it changes the tax on
-        your profit. The estimate assumes the tax on that income is already paid, for example through PAYE.
+        A salary, pension or other taxable income uses up some of your tax-free allowance and lower tax bands, so more of your profit is
+        taxed at higher rates. The tax on that income itself is assumed to be paid through PAYE, so the estimate only shows the extra tax
+        from the business.
       </p>
-      <div className="flex flex-wrap items-end gap-3">
-        <Field label="Other taxable income for the year, before tax (£)" htmlFor="other-income" error={error ?? save.error?.message}>
+      <Field
+        label="Other taxable income for the year (£)"
+        htmlFor="other-income"
+        hint="The full amount before tax is taken off, e.g. your gross salary or pension"
+        error={error ?? save.error?.message}
+      >
+        <div className="flex flex-wrap gap-3">
           <input
             id="other-income"
             inputMode="decimal"
@@ -65,11 +71,11 @@ function OtherIncomeForm({ data }: { data: TaxEstimateResponse }) {
             value={value}
             onChange={(e) => setValue(e.target.value)}
           />
-        </Field>
-        <Button type="submit" busy={save.isPending}>
-          Update estimate
-        </Button>
-      </div>
+          <Button type="submit" busy={save.isPending}>
+            Update estimate
+          </Button>
+        </div>
+      </Field>
     </form>
   );
 }
@@ -160,7 +166,13 @@ function EstimateBody({ data, today }: { data: TaxEstimateResponse; today: strin
           <table className="w-full min-w-[480px] text-sm">
             <tbody className="divide-y divide-line border-t border-line">
               <Row label="Taxable profit from the business" amount={formatGBP(e.profitPence)} />
-              {e.otherIncomePence > 0 && <Row label="Other taxable income" detail="Tax on it assumed already paid" amount={formatGBP(e.otherIncomePence)} />}
+              {e.otherIncomePence > 0 && (
+                <Row
+                  label="Other taxable income"
+                  detail="Its own tax is assumed to be paid through PAYE, so it only affects the rate your profit is taxed at"
+                  amount={formatGBP(e.otherIncomePence)}
+                />
+              )}
               <Row
                 label="Personal allowance"
                 detail={
