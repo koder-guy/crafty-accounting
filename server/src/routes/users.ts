@@ -1,10 +1,11 @@
-// People who can sign in. Everyone signed in can add people, rename them,
-// set their passwords and remove them (but not themselves).
+// People who can sign in. Editors can add people, rename them, set their
+// passwords and access, and remove them (but not themselves). Read-only
+// people can only change their own password (readOnlyGuard lets that through).
 import { Router } from 'express';
 import { createUserSchema, updateUserSchema } from '@crafty/shared';
 import type { AppContext } from '../context';
 import { HttpError, parseId, parseWith } from '../http';
-import { createUser, getUser, hashPassword, listUsers, nameTaken } from '../users';
+import { createUser, editorCount, getUser, hashPassword, listUsers, nameTaken } from '../users';
 
 export function usersRouter(ctx: AppContext): Router {
   const router = Router();
@@ -20,16 +21,24 @@ export function usersRouter(ctx: AppContext): Router {
   });
 
   router.post('/', (req, res) => {
-    const { name, password } = parseWith(createUserSchema, req.body);
+    const { name, password, role } = parseWith(createUserSchema, req.body);
     checkName(name);
-    const id = createUser(ctx.db, name, password);
+    const id = createUser(ctx.db, name, password, role);
     res.status(201).json(listUsers(ctx.db).find((u) => u.id === id));
   });
 
   router.put('/:id', (req, res) => {
     const id = parseId(req.params.id);
-    if (!getUser(ctx.db, id)) throw new HttpError(404, 'User not found');
-    const { name, password } = parseWith(updateUserSchema, req.body);
+    const person = getUser(ctx.db, id);
+    if (!person) throw new HttpError(404, 'User not found');
+    const { name, password, role } = parseWith(updateUserSchema, req.body);
+    if (req.user!.role === 'viewer' && (id !== req.user!.id || name !== undefined || role !== undefined)) {
+      throw new HttpError(403, 'Your account is read-only. You can change your own password, but nothing else.');
+    }
+    if (role === 'viewer' && person.role === 'editor' && editorCount(ctx.db) === 1) {
+      throw new HttpError(422, 'Someone needs to stay an editor, so make another person an editor first.');
+    }
+    if (role !== undefined) ctx.db.prepare('UPDATE users SET role = ? WHERE id = ?').run(role, id);
     if (name !== undefined) {
       checkName(name, id);
       ctx.db.prepare('UPDATE users SET name = ? WHERE id = ?').run(name, id);

@@ -13,7 +13,7 @@ import { ChangedElsewhere, recordedBy } from '../components/FormShell';
 import { NoTaxYear } from '../components/NoTaxYear';
 import { PageBody, PageHeader } from '../components/PageHeader';
 import { Alert, Button, Card, CardHeader, Spinner } from '../components/ui';
-import { useActiveTaxYear, useSaveUseOfHome, useUseOfHome } from '../lib/queries';
+import { useActiveTaxYear, useCanEdit, useSaveUseOfHome, useUseOfHome } from '../lib/queries';
 
 const parseHours = (value: string): number | null => {
   const text = value.trim();
@@ -36,6 +36,7 @@ function Stat({ label, value, sub }: { label: string; value: string; sub: string
 }
 
 function HoursForm({ taxYearId, data }: { taxYearId: number; data: UseOfHomeResponse }) {
+  const canEdit = useCanEdit();
   const save = useSaveUseOfHome();
   // The saved hours the form started from; saving is refused if they've changed since.
   const [base, setBase] = useState(data);
@@ -79,7 +80,7 @@ function HoursForm({ taxYearId, data }: { taxYearId: number; data: UseOfHomeResp
 
   return (
     <>
-      {changedElsewhere && dirty && <ChangedElsewhere by={data.updatedBy} what="these hours" onLoad={load} />}
+      {canEdit && changedElsewhere && dirty && <ChangedElsewhere by={data.updatedBy} what="these hours" onLoad={load} />}
       <Card>
         <CardHeader icon={<House className="size-5 text-accent-soft" />} title="Hours worked at home" />
         <form onSubmit={submit} noValidate>
@@ -109,6 +110,7 @@ function HoursForm({ taxYearId, data }: { taxYearId: number; data: UseOfHomeResp
                         </label>
                         <input
                           id={`hours-${i}`}
+                          readOnly={!canEdit}
                           inputMode="numeric"
                           placeholder="0"
                           className={`field tabular w-24 ${invalid ? 'border-out!' : ''}`}
@@ -141,23 +143,25 @@ function HoursForm({ taxYearId, data }: { taxYearId: number; data: UseOfHomeResp
               </tfoot>
             </table>
           </div>
-          <div className="flex flex-wrap items-center justify-end gap-3 border-t border-line px-5 py-4 sm:px-6">
-            <span className="mr-auto text-xs text-muted">
-              {dirty
-                ? 'Not saved yet'
-                : base.updatedAt && base.updatedBy
-                  ? `Last saved by ${recordedBy(base.updatedBy, base.updatedAt)}`
-                  : null}
-            </span>
-            {dirty && (
-              <Button type="button" variant="ghost" onClick={() => setFields(fieldsFrom(base))}>
-                Undo changes
+          {canEdit && (
+            <div className="flex flex-wrap items-center justify-end gap-3 border-t border-line px-5 py-4 sm:px-6">
+              <span className="mr-auto text-xs text-muted">
+                {dirty
+                  ? 'Not saved yet'
+                  : base.updatedAt && base.updatedBy
+                    ? `Last saved by ${recordedBy(base.updatedBy, base.updatedAt)}`
+                    : null}
+              </span>
+              {dirty && (
+                <Button type="button" variant="ghost" onClick={() => setFields(fieldsFrom(base))}>
+                  Undo changes
+                </Button>
+              )}
+              <Button type="submit" variant="primary" busy={save.isPending} disabled={!dirty || !valid}>
+                Save hours
               </Button>
-            )}
-            <Button type="submit" variant="primary" busy={save.isPending} disabled={!dirty || !valid}>
-              Save hours
-            </Button>
-          </div>
+            </div>
+          )}
           {save.error && (
             <div className="px-5 pb-5 sm:px-6">
               <Alert>{save.error.message}</Alert>

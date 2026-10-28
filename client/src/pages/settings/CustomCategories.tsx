@@ -3,7 +3,7 @@ import { Pencil, Plus, Tags, Trash2 } from 'lucide-react';
 import type { Category } from '@crafty/shared';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { Alert, Badge, Button, Card, CardHeader, EmptyState, Field, IconButton, Spinner } from '../../components/ui';
-import { useCategories, useCategoryMutations } from '../../lib/queries';
+import { useCanEdit, useCategories, useCategoryMutations } from '../../lib/queries';
 import { SettingsHeading } from './SettingsLayout';
 
 const usageLabel = (n: number) => (n === 0 ? 'Not used' : `${n} ${n === 1 ? 'use' : 'uses'}`);
@@ -100,6 +100,7 @@ function CategoryForm({
 
 export function CustomCategories() {
   const { data: categories, isLoading, error } = useCategories();
+  const canEdit = useCanEdit();
   const { remove } = useCategoryMutations();
   const [editing, setEditing] = useState<Category | null>(null);
   const [toDelete, setToDelete] = useState<Category | null>(null);
@@ -121,19 +122,23 @@ export function CustomCategories() {
         <Alert>{error.message}</Alert>
       ) : (
         <>
-          <Card>
-            <CardHeader
-              icon={editing ? <Pencil className="size-5 text-accent-soft" /> : <Plus className="size-5 text-accent-soft" />}
-              title={editing ? `Edit “${editing.name}”` : 'Add a category'}
-            />
-            <CategoryForm key={editing?.id ?? 'new'} standard={standard} editing={editing} onDone={() => setEditing(null)} />
-          </Card>
+          {canEdit && (
+            <Card>
+              <CardHeader
+                icon={editing ? <Pencil className="size-5 text-accent-soft" /> : <Plus className="size-5 text-accent-soft" />}
+                title={editing ? `Edit “${editing.name}”` : 'Add a category'}
+              />
+              <CategoryForm key={editing?.id ?? 'new'} standard={standard} editing={editing} onDone={() => setEditing(null)} />
+            </Card>
+          )}
 
           <Card>
             <CardHeader icon={<Tags className="size-5 text-accent-soft" />} title="Your custom categories" />
             {custom.length === 0 ? (
               <EmptyState title="No custom categories yet">
-                Add one above. It will appear in the category menus, grouped under the MTD category it maps to.
+                {canEdit
+                  ? 'Add one above. It will appear in the category menus, grouped under the MTD category it maps to.'
+                  : 'Only the standard MTD categories are in use.'}
               </EmptyState>
             ) : (
               <div className="overflow-x-auto">
@@ -144,7 +149,7 @@ export function CustomCategories() {
                       <th scope="col" className="px-4 py-3 text-left font-medium">Type</th>
                       <th scope="col" className="px-4 py-3 text-left font-medium">Maps to</th>
                       <th scope="col" className="px-4 py-3 text-left font-medium">Used</th>
-                      <th scope="col" className="px-4 py-3 text-right font-medium sm:pr-6">Actions</th>
+                      {canEdit && <th scope="col" className="px-4 py-3 text-right font-medium sm:pr-6">Actions</th>}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-line">
@@ -158,16 +163,18 @@ export function CustomCategories() {
                           {standardFor(c)?.name} <span className="ml-1 font-mono text-xs text-faint">{c.hmrcCode}</span>
                         </td>
                         <td className="px-4 py-3 whitespace-nowrap text-muted">{usageLabel(c.usageCount)}</td>
-                        <td className="px-3 py-2 sm:pr-5">
-                          <div className="flex justify-end gap-0.5">
-                            <IconButton label={`Edit ${c.name}`} onClick={() => setEditing(c)}>
-                              <Pencil className="size-4" />
-                            </IconButton>
-                            <IconButton label={`Delete ${c.name}`} tone="danger" onClick={() => setToDelete(c)}>
-                              <Trash2 className="size-4" />
-                            </IconButton>
-                          </div>
-                        </td>
+                        {canEdit && (
+                          <td className="px-3 py-2 sm:pr-5">
+                            <div className="flex justify-end gap-0.5">
+                              <IconButton label={`Edit ${c.name}`} onClick={() => setEditing(c)}>
+                                <Pencil className="size-4" />
+                              </IconButton>
+                              <IconButton label={`Delete ${c.name}`} tone="danger" onClick={() => setToDelete(c)}>
+                                <Trash2 className="size-4" />
+                              </IconButton>
+                            </div>
+                          </td>
+                        )}
                       </tr>
                     ))}
                   </tbody>

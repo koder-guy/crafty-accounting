@@ -104,8 +104,8 @@ describe('auth', () => {
 });
 
 /** Adds a person and returns an agent signed in as them. */
-async function addPerson(name: string, password = 'second-password') {
-  await agent.post('/api/users').send({ name, password }).expect(201);
+async function addPerson(name: string, password = 'second-password', role: 'editor' | 'viewer' = 'editor') {
+  await agent.post('/api/users').send({ name, password, role }).expect(201);
   const other = request.agent(createApp(ctx));
   await other.post('/api/auth/login').send({ name, password }).expect(200);
   return other;
@@ -278,6 +278,82 @@ describe('tax years', () => {
       .get() as { n: number };
     expect(counts.n).toBe(0);
     expect(body.activeTaxYearId).toBeNull();
+  });
+});
+
+describe('read-only people', () => {
+  it('can view, export and download documents, but not change anything', async () => {
+    const yearId = await createYear();
+    const saved = (await agent.post('/api/incomes').field('data', JSON.stringify(income(yearId))).attach('document', PDF, 'payout.pdf').expect(201)).body;
+    const viewer = await addPerson('Accountant', 'read-only-password', 'viewer');
+    expect((await viewer.get('/api/auth/me')).body.user).toMatchObject({ name: 'Accountant', role: 'viewer' });
+
+    for (const path of ['/api/dashboard', '/api/mtd/quarters', '/api/mileage', '/api/use-of-home', '/api/reports/tax-estimate', '/api/reports/year-end']) {
+      await viewer.get(path).query({ taxYearId: yearId }).expect(200);
+    }
+    await viewer.get('/api/reports/breakdown').query({ from: '2025-04-06', to: '2026-04-05' }).expect(200);
+    await viewer.get(`/api/incomes/${saved.id}`).expect(200);
+    await viewer.get('/api/incomes/export.csv').query({ taxYearId: yearId }).expect(200);
+    await viewer.get('/api/documents/payout.pdf').expect(200);
+
+    const refused = [
+      viewer.post('/api/incomes').send(income(yearId)),
+      viewer.put(`/api/incomes/${saved.id}`).send(income(yearId)),
+      viewer.delete(`/api/incomes/${saved.id}`),
+      viewer.post('/api/expenses').send(expense(yearId)),
+      viewer.post('/api/mileage').send({ taxYearId: yearId, date: '2025-06-14', description: 'Trip', vehicle: 'car', distanceTenths: 10 }),
+      viewer.put('/api/use-of-home').send({ taxYearId: yearId, months: [] }),
+      viewer.put(`/api/tax-years/${yearId}/tax-settings`).send({ otherIncomePence: 1 }),
+      viewer.post('/api/tax-years').send({ startYear: 2024 }),
+      viewer.delete(`/api/tax-years/${yearId}`),
+      viewer.post('/api/categories').send({ name: 'Beads', mapsToCategoryId: cat('costOfGoods') }),
+      viewer.put(`/api/mtd/quarters/${yearId}/1/submission`).send({ submittedOn: '2025-08-01' }),
+      viewer.post('/api/sample-data'),
+      viewer.post('/api/reset').send({ confirm: 'RESET' }),
+      viewer.post('/api/users').send({ name: 'Sam', password: 'long-enough' }),
+    ];
+    for (const res of await Promise.all(refused)) {
+      expect(res.status).toBe(403);
+      expect(res.body.error).toMatch(/read-only/);
+    }
+    expect((await agent.get(`/api/incomes/${saved.id}`)).body.amountPence).toBe(38000);
+  });
+
+  it('cannot download backups', async () => {
+    await createYear();
+    const viewer = await addPerson('Accountant', 'read-only-password', 'viewer');
+    for (const path of ['/api/backup.sql', '/api/backup.zip', '/api/backup/auto', '/api/backup/auto/files/x.zip']) {
+      await viewer.get(path).expect(403);
+    }
+    await agent.get('/api/backup.sql').expect(200);
+  });
+
+  it('can choose their own tax year and change their own password, and nothing else about people', async () => {
+    const first = await createYear(2024);
+    await createYear(2025);
+    const viewer = await addPerson('Accountant', 'read-only-password', 'viewer');
+    await viewer.put('/api/tax-years/active').send({ taxYearId: first }).expect(200);
+
+    const me = (await viewer.get('/api/auth/me')).body.user.id;
+    const admin = (await agent.get('/api/auth/me')).body.user.id;
+    await viewer.put(`/api/users/${me}`).send({ password: 'a-new-password' }).expect(200);
+    await request(createApp(ctx)).post('/api/auth/login').send({ name: 'Accountant', password: 'a-new-password' }).expect(200);
+    await viewer.put(`/api/users/${me}`).send({ role: 'editor' }).expect(403);
+    await viewer.put(`/api/users/${me}`).send({ name: 'Boss' }).expect(403);
+    await viewer.put(`/api/users/${admin}`).send({ password: 'taken-over!' }).expect(403);
+  });
+
+  it('can be made an editor, and the last editor stays one', async () => {
+    const viewer = await addPerson('Accountant', 'read-only-password', 'viewer');
+    const me = (await agent.get('/api/auth/me')).body.user.id;
+    await agent.put(`/api/users/${me}`).send({ role: 'viewer' }).expect(422);
+
+    const id = (await viewer.get('/api/auth/me')).body.user.id;
+    await agent.put(`/api/users/${id}`).send({ role: 'editor' }).expect(200);
+    await viewer.post('/api/tax-years').send({ startYear: 2025 }).expect(201);
+    // With two editors, one can step down.
+    await agent.put(`/api/users/${me}`).send({ role: 'viewer' }).expect(200);
+    await agent.post('/api/tax-years').send({ startYear: 2024 }).expect(403);
   });
 });
 
@@ -1092,9 +1168,13 @@ describe('backup and restore', () => {
     expect(dump).not.toMatch(/INSERT INTO "users"/);
     expect(dump).not.toMatch(/scrypt\$/);
 
-    await agent.post('/api/users').send({ name: 'Sam', password: 'added-after' }).expect(201);
+    await agent.post('/api/users').send({ name: 'Sam', password: 'added-after', role: 'viewer' }).expect(201);
     await agent.post('/api/restore').attach('file', Buffer.from(dump), 'backup.sql').expect(200);
-    expect((await jo.get('/api/users').expect(200)).body.map((u: { name: string }) => u.name)).toEqual(['Admin', 'Jo', 'Sam']);
+    expect((await jo.get('/api/users').expect(200)).body.map((u: { name: string; role: string }) => `${u.name} ${u.role}`)).toEqual([
+      'Admin editor',
+      'Jo editor',
+      'Sam viewer',
+    ]);
     expect((await agent.get('/api/incomes').query({ taxYearId: 1 })).body[0].createdBy).toBe(NAME);
 
     await agent.post('/api/reset').send({ confirm: 'RESET' }).expect(200);

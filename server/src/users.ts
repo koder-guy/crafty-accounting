@@ -1,7 +1,7 @@
 // People who can sign in. Passwords are stored as scrypt hashes with a
 // random salt: "scrypt$<salt hex>$<hash hex>".
 import crypto from 'node:crypto';
-import type { User } from '@crafty/shared';
+import type { Role, User } from '@crafty/shared';
 import type { Db } from './db';
 
 const KEY_LENGTH = 32;
@@ -22,7 +22,7 @@ export function verifyPassword(password: string, stored: string): boolean {
 
 type Row = Record<string, any>;
 
-const mapUser = (row: Row): User => ({ id: row.id, name: row.name, createdAt: row.created_at });
+const mapUser = (row: Row): User => ({ id: row.id, name: row.name, role: row.role, createdAt: row.created_at });
 
 export function listUsers(db: Db): User[] {
   return (db.prepare('SELECT * FROM users ORDER BY name COLLATE NOCASE').all() as Row[]).map(mapUser);
@@ -41,10 +41,12 @@ export function authenticate(db: Db, name: string, password: string): User | nul
   return row && ok ? mapUser(row) : null;
 }
 
-export function createUser(db: Db, name: string, password: string): number {
-  const result = db.prepare('INSERT INTO users (name, password_hash) VALUES (?, ?)').run(name, hashPassword(password));
+export function createUser(db: Db, name: string, password: string, role: Role = 'editor'): number {
+  const result = db.prepare('INSERT INTO users (name, password_hash, role) VALUES (?, ?, ?)').run(name, hashPassword(password), role);
   return Number(result.lastInsertRowid);
 }
+
+export const editorCount = (db: Db) => (db.prepare("SELECT COUNT(*) AS n FROM users WHERE role = 'editor'").get() as { n: number }).n;
 
 export const nameTaken = (db: Db, name: string, exceptId = 0) =>
   db.prepare('SELECT 1 FROM users WHERE name = ? COLLATE NOCASE AND id != ?').get(name, exceptId) !== undefined;
@@ -54,7 +56,8 @@ export const userCount = (db: Db) => (db.prepare('SELECT COUNT(*) AS n FROM user
 /**
  * On a new install (or one upgraded from the single shared password), creates
  * the first user from ADMIN_NAME and ADMIN_PASSWORD. After that, people are
- * managed in Settings → Users and these variables are ignored.
+ * managed in Settings → People and these variables are ignored. The first
+ * person is always an editor.
  */
 export function ensureFirstUser(db: Db, name: string, password: string | null): void {
   if (userCount(db) > 0) return;

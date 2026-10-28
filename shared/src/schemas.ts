@@ -186,11 +186,26 @@ export const loginSchema = z.object({
   password: z.string().min(1, 'Enter your password'),
 });
 
+/** Editors can change everything; read-only people can view, export and print, but not change the books. */
+export const ROLES = ['editor', 'viewer'] as const;
+export type Role = (typeof ROLES)[number];
+
+export const ROLE_LABELS: Record<Role, string> = {
+  editor: 'Editor',
+  viewer: 'Read-only',
+};
+
+export const ROLE_DESCRIPTIONS: Record<Role, string> = {
+  editor: 'Can add, change and delete anything, manage people and settings, and download backups',
+  viewer: 'Can view everything, export CSVs and print reports, but not change anything or download backups',
+};
+
 const userName = z.string().trim().min(1, 'Enter a name').max(50, 'Use 50 characters or fewer');
 const newPassword = z.string().min(8, 'Use at least 8 characters').max(200);
+const role = z.enum(ROLES, 'Choose what they can do');
 
-export const createUserSchema = z.object({ name: userName, password: newPassword });
+export const createUserSchema = z.object({ name: userName, password: newPassword, role: role.default('editor') });
 
 export const updateUserSchema = z
-  .object({ name: userName.optional(), password: newPassword.optional() })
-  .refine((v) => v.name !== undefined || v.password !== undefined, 'Nothing to change');
+  .object({ name: userName.optional(), password: newPassword.optional(), role: role.optional() })
+  .refine((v) => v.name !== undefined || v.password !== undefined || v.role !== undefined, 'Nothing to change');

@@ -14,7 +14,7 @@ import {
 import { NoTaxYear } from '../components/NoTaxYear';
 import { PageBody, PageHeader } from '../components/PageHeader';
 import { Alert, Badge, Button, Card, CardHeader, Field, Spinner, type BadgeTone } from '../components/ui';
-import { useActiveTaxYear, useCategories, useMtdQuarters, useMtdSubmission } from '../lib/queries';
+import { useActiveTaxYear, useCanEdit, useCategories, useMtdQuarters, useMtdSubmission } from '../lib/queries';
 
 const STATUS: Record<MtdQuarterStatus, { label: string; tone: BadgeTone }> = {
   upcoming: { label: 'Upcoming', tone: 'neutral' },
@@ -154,6 +154,7 @@ function FiguresTable({ summary, categories }: { summary: MtdPeriodSummary; cate
 }
 
 function SubmissionPanel({ taxYearId, q }: { taxYearId: number; q: MtdQuarterSummary }) {
+  const canEdit = useCanEdit();
   const { save, clear } = useMtdSubmission(taxYearId);
   const [editing, setEditing] = useState(false);
   const [submittedOn, setSubmittedOn] = useState(todayIso());
@@ -166,6 +167,21 @@ function SubmissionPanel({ taxYearId, q }: { taxYearId: number; q: MtdQuarterSum
   }, [q.quarter, q.submission?.submittedOn, q.submission?.reference]);
 
   const error = save.error ?? clear.error;
+
+  if (!canEdit) {
+    return (
+      <p className="text-sm text-ink">
+        {q.submission ? (
+          <>
+            Submitted to HMRC on <strong>{formatDisplayDate(q.submission.submittedOn)}</strong>
+            {q.submission.reference && <span className="text-muted"> · reference {q.submission.reference}</span>}
+          </>
+        ) : (
+          <span className="text-muted">No submission recorded yet.</span>
+        )}
+      </p>
+    );
+  }
 
   if (q.submission && !editing) {
     return (

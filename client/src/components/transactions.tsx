@@ -12,6 +12,7 @@ import {
   type TransactionFilters,
 } from '@crafty/shared';
 import { documentUrl } from '../lib/api';
+import { useCanEdit } from '../lib/queries';
 import { CategoryOptions } from './CategoryOptions';
 import { Button, IconButton } from './ui';
 
@@ -188,17 +189,22 @@ export function SortTh<K extends string>({
 }
 
 export function RowActions({ viewTo, editTo, onDelete }: { viewTo: string; editTo: string; onDelete: () => void }) {
+  const canEdit = useCanEdit();
   return (
     <div className="flex justify-end gap-0.5">
       <IconLink to={viewTo} label="View">
         <Eye className="size-4" />
       </IconLink>
-      <IconLink to={editTo} label="Edit">
-        <Pencil className="size-4" />
-      </IconLink>
-      <IconButton label="Delete" tone="danger" onClick={onDelete}>
-        <Trash2 className="size-4" />
-      </IconButton>
+      {canEdit && (
+        <>
+          <IconLink to={editTo} label="Edit">
+            <Pencil className="size-4" />
+          </IconLink>
+          <IconButton label="Delete" tone="danger" onClick={onDelete}>
+            <Trash2 className="size-4" />
+          </IconButton>
+        </>
+      )}
     </div>
   );
 }

@@ -10,11 +10,12 @@ import {
 } from '@crafty/shared';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { Alert, Badge, Button, Card, CardHeader, EmptyState, Spinner } from '../../components/ui';
-import { useTaxYearMutations, useTaxYears } from '../../lib/queries';
+import { useCanEdit, useTaxYearMutations, useTaxYears } from '../../lib/queries';
 import { SettingsHeading } from './SettingsLayout';
 
 export function TaxYearsSettings() {
   const { data, isLoading } = useTaxYears();
+  const canEdit = useCanEdit();
   const { create, setActive, remove } = useTaxYearMutations();
   const currentStart = taxYearStartYearForDate(todayIso());
   const [toDelete, setToDelete] = useState<TaxYear | null>(null);
@@ -52,50 +53,54 @@ export function TaxYearsSettings() {
           title="Tax years"
           description="Create UK tax years (6 April to 5 April), choose the active one, or delete a year and everything in it."
         />
-        <Card>
-          <CardHeader icon={<CalendarPlus className="size-5 text-accent-soft" />} title="Create a tax year" />
-          <div className="flex flex-col gap-4 px-5 pb-6 sm:flex-row sm:items-end sm:px-6">
-            <div className="sm:w-64">
-              <label htmlFor="start-year" className="mb-1.5 block text-sm font-medium">
-                Tax year
-              </label>
-              <select
-                id="start-year"
-                className="field"
-                value={selected ?? ''}
-                onChange={(e) => setStartYear(Number(e.target.value))}
-                disabled={available.length === 0}
-              >
-                {available.map((y) => (
-                  <option key={y} value={y}>
-                    {displayTaxYear(taxYearFromStartYear(y).label)}
-                    {y === currentStart ? ' (current)' : ''}
-                  </option>
-                ))}
-              </select>
+        {canEdit && (
+          <Card>
+            <CardHeader icon={<CalendarPlus className="size-5 text-accent-soft" />} title="Create a tax year" />
+            <div className="flex flex-col gap-4 px-5 pb-6 sm:flex-row sm:items-end sm:px-6">
+              <div className="sm:w-64">
+                <label htmlFor="start-year" className="mb-1.5 block text-sm font-medium">
+                  Tax year
+                </label>
+                <select
+                  id="start-year"
+                  className="field"
+                  value={selected ?? ''}
+                  onChange={(e) => setStartYear(Number(e.target.value))}
+                  disabled={available.length === 0}
+                >
+                  {available.map((y) => (
+                    <option key={y} value={y}>
+                      {displayTaxYear(taxYearFromStartYear(y).label)}
+                      {y === currentStart ? ' (current)' : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <p className="flex-1 text-sm text-muted sm:pb-2.5">
+                {preview
+                  ? `Runs from ${formatDisplayDate(preview.startDate)} to ${formatDisplayDate(preview.endDate)}.`
+                  : 'All recent tax years already exist.'}
+              </p>
+              <Button variant="primary" onClick={createYear} busy={create.isPending} disabled={!preview}>
+                Create tax year
+              </Button>
             </div>
-            <p className="flex-1 text-sm text-muted sm:pb-2.5">
-              {preview
-                ? `Runs from ${formatDisplayDate(preview.startDate)} to ${formatDisplayDate(preview.endDate)}.`
-                : 'All recent tax years already exist.'}
-            </p>
-            <Button variant="primary" onClick={createYear} busy={create.isPending} disabled={!preview}>
-              Create tax year
-            </Button>
-          </div>
-          {(create.error || message) && (
-            <div className="px-5 pb-5 sm:px-6">
-              {create.error ? <Alert>{create.error.message}</Alert> : <Alert tone="success">{message}</Alert>}
-            </div>
-          )}
-        </Card>
+            {(create.error || message) && (
+              <div className="px-5 pb-5 sm:px-6">
+                {create.error ? <Alert>{create.error.message}</Alert> : <Alert tone="success">{message}</Alert>}
+              </div>
+            )}
+          </Card>
+        )}
 
         <Card>
           <CardHeader icon={<Layers className="size-5 text-accent-soft" />} title="Your tax years" />
           {isLoading ? (
             <Spinner />
           ) : !data || data.taxYears.length === 0 ? (
-            <EmptyState title="No tax years yet">Create one above to start recording transactions.</EmptyState>
+            <EmptyState title="No tax years yet">
+              {canEdit ? 'Create one above to start recording transactions.' : 'An editor needs to create one.'}
+            </EmptyState>
           ) : (
             <ul className="divide-y divide-line border-t border-line">
               {data.taxYears.map((year) => {
@@ -120,10 +125,12 @@ export function TaxYearsSettings() {
                           Make active
                         </Button>
                       )}
-                      <Button variant="ghost" className="hover:text-out-soft!" onClick={() => setToDelete(year)}>
-                        <Trash2 className="size-4" aria-hidden />
-                        Delete
-                      </Button>
+                      {canEdit && (
+                        <Button variant="ghost" className="hover:text-out-soft!" onClick={() => setToDelete(year)}>
+                          <Trash2 className="size-4" aria-hidden />
+                          Delete
+                        </Button>
+                      )}
                     </div>
                   </li>
                 );

@@ -13,6 +13,7 @@ import type {
   MileageResponse,
   MileageTrip,
   MtdQuartersResponse,
+  Role,
   TaxEstimateResponse,
   TaxYear,
   TaxYearsResponse,
@@ -35,6 +36,12 @@ export const useMe = () =>
     queryFn: () => api.get<MeResponse>('/auth/me'),
     staleTime: Infinity,
   });
+
+/** Whether the signed-in person can change the books (read-only people can only view, export and print). */
+export function useCanEdit(): boolean {
+  const { data } = useMe();
+  return data?.user?.role !== 'viewer';
+}
 
 export function useLogin() {
   const qc = useQueryClient();
@@ -70,11 +77,12 @@ export function useUserMutations() {
   };
   return {
     create: useMutation({
-      mutationFn: (input: { name: string; password: string }) => api.post<User>('/users', input),
+      mutationFn: (input: { name: string; password: string; role: Role }) => api.post<User>('/users', input),
       onSuccess,
     }),
     update: useMutation({
-      mutationFn: ({ id, ...input }: { id: number; name?: string; password?: string }) => api.put<User>(`/users/${id}`, input),
+      mutationFn: ({ id, ...input }: { id: number; name?: string; password?: string; role?: Role }) =>
+        api.put<User>(`/users/${id}`, input),
       onSuccess,
     }),
     remove: useMutation({ mutationFn: (id: number) => api.delete(`/users/${id}`), onSuccess }),

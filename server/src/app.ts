@@ -4,7 +4,7 @@ import express from 'express';
 import cookieSession from 'cookie-session';
 import type { AppContext } from './context';
 import { errorHandler, HttpError } from './http';
-import { authRouter, requireAuth } from './routes/auth';
+import { authRouter, readOnlyGuard, requireAuth } from './routes/auth';
 import { backupRouter } from './routes/backup';
 import { categoriesRouter } from './routes/categories';
 import { dashboardRouter } from './routes/dashboard';
@@ -60,6 +60,7 @@ export function createApp(ctx: AppContext) {
   app.use('/api/auth', authRouter(ctx));
 
   app.use('/api', requireAuth(ctx));
+  app.use('/api', readOnlyGuard);
 
   app.get('/api/events', (req, res) => {
     ctx.liveUpdates.subscribe(res, clientId(req.query.client));

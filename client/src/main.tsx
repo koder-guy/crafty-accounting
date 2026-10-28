@@ -6,6 +6,7 @@ import './index.css';
 import { setUnauthorizedHandler } from './lib/api';
 import { useMe } from './lib/queries';
 import { Layout } from './components/Layout';
+import { EditorOnly } from './components/ReadOnly';
 import { Spinner } from './components/ui';
 import { Login } from './pages/Login';
 import { Dashboard } from './pages/Dashboard';
@@ -47,13 +48,41 @@ function App() {
       <Route element={<Layout />}>
         <Route index element={<Dashboard />} />
         <Route path="incoming" element={<IncomingList />} />
-        <Route path="incoming/new" element={<IncomeForm />} />
+        <Route
+          path="incoming/new"
+          element={
+            <EditorOnly title="Add incoming">
+              <IncomeForm />
+            </EditorOnly>
+          }
+        />
         <Route path="incoming/:id" element={<IncomeView />} />
-        <Route path="incoming/:id/edit" element={<IncomeForm />} />
+        <Route
+          path="incoming/:id/edit"
+          element={
+            <EditorOnly title="Edit incoming">
+              <IncomeForm />
+            </EditorOnly>
+          }
+        />
         <Route path="outgoing" element={<OutgoingList />} />
-        <Route path="outgoing/new" element={<ExpenseForm />} />
+        <Route
+          path="outgoing/new"
+          element={
+            <EditorOnly title="Add outgoing">
+              <ExpenseForm />
+            </EditorOnly>
+          }
+        />
         <Route path="outgoing/:id" element={<ExpenseView />} />
-        <Route path="outgoing/:id/edit" element={<ExpenseForm />} />
+        <Route
+          path="outgoing/:id/edit"
+          element={
+            <EditorOnly title="Edit outgoing">
+              <ExpenseForm />
+            </EditorOnly>
+          }
+        />
         <Route path="mileage" element={<Mileage />} />
         <Route path="use-of-home" element={<UseOfHome />} />
         <Route path="mtd" element={<MtdQuarterly />} />
@@ -69,7 +98,14 @@ function App() {
           <Route path="tax-years" element={<TaxYearsSettings />} />
           <Route path="categories" element={<CustomCategories />} />
           <Route path="people" element={<People />} />
-          <Route path="backup" element={<BackupSettings />} />
+          <Route
+            path="backup"
+            element={
+              <EditorOnly title="Backup and restore">
+                <BackupSettings />
+              </EditorOnly>
+            }
+          />
         </Route>
         <Route path="backup" element={<Navigate to="/settings/backup" replace />} />
         <Route path="tax-years" element={<Navigate to="/settings/tax-years" replace />} />

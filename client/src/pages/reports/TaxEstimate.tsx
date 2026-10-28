@@ -18,7 +18,7 @@ import {
 import { NoTaxYear } from '../../components/NoTaxYear';
 import { SectionHeading } from '../../components/SectionLayout';
 import { Alert, Button, Card, CardHeader, Field, Spinner } from '../../components/ui';
-import { useActiveTaxYear, useTaxEstimate, useTaxSettings } from '../../lib/queries';
+import { useActiveTaxYear, useCanEdit, useTaxEstimate, useTaxSettings } from '../../lib/queries';
 import { printPage } from '../../lib/liveUpdates';
 
 const whole = (pence: number) => formatGBP(pence).replace(/\.00$/, '');
@@ -114,6 +114,7 @@ export function TaxEstimate() {
 }
 
 function EstimateBody({ data, today }: { data: TaxEstimateResponse; today: string }) {
+  const canEdit = useCanEdit();
   const e = data.estimate;
   const rates = taxRatesFor(data.taxYear.label).rates;
   const year = displayTaxYear(data.taxYear.label);
@@ -197,7 +198,7 @@ function EstimateBody({ data, today }: { data: TaxEstimateResponse; today: strin
             </tbody>
           </table>
         </div>
-        <OtherIncomeForm key={`${data.taxYear.id}-${data.taxYear.otherIncomePence}`} data={data} />
+        {canEdit && <OtherIncomeForm key={`${data.taxYear.id}-${data.taxYear.otherIncomePence}`} data={data} />}
       </Card>
 
       <Card className="print:break-inside-avoid">

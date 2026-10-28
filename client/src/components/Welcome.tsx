@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import { Link } from 'react-router';
 import { Layers, Sparkles, Wallet } from 'lucide-react';
 import { APP_NAME } from '@crafty/shared';
-import { useLoadSampleData, useSampleData } from '../lib/queries';
+import { useCanEdit, useLoadSampleData, useSampleData } from '../lib/queries';
 import { Alert, Button, ButtonLink, Card } from './ui';
 
 function Option({ icon, title, children, action }: { icon: ReactNode; title: string; children: ReactNode; action: ReactNode }) {
@@ -18,8 +18,18 @@ function Option({ icon, title, children, action }: { icon: ReactNode; title: str
 
 /** Shown on the dashboard when there are no tax years yet. */
 export function Welcome() {
+  const canEdit = useCanEdit();
   const load = useLoadSampleData();
   const { data: sample } = useSampleData();
+
+  if (!canEdit) {
+    return (
+      <Card className="p-6 sm:p-8">
+        <h2 className="text-xl font-bold text-white">Welcome to {APP_NAME}</h2>
+        <p className="mt-1 text-sm text-muted">There are no tax years yet. Once an editor sets up the books, they'll appear here.</p>
+      </Card>
+    );
+  }
 
   return (
     <Card className="p-6 sm:p-8">

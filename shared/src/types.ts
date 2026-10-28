@@ -5,6 +5,7 @@ import type { MtdPeriodSummary, MtdQuarter } from './mtd';
 import type { SelfAssessmentSummary } from './selfAssessment';
 import type { Vehicle } from './mileage';
 import type { TaxEstimate } from './taxEstimate';
+import type { Role } from './schemas';
 
 export interface TaxYear {
   id: number;
@@ -22,6 +23,7 @@ export interface TaxYear {
 export interface User {
   id: number;
   name: string;
+  role: Role;
   createdAt: string;
 }
 

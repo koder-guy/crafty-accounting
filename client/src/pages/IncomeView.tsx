@@ -7,13 +7,14 @@ import { BackLink, recordedBy } from '../components/FormShell';
 import { PageBody, PageHeader } from '../components/PageHeader';
 import { Alert, Button, ButtonLink, Card, DetailRow, PaymentBadge, Spinner } from '../components/ui';
 import { documentUrl } from '../lib/api';
-import { useDeleteTransaction, useIncome, useTaxYears } from '../lib/queries';
+import { useCanEdit, useDeleteTransaction, useIncome, useTaxYears } from '../lib/queries';
 
 export function IncomeView() {
   const id = Number(useParams().id);
   const navigate = useNavigate();
   const { data: income, isLoading, error } = useIncome(id);
   const { data: years } = useTaxYears();
+  const canEdit = useCanEdit();
   const remove = useDeleteTransaction('incomes');
   const [confirming, setConfirming] = useState(false);
   const year = years?.taxYears.find((y) => y.id === income?.taxYearId);
@@ -26,18 +27,22 @@ export function IncomeView() {
         actions={
           income && (
             <>
-              <ButtonLink to={`/incoming/${id}/edit`}>
-                <Pencil className="size-4" aria-hidden />
-                Edit
-              </ButtonLink>
-              <ButtonLink to={`/incoming/new?copy=${id}`} title="Start a new transaction with the same details">
-                <Copy className="size-4" aria-hidden />
-                Duplicate
-              </ButtonLink>
-              <Button variant="ghost" className="hover:text-out-soft!" onClick={() => setConfirming(true)}>
-                <Trash2 className="size-4" aria-hidden />
-                Delete
-              </Button>
+              {canEdit && (
+                <>
+                  <ButtonLink to={`/incoming/${id}/edit`}>
+                    <Pencil className="size-4" aria-hidden />
+                    Edit
+                  </ButtonLink>
+                  <ButtonLink to={`/incoming/new?copy=${id}`} title="Start a new transaction with the same details">
+                    <Copy className="size-4" aria-hidden />
+                    Duplicate
+                  </ButtonLink>
+                  <Button variant="ghost" className="hover:text-out-soft!" onClick={() => setConfirming(true)}>
+                    <Trash2 className="size-4" aria-hidden />
+                    Delete
+                  </Button>
+                </>
+              )}
             </>
           )
         }

@@ -15,13 +15,14 @@ import {
   useTransactionFilters,
 } from '../components/transactions';
 import { Alert, ButtonLink, Card, CardHeader, EmptyState, PaymentBadge, Spinner } from '../components/ui';
-import { exportCsvUrl, useActiveTaxYear, useCategories, useDeleteTransaction, useIncomes } from '../lib/queries';
+import { exportCsvUrl, useActiveTaxYear, useCanEdit, useCategories, useDeleteTransaction, useIncomes } from '../lib/queries';
 
 export function IncomingList() {
   const { taxYear, isLoading: yearLoading } = useActiveTaxYear();
   const filterState = useTransactionFilters(taxYear);
   const { data: categories = [] } = useCategories();
   const { data, isLoading, error } = useIncomes(filterState.filters);
+  const canEdit = useCanEdit();
   const remove = useDeleteTransaction('incomes');
   const [toDelete, setToDelete] = useState<Income | null>(null);
   const navigate = useNavigate();
@@ -47,10 +48,12 @@ export function IncomingList() {
           taxYear && (
             <>
               {filterState.filters && <ExportCsvButton href={exportCsvUrl('incomes', filterState.filters)} />}
-              <ButtonLink to="/incoming/new" variant="primary">
-                <Plus className="size-4" aria-hidden />
-                Add incoming
-              </ButtonLink>
+              {canEdit && (
+                <ButtonLink to="/incoming/new" variant="primary">
+                  <Plus className="size-4" aria-hidden />
+                  Add incoming
+                </ButtonLink>
+              )}
             </>
           )
         }

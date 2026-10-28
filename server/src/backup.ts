@@ -127,7 +127,7 @@ export function restoreBackup(ctx: AppContext, sql: string, uploadsFrom?: string
     key: string;
     value: string | null;
   }[];
-  const keepUsers = ctx.db.prepare('SELECT id, name, password_hash, created_at FROM users').all();
+  const keepUsers = ctx.db.prepare('SELECT id, name, password_hash, role, created_at FROM users').all();
 
   ctx.db.pragma('wal_checkpoint(TRUNCATE)');
   ctx.db.close();
@@ -140,7 +140,7 @@ export function restoreBackup(ctx: AppContext, sql: string, uploadsFrom?: string
   // Tax year ids differ in the restored books, so everyone goes back to the default year.
   ctx.db.transaction(() => {
     ctx.db.prepare('DELETE FROM users').run();
-    const insert = ctx.db.prepare('INSERT INTO users (id, name, password_hash, created_at) VALUES (@id, @name, @password_hash, @created_at)');
+    const insert = ctx.db.prepare('INSERT INTO users (id, name, password_hash, role, created_at) VALUES (@id, @name, @password_hash, @role, @created_at)');
     for (const user of keepUsers) insert.run(user);
   })();
 

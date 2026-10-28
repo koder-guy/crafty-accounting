@@ -21,9 +21,10 @@ import { MileageCheckAlert } from '../components/MileageCheckAlert';
 import { ExportCsvButton } from '../components/transactions';
 import { ChangedElsewhere, dateInYear, duplicateDate, recordedBy, yearRangeHint } from '../components/FormShell';
 import { NoTaxYear } from '../components/NoTaxYear';
+import { ReadOnlyNotice } from '../components/ReadOnly';
 import { PageBody, PageHeader } from '../components/PageHeader';
 import { Alert, Button, Card, CardHeader, EmptyState, Field, IconButton, Spinner } from '../components/ui';
-import { useActiveTaxYear, useMileage, useMileageMutations } from '../lib/queries';
+import { useActiveTaxYear, useCanEdit, useMileage, useMileageMutations } from '../lib/queries';
 
 /** Adds a trip (blank, or copied from `copyOf`) or edits one. */
 function TripForm({
@@ -160,6 +161,7 @@ function Stat({ label, value, sub }: { label: string; value: string; sub: string
 export function Mileage() {
   const { taxYear, isLoading: yearLoading } = useActiveTaxYear();
   const { data, isLoading, error } = useMileage(taxYear?.id);
+  const canEdit = useCanEdit();
   const { remove } = useMileageMutations();
   const [editing, setEditing] = useState<MileageTrip | null>(null);
   const [copyOf, setCopyOf] = useState<MileageTrip | null>(null);
@@ -227,33 +229,39 @@ export function Mileage() {
               </Alert>
             )}
 
-            {editing && latest && latest.updatedAt !== editing.updatedAt && (
-              <ChangedElsewhere by={latest.updatedBy} what="this trip" onLoad={() => setEditing(latest)} />
-            )}
+            {canEdit ? (
+              <>
+                {editing && latest && latest.updatedAt !== editing.updatedAt && (
+                  <ChangedElsewhere by={latest.updatedBy} what="this trip" onLoad={() => setEditing(latest)} />
+                )}
 
-            <div ref={formRef} className="scroll-mt-24">
-              <Card>
-                <CardHeader
-                  icon={
-                    editing ? (
-                      <Pencil className="size-5 text-accent-soft" />
-                    ) : copyOf ? (
-                      <Copy className="size-5 text-accent-soft" />
-                    ) : (
-                      <Plus className="size-5 text-accent-soft" />
-                    )
-                  }
-                  title={editing ? 'Edit trip' : copyOf ? `Duplicate trip from ${formatDisplayDate(copyOf.date)}` : 'Add a trip'}
-                />
-                <TripForm
-                  key={editing ? `${editing.id}-${editing.updatedAt}` : copyOf ? `copy-${copyOf.id}` : 'new'}
-                  taxYear={taxYear}
-                  editing={editing}
-                  copyOf={copyOf}
-                  onDone={finish}
-                />
-              </Card>
-            </div>
+                <div ref={formRef} className="scroll-mt-24">
+                  <Card>
+                    <CardHeader
+                      icon={
+                        editing ? (
+                          <Pencil className="size-5 text-accent-soft" />
+                        ) : copyOf ? (
+                          <Copy className="size-5 text-accent-soft" />
+                        ) : (
+                          <Plus className="size-5 text-accent-soft" />
+                        )
+                      }
+                      title={editing ? 'Edit trip' : copyOf ? `Duplicate trip from ${formatDisplayDate(copyOf.date)}` : 'Add a trip'}
+                    />
+                    <TripForm
+                      key={editing ? `${editing.id}-${editing.updatedAt}` : copyOf ? `copy-${copyOf.id}` : 'new'}
+                      taxYear={taxYear}
+                      editing={editing}
+                      copyOf={copyOf}
+                      onDone={finish}
+                    />
+                  </Card>
+                </div>
+              </>
+            ) : (
+              <ReadOnlyNotice />
+            )}
 
             <Card>
               <CardHeader icon={<Route className="size-5 text-accent-soft" />} title="Trips" />
@@ -272,7 +280,7 @@ export function Mileage() {
                         <th scope="col" className="px-4 py-3 text-left font-medium">Vehicle</th>
                         <th scope="col" className="px-4 py-3 text-right font-medium">Miles</th>
                         <th scope="col" className="px-4 py-3 text-right font-medium">Claim</th>
-                        <th scope="col" className="px-4 py-3 text-right font-medium sm:pr-6">Actions</th>
+                        {canEdit && <th scope="col" className="px-4 py-3 text-right font-medium sm:pr-6">Actions</th>}
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-line">
@@ -290,19 +298,21 @@ export function Mileage() {
                           <td className="px-4 py-3 whitespace-nowrap text-muted">{VEHICLE_LABELS[t.vehicle]}</td>
                           <td className="tabular px-4 py-3 text-right">{tenthsToMiles(t.distanceTenths)}</td>
                           <td className="tabular px-4 py-3 text-right text-out-soft">{formatGBP(t.claimPence)}</td>
-                          <td className="px-3 py-2 sm:pr-5">
-                            <div className="flex justify-end gap-0.5">
-                              <IconButton label={`Edit trip on ${formatDisplayDate(t.date)}`} onClick={() => startEdit(t)}>
-                                <Pencil className="size-4" />
-                              </IconButton>
-                              <IconButton label={`Duplicate trip on ${formatDisplayDate(t.date)}`} onClick={() => startCopy(t)}>
-                                <Copy className="size-4" />
-                              </IconButton>
-                              <IconButton label={`Delete trip on ${formatDisplayDate(t.date)}`} tone="danger" onClick={() => setToDelete(t)}>
-                                <Trash2 className="size-4" />
-                              </IconButton>
-                            </div>
-                          </td>
+                          {canEdit && (
+                            <td className="px-3 py-2 sm:pr-5">
+                              <div className="flex justify-end gap-0.5">
+                                <IconButton label={`Edit trip on ${formatDisplayDate(t.date)}`} onClick={() => startEdit(t)}>
+                                  <Pencil className="size-4" />
+                                </IconButton>
+                                <IconButton label={`Duplicate trip on ${formatDisplayDate(t.date)}`} onClick={() => startCopy(t)}>
+                                  <Copy className="size-4" />
+                                </IconButton>
+                                <IconButton label={`Delete trip on ${formatDisplayDate(t.date)}`} tone="danger" onClick={() => setToDelete(t)}>
+                                  <Trash2 className="size-4" />
+                                </IconButton>
+                              </div>
+                            </td>
+                          )}
                         </tr>
                       ))}
                     </tbody>
@@ -313,7 +323,7 @@ export function Mileage() {
                         </td>
                         <td className="tabular px-4 py-3 text-right">{tenthsToMiles(data.totals.distanceTenths)}</td>
                         <td className="tabular px-4 py-3 text-right text-out-soft">{formatGBP(data.totals.claimPence)}</td>
-                        <td />
+                        {canEdit && <td />}
                       </tr>
                     </tfoot>
                   </table>

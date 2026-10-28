@@ -15,13 +15,14 @@ import {
   useTransactionFilters,
 } from '../components/transactions';
 import { Alert, Badge, ButtonLink, Card, CardHeader, EmptyState, PaymentBadge, Spinner } from '../components/ui';
-import { exportCsvUrl, useActiveTaxYear, useCategories, useDeleteTransaction, useExpandedOutgoingRows, useExpenses } from '../lib/queries';
+import { exportCsvUrl, useActiveTaxYear, useCanEdit, useCategories, useDeleteTransaction, useExpandedOutgoingRows, useExpenses } from '../lib/queries';
 
 export function OutgoingList() {
   const { taxYear, isLoading: yearLoading } = useActiveTaxYear();
   const filterState = useTransactionFilters(taxYear);
   const { data: categories = [] } = useCategories();
   const { data, isLoading, error } = useExpenses(filterState.filters);
+  const canEdit = useCanEdit();
   const remove = useDeleteTransaction('expenses');
   const { isExpanded, toggle: toggleRow } = useExpandedOutgoingRows();
   const [toDelete, setToDelete] = useState<Expense | null>(null);
@@ -48,10 +49,12 @@ export function OutgoingList() {
           taxYear && (
             <>
               {filterState.filters && <ExportCsvButton href={exportCsvUrl('expenses', filterState.filters)} />}
-              <ButtonLink to="/outgoing/new" variant="primary">
-                <Plus className="size-4" aria-hidden />
-                Add outgoing
-              </ButtonLink>
+              {canEdit && (
+                <ButtonLink to="/outgoing/new" variant="primary">
+                  <Plus className="size-4" aria-hidden />
+                  Add outgoing
+                </ButtonLink>
+              )}
             </>
           )
         }

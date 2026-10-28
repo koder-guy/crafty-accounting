@@ -18,7 +18,8 @@ import {
 } from 'lucide-react';
 import { APP_NAME, APP_VERSION, displayTaxYear, taxYearStartYearForDate, todayIso } from '@crafty/shared';
 import { useLiveUpdates } from '../lib/liveUpdates';
-import { useLogout, useMe, useTaxYearMutations, useTaxYears } from '../lib/queries';
+import { useCanEdit, useLogout, useMe, useTaxYearMutations, useTaxYears } from '../lib/queries';
+import { Badge } from './ui';
 
 function Brand() {
   return (
@@ -36,11 +37,15 @@ function Brand() {
 
 function TaxYearSwitcher() {
   const { data } = useTaxYears();
+  const canEdit = useCanEdit();
   const { setActive } = useTaxYearMutations();
   const currentStart = taxYearStartYearForDate(todayIso());
 
   if (!data) return <div className="h-11 rounded-lg border border-line bg-surface" />;
   if (data.taxYears.length === 0) {
+    if (!canEdit) {
+      return <div className="rounded-lg border border-dashed border-line-strong px-3 py-2.5 text-sm text-muted">No tax years yet</div>;
+    }
     return (
       <NavLink to="/settings/tax-years" className="block rounded-lg border border-dashed border-line-strong px-3 py-2.5 text-sm text-muted hover:text-ink">
         Create your first tax year →
@@ -150,6 +155,7 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
           <div className="flex items-center gap-1.5 text-muted">
             <UserRound className="size-3.5" aria-hidden />
             Signed in as <span className="font-semibold text-ink">{me.user.name}</span>
+            {me.user.role === 'viewer' && <Badge tone="warn">Read-only</Badge>}
           </div>
         )}
         <div className="font-semibold text-ink/80">

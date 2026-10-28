@@ -156,6 +156,13 @@ CREATE TABLE home_working_months (
 );
 `,
   },
+  // Read-only sign-ins. Everyone set up before this is an editor.
+  {
+    version: 5,
+    sql: `
+ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'editor' CHECK (role IN ('editor', 'viewer'));
+`,
+  },
 ];
 
 export const CURRENT_SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;
