@@ -1,17 +1,11 @@
 import type { ReactNode } from 'react';
-import { Eye } from 'lucide-react';
 import { useCanEdit } from '../lib/queries';
 import { PageBody, PageHeader } from './PageHeader';
 import { Alert } from './ui';
 
 export function ReadOnlyNotice({ children }: { children?: ReactNode }) {
   return (
-    <Alert tone="warning">
-      <span className="inline-flex items-center gap-1.5">
-        <Eye className="size-4 shrink-0" aria-hidden />
-        {children ?? 'Your account is read-only, so you can view and export the books but not change them.'}
-      </span>
-    </Alert>
+    <Alert tone="warning">{children ?? 'Your account is read-only, so you can view and export the books but not change them.'}</Alert>
   );
 }
 

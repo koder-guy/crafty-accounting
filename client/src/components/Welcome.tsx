@@ -85,7 +85,15 @@ export function Welcome() {
 /** Reminder on the dashboard while the sample data is in use. */
 export function SampleDataNotice() {
   const { data } = useSampleData();
+  const canEdit = useCanEdit();
   if (!data?.loaded) return null;
+  if (!canEdit) {
+    return (
+      <Alert tone="warning">
+        You're looking at <strong>sample data</strong>, not real books.
+      </Alert>
+    );
+  }
   return (
     <Alert tone="warning">
       You're looking at <strong>sample data</strong>. When you're ready for your own books, clear it with{' '}

@@ -15,9 +15,10 @@ import {
 } from '@crafty/shared';
 import { SampleDataNotice, Welcome } from '../components/Welcome';
 import { PageBody, PageHeader } from '../components/PageHeader';
+import { ReadOnlyNotice } from '../components/ReadOnly';
 import { DocIndicator } from '../components/transactions';
 import { Alert, Card, CardHeader, Spinner } from '../components/ui';
-import { useActiveTaxYear, useDashboard } from '../lib/queries';
+import { useActiveTaxYear, useCanEdit, useDashboard } from '../lib/queries';
 
 const CHART_IN = '#5b63d3';
 const CHART_OUT = '#dc2626';
@@ -279,6 +280,7 @@ function KeyDates({ data }: { data: DashboardData }) {
 export function Dashboard() {
   const { taxYear, isLoading: yearLoading } = useActiveTaxYear();
   const { data, isLoading, error } = useDashboard(taxYear?.id);
+  const canEdit = useCanEdit();
 
   return (
     <>
@@ -292,6 +294,7 @@ export function Dashboard() {
           <Alert>{error?.message ?? 'Could not load the dashboard'}</Alert>
         ) : (
           <>
+            {!canEdit && <ReadOnlyNotice />}
             <SampleDataNotice />
             <div className="grid gap-5 md:grid-cols-3">
               <StatCard

@@ -21,7 +21,6 @@ import { MileageCheckAlert } from '../components/MileageCheckAlert';
 import { ExportCsvButton } from '../components/transactions';
 import { ChangedElsewhere, dateInYear, duplicateDate, recordedBy, yearRangeHint } from '../components/FormShell';
 import { NoTaxYear } from '../components/NoTaxYear';
-import { ReadOnlyNotice } from '../components/ReadOnly';
 import { PageBody, PageHeader } from '../components/PageHeader';
 import { Alert, Button, Card, CardHeader, EmptyState, Field, IconButton, Spinner } from '../components/ui';
 import { useActiveTaxYear, useCanEdit, useMileage, useMileageMutations } from '../lib/queries';
@@ -229,7 +228,7 @@ export function Mileage() {
               </Alert>
             )}
 
-            {canEdit ? (
+            {canEdit && (
               <>
                 {editing && latest && latest.updatedAt !== editing.updatedAt && (
                   <ChangedElsewhere by={latest.updatedBy} what="this trip" onLoad={() => setEditing(latest)} />
@@ -259,8 +258,6 @@ export function Mileage() {
                   </Card>
                 </div>
               </>
-            ) : (
-              <ReadOnlyNotice />
             )}
 
             <Card>
