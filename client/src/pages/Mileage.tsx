@@ -1,5 +1,5 @@
-import { useState, type FormEvent } from 'react';
-import { Car, Gauge, Pencil, Plus, Route, Trash2 } from 'lucide-react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { Car, Copy, Gauge, Pencil, Plus, Route, Trash2 } from 'lucide-react';
 import {
   formatDisplayDate,
   formatGBP,
@@ -19,20 +19,34 @@ import {
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { MileageCheckAlert } from '../components/MileageCheckAlert';
 import { ExportCsvButton } from '../components/transactions';
-import { ChangedElsewhere, dateInYear, recordedBy, yearRangeHint } from '../components/FormShell';
+import { ChangedElsewhere, dateInYear, duplicateDate, recordedBy, yearRangeHint } from '../components/FormShell';
 import { NoTaxYear } from '../components/NoTaxYear';
 import { PageBody, PageHeader } from '../components/PageHeader';
 import { Alert, Button, Card, CardHeader, EmptyState, Field, IconButton, Spinner } from '../components/ui';
 import { useActiveTaxYear, useMileage, useMileageMutations } from '../lib/queries';
 
-function TripForm({ taxYear, editing, onDone }: { taxYear: TaxYear; editing: MileageTrip | null; onDone: () => void }) {
+/** Adds a trip (blank, or copied from `copyOf`) or edits one. */
+function TripForm({
+  taxYear,
+  editing,
+  copyOf,
+  onDone,
+}: {
+  taxYear: TaxYear;
+  editing: MileageTrip | null;
+  copyOf: MileageTrip | null;
+  onDone: () => void;
+}) {
   const { save } = useMileageMutations();
   const today = todayIso();
-  const [date, setDate] = useState(editing?.date ?? (isDateInTaxYear(today, taxYear) ? today : ''));
-  const [miles, setMiles] = useState(editing ? tenthsToMiles(editing.distanceTenths) : '');
-  const [vehicle, setVehicle] = useState<Vehicle>(editing?.vehicle ?? 'car');
-  const [description, setDescription] = useState(editing?.description ?? '');
-  const [notes, setNotes] = useState(editing?.notes ?? '');
+  const from = editing ?? copyOf;
+  const [date, setDate] = useState(
+    editing?.date ?? (copyOf ? duplicateDate(copyOf.date, taxYear) : isDateInTaxYear(today, taxYear) ? today : ''),
+  );
+  const [miles, setMiles] = useState(from ? tenthsToMiles(from.distanceTenths) : '');
+  const [vehicle, setVehicle] = useState<Vehicle>(from?.vehicle ?? 'car');
+  const [description, setDescription] = useState(from?.description ?? '');
+  const [notes, setNotes] = useState(from?.notes ?? '');
   const [errors, setErrors] = useState<Partial<Record<'date' | 'miles' | 'description', string>>>({});
 
   const submit = (e: FormEvent) => {
@@ -123,7 +137,7 @@ function TripForm({ taxYear, editing, onDone }: { taxYear: TaxYear; editing: Mil
         <Button type="submit" variant="primary" busy={save.isPending}>
           {editing ? 'Save changes' : 'Add trip'}
         </Button>
-        {editing && (
+        {(editing || copyOf) && (
           <Button type="button" variant="ghost" onClick={onDone}>
             Cancel
           </Button>
@@ -148,7 +162,26 @@ export function Mileage() {
   const { data, isLoading, error } = useMileage(taxYear?.id);
   const { remove } = useMileageMutations();
   const [editing, setEditing] = useState<MileageTrip | null>(null);
+  const [copyOf, setCopyOf] = useState<MileageTrip | null>(null);
   const [toDelete, setToDelete] = useState<MileageTrip | null>(null);
+  const formRef = useRef<HTMLDivElement>(null);
+
+  // Bring the form into view when a trip is picked to edit or duplicate from the list below it.
+  useEffect(() => {
+    if (editing || copyOf) formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [editing, copyOf]);
+  const startEdit = (trip: MileageTrip) => {
+    setCopyOf(null);
+    setEditing(trip);
+  };
+  const startCopy = (trip: MileageTrip) => {
+    setEditing(null);
+    setCopyOf(trip);
+  };
+  const finish = () => {
+    setEditing(null);
+    setCopyOf(null);
+  };
 
   // If someone else saves the trip being edited, offer their version rather than overwriting it.
   const latest = editing ? data?.trips.find((t) => t.id === editing.id) : undefined;
@@ -198,13 +231,29 @@ export function Mileage() {
               <ChangedElsewhere by={latest.updatedBy} onLoad={() => setEditing(latest)} />
             )}
 
-            <Card>
-              <CardHeader
-                icon={editing ? <Pencil className="size-5 text-accent-soft" /> : <Plus className="size-5 text-accent-soft" />}
-                title={editing ? 'Edit trip' : 'Add a trip'}
-              />
-              <TripForm key={editing ? `${editing.id}-${editing.updatedAt}` : 'new'} taxYear={taxYear} editing={editing} onDone={() => setEditing(null)} />
-            </Card>
+            <div ref={formRef} className="scroll-mt-24">
+              <Card>
+                <CardHeader
+                  icon={
+                    editing ? (
+                      <Pencil className="size-5 text-accent-soft" />
+                    ) : copyOf ? (
+                      <Copy className="size-5 text-accent-soft" />
+                    ) : (
+                      <Plus className="size-5 text-accent-soft" />
+                    )
+                  }
+                  title={editing ? 'Edit trip' : copyOf ? `Duplicate trip from ${formatDisplayDate(copyOf.date)}` : 'Add a trip'}
+                />
+                <TripForm
+                  key={editing ? `${editing.id}-${editing.updatedAt}` : copyOf ? `copy-${copyOf.id}` : 'new'}
+                  taxYear={taxYear}
+                  editing={editing}
+                  copyOf={copyOf}
+                  onDone={finish}
+                />
+              </Card>
+            </div>
 
             <Card>
               <CardHeader icon={<Route className="size-5 text-accent-soft" />} title="Trips" />
@@ -243,8 +292,11 @@ export function Mileage() {
                           <td className="tabular px-4 py-3 text-right text-out-soft">{formatGBP(t.claimPence)}</td>
                           <td className="px-3 py-2 sm:pr-5">
                             <div className="flex justify-end gap-0.5">
-                              <IconButton label={`Edit trip on ${formatDisplayDate(t.date)}`} onClick={() => setEditing(t)}>
+                              <IconButton label={`Edit trip on ${formatDisplayDate(t.date)}`} onClick={() => startEdit(t)}>
                                 <Pencil className="size-4" />
+                              </IconButton>
+                              <IconButton label={`Duplicate trip on ${formatDisplayDate(t.date)}`} onClick={() => startCopy(t)}>
+                                <Copy className="size-4" />
                               </IconButton>
                               <IconButton label={`Delete trip on ${formatDisplayDate(t.date)}`} tone="danger" onClick={() => setToDelete(t)}>
                                 <Trash2 className="size-4" />
@@ -285,7 +337,7 @@ export function Mileage() {
         onClose={() => setToDelete(null)}
         onConfirm={async () => {
           await remove.mutateAsync(toDelete!.id);
-          if (editing?.id === toDelete!.id) setEditing(null);
+          if (editing?.id === toDelete!.id) finish();
         }}
       >
         {toDelete && (

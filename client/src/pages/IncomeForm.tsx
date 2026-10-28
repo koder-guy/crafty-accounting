@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
-import { useNavigate, useParams } from 'react-router';
+import { useNavigate, useParams, useSearchParams } from 'react-router';
 import { isDateInTaxYear, parsePoundsToPence, penceToPounds, todayIso, type Income, type PaymentMethod } from '@crafty/shared';
 import { CategoryOptions } from '../components/CategoryOptions';
-import { BackLink, ChangedElsewhere, dateInYear, yearRangeHint } from '../components/FormShell';
+import { BackLink, ChangedElsewhere, CopiedFrom, dateInYear, duplicateDate, yearRangeHint } from '../components/FormShell';
 import { NoTaxYear } from '../components/NoTaxYear';
 import { PageBody, PageHeader } from '../components/PageHeader';
 import { DocumentField, PaymentMethodOptions } from '../components/transactions';
@@ -26,6 +26,10 @@ export function IncomeForm() {
   const id = params.id ? Number(params.id) : null;
   const navigate = useNavigate();
   const { data: existing, isLoading: loadingExisting, error: loadError, refetch: refetchExisting } = useIncome(id);
+  // Duplicating: /incoming/new?copy=<id> fills the new form from that transaction.
+  const [searchParams] = useSearchParams();
+  const copyId = id ? null : Number(searchParams.get('copy')) || null;
+  const { data: original, isLoading: loadingOriginal, error: originalError } = useIncome(copyId);
   const { data: years } = useTaxYears();
   const { taxYear: activeYear, isLoading: yearLoading } = useActiveTaxYear();
   const { data: categories = [] } = useCategories();
@@ -74,12 +78,25 @@ export function IncomeForm() {
   // Fill the form once the record (edit) or the defaults (new) are known. Only
   // once: live updates refetch the data, and that mustn't wipe what you've typed.
   useEffect(() => {
-    const key = id ? `edit-${id}` : `new-${activeYear?.id}`;
+    const key = id ? `edit-${id}` : `new-${activeYear?.id}-${copyId}`;
     if (filledFor.current === key) return;
     if (id && existing) {
       filledFor.current = key;
       fillFrom(existing);
-    } else if (!id && activeYear && incomeCategories.length) {
+    } else if (copyId && original && activeYear && incomeCategories.length) {
+      // Wait for the categories too, or the category menus can't show the copied choice.
+      // The reference and document belong to the original, so they aren't copied.
+      filledFor.current = key;
+      reset({
+        date: duplicateDate(original.date, activeYear),
+        description: original.description,
+        reference: '',
+        paymentMethod: original.paymentMethod,
+        amount: penceToPounds(original.amountPence),
+        categoryId: String(original.categoryId),
+        notes: original.notes ?? '',
+      });
+    } else if (!id && !copyId && activeYear && incomeCategories.length) {
       filledFor.current = key;
       const today = todayIso();
       reset({
@@ -93,7 +110,7 @@ export function IncomeForm() {
       });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id, existing, activeYear?.id, incomeCategories.length]);
+  }, [id, existing, copyId, original, activeYear?.id, incomeCategories.length]);
 
   const onSubmit = handleSubmit((values) => {
     if (!taxYear) return;
@@ -128,10 +145,10 @@ export function IncomeForm() {
     );
   });
 
-  const title = id ? 'Edit incoming' : 'Add incoming';
-  const backTo = id ? `/incoming/${id}` : '/incoming';
+  const title = id ? 'Edit incoming' : copyId ? 'Duplicate incoming' : 'Add incoming';
+  const backTo = id ? `/incoming/${id}` : copyId ? `/incoming/${copyId}` : '/incoming';
 
-  if (yearLoading || (id && loadingExisting)) {
+  if (yearLoading || (id && loadingExisting) || (copyId && loadingOriginal)) {
     return (
       <>
         <PageHeader title={title} />
@@ -139,12 +156,12 @@ export function IncomeForm() {
       </>
     );
   }
-  if (loadError) {
+  if (loadError || originalError) {
     return (
       <>
         <PageHeader title={title} />
         <PageBody>
-          <Alert>{loadError.message}</Alert>
+          <Alert>{(loadError ?? originalError)!.message}</Alert>
         </PageBody>
       </>
     );
@@ -165,6 +182,11 @@ export function IncomeForm() {
       <PageHeader title={title} />
       <PageBody>
         <BackLink to={backTo}>Back</BackLink>
+        {original && (
+          <div className="max-w-3xl">
+            <CopiedFrom what={original.description} date={original.date} notCopied="The reference and any attached document aren't copied." />
+          </div>
+        )}
         {existing && loaded && existing.updatedAt !== loaded.updatedAt && (
           <div className="max-w-3xl">
             <ChangedElsewhere

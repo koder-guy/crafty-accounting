@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { ArrowLeft, RefreshCw } from 'lucide-react';
 import { Link } from 'react-router';
-import { displayTaxYear, formatDisplayDate, isDateInTaxYear, type TaxYear } from '@crafty/shared';
+import { displayTaxYear, formatDisplayDate, isDateInTaxYear, todayIso, type TaxYear } from '@crafty/shared';
 import { Alert, Button } from './ui';
 
 export function BackLink({ to, children }: { to: string; children: ReactNode }) {
@@ -46,3 +46,22 @@ const timestamp = (iso: string) =>
 
 /** "Jo, 3 Nov 2026, 14:05" for the Added / Last changed rows; null for records made before sign-ins. */
 export const recordedBy = (name: string | null, at: string) => (name ? `${name}, ${timestamp(at)}` : null);
+
+/**
+ * The date for a duplicated transaction or trip: today if it's in the tax
+ * year being added to, otherwise the original date if that is, otherwise blank.
+ */
+export function duplicateDate(originalDate: string, taxYear: TaxYear): string {
+  const today = todayIso();
+  if (isDateInTaxYear(today, taxYear)) return today;
+  return isDateInTaxYear(originalDate, taxYear) ? originalDate : '';
+}
+
+/** Shown on an Add form that was filled from an existing transaction. */
+export function CopiedFrom({ what, date, notCopied }: { what: string; date: string; notCopied: string }) {
+  return (
+    <Alert tone="success">
+      Copied from <strong>{what}</strong> on {formatDisplayDate(date)}. Check the date and amounts, then add it. {notCopied}
+    </Alert>
+  );
+}

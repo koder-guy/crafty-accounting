@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
-import { Download, Pencil, Trash2 } from 'lucide-react';
+import { Copy, Download, Pencil, Trash2 } from 'lucide-react';
 import { displayTaxYear, formatDisplayDate, formatGBP } from '@crafty/shared';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { BackLink, recordedBy } from '../components/FormShell';
@@ -29,6 +29,10 @@ export function IncomeView() {
               <ButtonLink to={`/incoming/${id}/edit`}>
                 <Pencil className="size-4" aria-hidden />
                 Edit
+              </ButtonLink>
+              <ButtonLink to={`/incoming/new?copy=${id}`} title="Start a new transaction with the same details">
+                <Copy className="size-4" aria-hidden />
+                Duplicate
               </ButtonLink>
               <Button variant="ghost" className="hover:text-out-soft!" onClick={() => setConfirming(true)}>
                 <Trash2 className="size-4" aria-hidden />

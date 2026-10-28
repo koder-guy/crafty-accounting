@@ -54,4 +54,4 @@ export PATH="/opt/homebrew/opt/node@22/bin:$PATH"
 
 ## Open ideas
 
-MTD stage 2 (submitting to HMRC), locking submitted quarters, change history, duplicate and recurring transactions, bank statement CSV/OFX import with matching, card reader and marketplace imports (SumUp, Square, Etsy), profit per craft fair, phone camera capture for receipts, use-of-home flat rate, VAT threshold warning, deadline reminders, read-only accountant access, Scottish tax rates, code splitting.
+MTD stage 2 (submitting to HMRC), locking submitted quarters, change history, recurring transactions, bank statement CSV/OFX import with matching, card reader and marketplace imports (SumUp, Square, Etsy), profit per craft fair, phone camera capture for receipts, use-of-home flat rate, VAT threshold warning, deadline reminders, read-only accountant access, Scottish tax rates, code splitting.

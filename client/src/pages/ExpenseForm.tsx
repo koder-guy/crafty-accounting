@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useFieldArray, useForm, useWatch } from 'react-hook-form';
-import { useNavigate, useParams } from 'react-router';
+import { useNavigate, useParams, useSearchParams } from 'react-router';
 import { Plus, Trash2 } from 'lucide-react';
 import {
   formatGBP,
@@ -12,7 +12,7 @@ import {
   type PaymentMethod,
 } from '@crafty/shared';
 import { CategoryOptions } from '../components/CategoryOptions';
-import { BackLink, ChangedElsewhere, dateInYear, yearRangeHint } from '../components/FormShell';
+import { BackLink, ChangedElsewhere, CopiedFrom, dateInYear, duplicateDate, yearRangeHint } from '../components/FormShell';
 import { NoTaxYear } from '../components/NoTaxYear';
 import { PageBody, PageHeader } from '../components/PageHeader';
 import { DocumentField, PaymentMethodOptions } from '../components/transactions';
@@ -53,6 +53,10 @@ export function ExpenseForm() {
   const id = params.id ? Number(params.id) : null;
   const navigate = useNavigate();
   const { data: existing, isLoading: loadingExisting, error: loadError, refetch: refetchExisting } = useExpense(id);
+  // Duplicating: /outgoing/new?copy=<id> fills the new form from that transaction.
+  const [searchParams] = useSearchParams();
+  const copyId = id ? null : Number(searchParams.get('copy')) || null;
+  const { data: original, isLoading: loadingOriginal, error: originalError } = useExpense(copyId);
   const { data: years } = useTaxYears();
   const { taxYear: activeYear, isLoading: yearLoading } = useActiveTaxYear();
   const { data: categories = [] } = useCategories();
@@ -114,12 +118,32 @@ export function ExpenseForm() {
 
   // Fill the form once: live updates refetch the data, and that mustn't wipe what you've typed.
   useEffect(() => {
-    const key = id ? `edit-${id}` : `new-${activeYear?.id}`;
+    const key = id ? `edit-${id}` : `new-${activeYear?.id}-${copyId}`;
     if (filledFor.current === key) return;
     if (id && existing) {
       filledFor.current = key;
       fillFrom(existing);
-    } else if (!id && activeYear && expenseCategories.length) {
+    } else if (copyId && original && activeYear && expenseCategories.length) {
+      // Wait for the categories too, or the category menus can't show the copied choice.
+      // Invoice and order numbers and the document belong to the original, so they aren't copied.
+      filledFor.current = key;
+      reset({
+        date: duplicateDate(original.date, activeYear),
+        payee: original.payee,
+        invoiceNumber: '',
+        orderNumber: '',
+        description: original.description ?? '',
+        paymentMethod: original.paymentMethod,
+        total: penceToPounds(original.totalPence),
+        notes: original.notes ?? '',
+        lineItems: original.lineItems.map((li) => ({
+          description: li.description,
+          amount: penceToPounds(li.amountPence),
+          categoryId: String(li.categoryId),
+          disallowable: li.disallowable,
+        })),
+      });
+    } else if (!id && !copyId && activeYear && expenseCategories.length) {
       filledFor.current = key;
       const today = todayIso();
       reset({
@@ -135,7 +159,7 @@ export function ExpenseForm() {
       });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id, existing, activeYear?.id, expenseCategories.length]);
+  }, [id, existing, copyId, original, activeYear?.id, expenseCategories.length]);
 
   const watchedLines = useWatch({ control, name: 'lineItems' });
   const watchedTotal = useWatch({ control, name: 'total' });
@@ -187,10 +211,10 @@ export function ExpenseForm() {
     );
   });
 
-  const title = id ? 'Edit outgoing' : 'Add outgoing';
-  const backTo = id ? `/outgoing/${id}` : '/outgoing';
+  const title = id ? 'Edit outgoing' : copyId ? 'Duplicate outgoing' : 'Add outgoing';
+  const backTo = id ? `/outgoing/${id}` : copyId ? `/outgoing/${copyId}` : '/outgoing';
 
-  if (yearLoading || (id && loadingExisting)) {
+  if (yearLoading || (id && loadingExisting) || (copyId && loadingOriginal)) {
     return (
       <>
         <PageHeader title={title} />
@@ -198,12 +222,12 @@ export function ExpenseForm() {
       </>
     );
   }
-  if (loadError) {
+  if (loadError || originalError) {
     return (
       <>
         <PageHeader title={title} />
         <PageBody>
-          <Alert>{loadError.message}</Alert>
+          <Alert>{(loadError ?? originalError)!.message}</Alert>
         </PageBody>
       </>
     );
@@ -224,6 +248,13 @@ export function ExpenseForm() {
       <PageHeader title={title} />
       <PageBody>
         <BackLink to={backTo}>Back</BackLink>
+        {original && (
+          <CopiedFrom
+            what={original.payee}
+            date={original.date}
+            notCopied="The invoice and order numbers and any attached document aren't copied."
+          />
+        )}
         {existing && loaded && existing.updatedAt !== loaded.updatedAt && (
           <ChangedElsewhere
             by={existing.updatedBy}
