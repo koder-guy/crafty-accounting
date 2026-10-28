@@ -614,6 +614,25 @@ describe('mileage', () => {
     expect(items).toMatchObject([{ kind: 'mileage', amountPence: 1350, description: 'Home to Abingdon Market and back' }]);
   });
 
+  it('warns when outgoing in the same category may claim the car twice', async () => {
+    const yearId = await createYear();
+    const fuel = (disallowable = false) =>
+      expense(yearId, {
+        payee: 'Shell',
+        totalPence: 4000,
+        lineItems: [{ description: 'Fuel', amountPence: 4000, categoryId: cat('carVanTravelExpenses'), disallowable }],
+      });
+    // Fuel alone is fine: no mileage, so the actual-costs method is being used.
+    await agent.post('/api/expenses').send(fuel()).expect(201);
+    await agent.post('/api/expenses').send(fuel(true)).expect(201);
+    expect((await agent.get('/api/mileage').query({ taxYearId: yearId })).body.check).toBeNull();
+
+    await agent.post('/api/mileage').send(trip(yearId)).expect(201);
+    const check = { mileagePence: 1350, outgoingPence: 4000, outgoingCount: 1, categoryId: cat('carVanTravelExpenses') };
+    expect((await agent.get('/api/mileage').query({ taxYearId: yearId })).body.check).toEqual(check);
+    expect((await agent.get('/api/reports/year-end').query({ taxYearId: yearId })).body.mileageCheck).toEqual(check);
+  });
+
   it('is deleted with its tax year', async () => {
     const yearId = await createYear();
     await agent.post('/api/mileage').send(trip(yearId)).expect(201);

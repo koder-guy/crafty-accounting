@@ -22,7 +22,7 @@ import {
 } from '@crafty/shared';
 import type { AppContext } from '../context';
 import { HttpError, parseWith } from '../http';
-import { getCategory, getTaxYear, listCategories, mileageCategoryId, mileageClaimLines, yearEntries, type Db } from '../repo';
+import { getCategory, getTaxYear, listCategories, mileageCategoryId, mileageCheck, mileageClaimLines, yearEntries, type Db } from '../repo';
 
 interface Entry {
   categoryId: number;
@@ -126,6 +126,7 @@ export function reportsRouter(ctx: AppContext): Router {
 
     const response: YearEndSummaryResponse = {
       taxYear,
+      mileageCheck: mileageCheck(db, taxYearId),
       filingDeadline: selfAssessmentDeadline(startYearFromLabel(taxYear.label)!),
       summary: buildSelfAssessmentSummary(buildMtdPeriodSummary(incomes, lines)),
     };

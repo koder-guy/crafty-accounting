@@ -156,6 +156,7 @@ export interface MtdQuartersResponse {
 
 export interface YearEndSummaryResponse {
   taxYear: TaxYear;
+  mileageCheck: MileageCheck | null;
   /** Online filing and payment deadline (31 January after the tax year). */
   filingDeadline: string;
   summary: SelfAssessmentSummary;
@@ -255,6 +256,23 @@ export interface MileageResponse {
     /** Car and van miles, which count towards the 10,000-mile threshold. */
     carDistanceTenths: number;
   };
+  /** Outgoing in the same category as mileage, which may be a double claim (see MileageCheck). */
+  check: MileageCheck | null;
+}
+
+/**
+ * Set when a tax year has both mileage claims and outgoing in "Car, van and
+ * travel expenses". HMRC doesn't allow the mileage rate and actual running
+ * costs (fuel, insurance, repairs) for the same vehicle, though parking,
+ * tolls and fares are fine, so it's a prompt to check rather than an error.
+ */
+export interface MileageCheck {
+  mileagePence: number;
+  outgoingPence: number;
+  /** Outgoing line items in the category (allowable ones only). */
+  outgoingCount: number;
+  /** The standard category, for linking to the outgoing list. */
+  categoryId: number;
 }
 
 export interface TaxEstimateResponse {

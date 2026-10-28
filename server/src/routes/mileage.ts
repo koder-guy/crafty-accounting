@@ -11,7 +11,7 @@ import {
 import type { AppContext } from '../context';
 import { toCsv } from '../csv';
 import { HttpError, parseId, parseWith } from '../http';
-import { getMileageTrip, getTaxYear, listMileage } from '../repo';
+import { getMileageTrip, getTaxYear, listMileage, mileageCheck } from '../repo';
 import { checkTaxYearAndDate, checkUnchanged } from './transactions';
 
 const querySchema = z.object({ taxYearId: z.coerce.number().int().positive() });
@@ -33,6 +33,7 @@ export function mileageRouter(ctx: AppContext): Router {
           (t) => t.distanceTenths,
         ),
       },
+      check: mileageCheck(ctx.db, taxYearId),
     };
     res.json(response);
   });

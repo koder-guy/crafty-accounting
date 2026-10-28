@@ -1,5 +1,15 @@
 // Data access: SQL rows in, API shapes (camelCase, shared types) out.
-import type { Category, Expense, ExpenseWithLineItems, Income, LineItem, MileageTrip, TaxYear, TransactionFilters } from '@crafty/shared';
+import type {
+  Category,
+  Expense,
+  ExpenseWithLineItems,
+  Income,
+  LineItem,
+  MileageCheck,
+  MileageTrip,
+  TaxYear,
+  TransactionFilters,
+} from '@crafty/shared';
 import { MILEAGE_HMRC_CODE, mileageClaims, taxYearStartYearForDate, todayIso } from '@crafty/shared';
 import type { Db } from './db';
 
@@ -405,4 +415,25 @@ export function yearEntries(db: Db, taxYearId: number): { incomes: IncomeEntry[]
     lines.push({ date: claim.date, amountPence: claim.amountPence, disallowable: false, categoryId: claim.categoryId, hmrcCode: claim.hmrcCode });
   }
   return { incomes, lines };
+}
+
+/**
+ * Flags a possible double claim: mileage at HMRC rates alongside allowable
+ * outgoing in the same category (including custom categories mapped to it).
+ * The app can't tell fuel from parking, so this is only ever a warning.
+ */
+export function mileageCheck(db: Db, taxYearId: number): MileageCheck | null {
+  const mileagePence = mileageClaimLines(db, [taxYearId]).reduce((acc, c) => acc + c.amountPence, 0);
+  if (mileagePence === 0) return null;
+  const outgoing = db
+    .prepare(
+      `SELECT COALESCE(SUM(li.amount_pence), 0) AS pence, COUNT(*) AS count
+       FROM expense_line_items li
+       JOIN expenses e ON e.id = li.expense_id
+       JOIN categories c ON c.id = li.category_id
+       WHERE e.tax_year_id = ? AND c.hmrc_code = ? AND li.disallowable = 0`,
+    )
+    .get(taxYearId, MILEAGE_HMRC_CODE) as { pence: number; count: number };
+  if (outgoing.count === 0) return null;
+  return { mileagePence, outgoingPence: outgoing.pence, outgoingCount: outgoing.count, categoryId: mileageCategoryId(db) };
 }

@@ -11,6 +11,7 @@ import {
   type Sa103sBox,
   type YearEndSummaryResponse,
 } from '@crafty/shared';
+import { MileageCheckAlert } from '../../components/MileageCheckAlert';
 import { NoTaxYear } from '../../components/NoTaxYear';
 import { SectionHeading } from '../../components/SectionLayout';
 import { Alert, Button, Card, CardHeader, Spinner } from '../../components/ui';
@@ -206,6 +207,8 @@ export function YearEndSummary() {
                 Your turnover is £90,000 or more, so you'll need the full self-employment pages (SA103F) rather than the short ones.
               </Alert>
             )}
+
+            {data.mileageCheck && <MileageCheckAlert check={data.mileageCheck} />}
 
             <Card className="print:break-inside-avoid">
               <CardHeader icon={<FileText className="size-5 text-accent-soft" />} title="Self-employment (short) – SA103S" />

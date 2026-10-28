@@ -17,6 +17,7 @@ import {
   type Vehicle,
 } from '@crafty/shared';
 import { ConfirmDialog } from '../components/ConfirmDialog';
+import { MileageCheckAlert } from '../components/MileageCheckAlert';
 import { ExportCsvButton } from '../components/transactions';
 import { ChangedElsewhere, dateInYear, recordedBy, yearRangeHint } from '../components/FormShell';
 import { NoTaxYear } from '../components/NoTaxYear';
@@ -184,10 +185,14 @@ export function Mileage() {
               />
             </div>
 
-            <Alert tone="warning">
-              The mileage rate covers all the running costs of the vehicle (fuel, insurance, servicing, repairs). Don't also record
-              those costs as outgoing for the same vehicle. Parking, tolls and train fares can still go in Outgoing.
-            </Alert>
+            {data.check ? (
+              <MileageCheckAlert check={data.check} />
+            ) : (
+              <Alert tone="warning">
+                The mileage rate covers all the running costs of the vehicle (fuel, insurance, servicing, repairs). Don't also record
+                those costs as outgoing for the same vehicle. Parking, tolls and train fares can still go in Outgoing.
+              </Alert>
+            )}
 
             {editing && latest && latest.updatedAt !== editing.updatedAt && (
               <ChangedElsewhere by={latest.updatedBy} onLoad={() => setEditing(latest)} />
