@@ -60,7 +60,7 @@ function CategoryForm({
             id="category-name"
             className="field"
             maxLength={60}
-            placeholder="Printer filament"
+            placeholder="Packaging"
             value={name}
             onChange={(e) => setName(e.target.value)}
           />
@@ -113,7 +113,7 @@ export function CustomCategories() {
     <div className="space-y-6">
       <SettingsHeading
         title="Custom categories"
-        description="Create your own categories, like “Printer filament”. Each one maps to a standard MTD category, so your MTD figures stay the same."
+        description="Create your own categories, like “Packaging”. Each one maps to a standard MTD category, so your MTD figures stay the same."
       />
 
       {isLoading ? (
