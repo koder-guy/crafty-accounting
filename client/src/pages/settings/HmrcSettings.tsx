@@ -51,7 +51,7 @@ function NinoForm({ status, canEdit }: { status: HmrcStatus; canEdit: boolean })
 
   if (!canEdit) {
     return (
-      <dl className="grid gap-3 text-sm sm:grid-cols-[200px_1fr]">
+      <dl className="grid gap-x-4 gap-y-3 text-sm sm:grid-cols-[160px_1fr]">
         <dt className="text-muted">National Insurance number</dt>
         <dd>{status.nino ? spacedNino(status.nino) : <span className="text-muted">Not set</span>}</dd>
       </dl>
@@ -97,16 +97,22 @@ function BusinessRow({ status, canEdit }: { status: HmrcStatus; canEdit: boolean
     <>
       <dt className="text-muted">Business</dt>
       <dd className="space-y-3">
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
           {status.business ? (
             <span>{businessLabel(status.business)}</span>
           ) : (
             <span className="text-muted">Not found yet</span>
           )}
           {canEdit && (
-            <Button onClick={() => findBusiness.mutate()} busy={findBusiness.isPending} disabled={!status.nino}>
-              {status.business ? 'Check again' : 'Find my business'}
-            </Button>
+            // A link-style button, so the business lines up with its label.
+            <button
+              type="button"
+              onClick={() => findBusiness.mutate()}
+              disabled={!status.nino || findBusiness.isPending}
+              className="text-accent-soft hover:underline disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {findBusiness.isPending ? 'Asking HMRC…' : status.business ? 'Check again' : 'Find my business'}
+            </button>
           )}
         </div>
         {!status.nino && canEdit && <p className="text-xs text-muted">Save the National Insurance number first.</p>}
@@ -246,7 +252,7 @@ export function HmrcSettings() {
                     <SetupSteps status={status} />
                   ) : status.connection ? (
                     <>
-                      <dl className="grid gap-3 text-sm sm:grid-cols-[200px_1fr]">
+                      <dl className="grid gap-x-4 gap-y-3 text-sm sm:grid-cols-[160px_1fr]">
                         <dt className="text-muted">Status</dt>
                         <dd>
                           <Badge tone="ok">Connected</Badge>
