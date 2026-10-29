@@ -15,6 +15,7 @@ import { isAutoBackupDue, nextAutoBackup, runAutoBackup } from './autoBackup';
 import { loadConfig } from './config';
 import { createContext, type AppContext } from './context';
 import { documentNameProblem } from './documents';
+import { fraudPreventionHeaders, parseBrowserData, publicIp } from './fraudPrevention';
 import { hmrcAccessToken } from './hmrc';
 import { clearData, generateSampleData } from './sampleData';
 
@@ -1314,6 +1315,9 @@ describe('HMRC connection', () => {
   let tokenRequests: URLSearchParams[];
   let tokenReply: () => { status: number; body: unknown };
   let issued: number;
+  /** Calls to HMRC's APIs (anything but the token endpoint), and their answers by path. */
+  let apiRequests: { url: URL; headers: Record<string, string> }[];
+  let apiReplies: Record<string, { status: number; body: unknown }>;
 
   beforeEach(() => {
     ctx.config.hmrc = { environment: 'sandbox', clientId: 'test-client', clientSecret: 'test-secret', redirectUri: null };
@@ -1323,11 +1327,23 @@ describe('HMRC connection', () => {
       issued += 1;
       return { status: 200, body: { access_token: `access-${issued}`, refresh_token: `refresh-${issued}`, expires_in: 14400, scope: 'read:self-assessment write:self-assessment' } };
     };
+    apiRequests = [];
+    apiReplies = {};
+    const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
     ctx.fetch = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
-      expect(String(url)).toBe(TOKEN_URL);
-      tokenRequests.push(new URLSearchParams(String(init?.body)));
-      const { status, body } = tokenReply();
-      return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
+      if (String(url) === TOKEN_URL) {
+        const fields = new URLSearchParams(String(init?.body));
+        if (fields.get('grant_type') === 'client_credentials') return json(200, { access_token: 'app-token', expires_in: 14400 });
+        tokenRequests.push(fields);
+        const { status, body } = tokenReply();
+        return json(status, body);
+      }
+      const parsed = new URL(String(url));
+      expect(parsed.origin).toBe('https://test-api.service.hmrc.gov.uk');
+      apiRequests.push({ url: parsed, headers: init?.headers as Record<string, string> });
+      const reply = apiReplies[parsed.pathname];
+      if (!reply) throw new Error(`Unexpected HMRC call to ${parsed.pathname}`);
+      return json(reply.status, reply.body);
     }) as typeof fetch;
   });
 
@@ -1341,7 +1357,7 @@ describe('HMRC connection', () => {
   it('explains what to set up before connecting', async () => {
     ctx.config.hmrc = { environment: 'sandbox', clientId: null, clientSecret: null, redirectUri: null };
     const status = (await agent.get('/api/hmrc').expect(200)).body;
-    expect(status).toEqual({ environment: 'sandbox', configured: false, redirectUri: expect.stringMatching(/^http:\/\/127\.0\.0\.1:\d+\/api\/hmrc\/callback$/), nino: null, connection: null });
+    expect(status).toEqual({ environment: 'sandbox', configured: false, redirectUri: expect.stringMatching(/^http:\/\/127\.0\.0\.1:\d+\/api\/hmrc\/callback$/), nino: null, business: null, connection: null });
     expect((await agent.post('/api/hmrc/connect').expect(400)).body.error).toMatch(/HMRC_CLIENT_ID/);
 
     ctx.config.hmrc.redirectUri = 'https://books.example.com/api/hmrc/callback';
@@ -1447,6 +1463,200 @@ describe('HMRC connection', () => {
     await agent.post('/api/reset').send({ confirm: 'RESET' }).expect(200);
     expect((await agent.get('/api/hmrc')).body).toMatchObject({ nino: 'AB123456C', connection: { connectedBy: NAME } });
     await expect(hmrcAccessToken(ctx)).resolves.toBe('access-1');
+  });
+
+  const BROWSER =
+    'device-id=beec798b-b366-47fa-b1f8-92cede14a1ce&user-agent=Mozilla%2F5.0+Test&' +
+    'screens=width%3D1920%26height%3D1080%26scaling-factor%3D2%26colour-depth%3D24&window-size=width%3D1256%26height%3D803&timezone=UTC%2B01%3A00';
+  const NINO_PATH = '/individuals/business/details/AB123456C/list';
+  const OBLIGATIONS_PATH = '/obligations/details/AB123456C/income-and-expenditure';
+
+  async function connectWithBusiness() {
+    await agent.put('/api/hmrc/nino').send({ nino: 'AB123456C' }).expect(200);
+    await connect();
+    apiReplies[NINO_PATH] = {
+      status: 200,
+      body: {
+        listOfBusinesses: [
+          { typeOfBusiness: 'self-employment', businessId: 'XAIS12345678910', tradingName: 'Bead Things' },
+          { typeOfBusiness: 'foreign-property', businessId: 'XAIS23456789101' },
+        ],
+      },
+    };
+    await agent.post('/api/hmrc/businesses/find').set('X-Fraud-Prevention', BROWSER).expect(200);
+  }
+
+  it('builds the fraud prevention headers without guessing', () => {
+    expect(publicIp('192.168.1.20')).toBeNull();
+    expect(publicIp('::ffff:10.0.0.4')).toBeNull();
+    expect(publicIp('100.70.1.1')).toBeNull();
+    expect(publicIp('::1')).toBeNull();
+    expect(publicIp('::ffff:81.2.69.160')).toBe('81.2.69.160');
+    expect(publicIp('2a00:1450:4009::1')).toBe('2a00:1450:4009::1');
+
+    const browser = parseBrowserData(BROWSER);
+    expect(browser).toEqual({
+      deviceId: 'beec798b-b366-47fa-b1f8-92cede14a1ce',
+      userAgent: 'Mozilla/5.0 Test',
+      screens: 'width=1920&height=1080&scaling-factor=2&colour-depth=24',
+      windowSize: 'width=1256&height=803',
+      timezone: 'UTC+01:00',
+    });
+    expect(parseBrowserData('device-id=nope&timezone=BST&screens=width%3Dx')).toEqual({
+      deviceId: null,
+      userAgent: null,
+      screens: null,
+      windowSize: null,
+      timezone: null,
+    });
+
+    const receivedAt = new Date('2026-10-29T10:00:00.123Z');
+    const common = { browser, clientPort: 51234, receivedAt, userName: 'Jo Bloggs' };
+    const online = fraudPreventionHeaders({ ...common, clientIp: '81.2.69.160', vendorIp: '203.0.113.6' });
+    expect(online).toMatchObject({
+      'Gov-Client-Connection-Method': 'WEB_APP_VIA_SERVER',
+      'Gov-Client-Device-ID': 'beec798b-b366-47fa-b1f8-92cede14a1ce',
+      'Gov-Client-Timezone': 'UTC+01:00',
+      'Gov-Client-User-IDs': 'crafty-accounting=Jo%20Bloggs',
+      'Gov-Client-Public-IP': '81.2.69.160',
+      'Gov-Client-Public-IP-Timestamp': '2026-10-29T10:00:00.123Z',
+      'Gov-Client-Public-Port': '51234',
+      'Gov-Vendor-Public-IP': '203.0.113.6',
+      'Gov-Vendor-Forwarded': 'by=203.0.113.6&for=81.2.69.160',
+      'Gov-Vendor-Product-Name': 'Crafty%20Accounting',
+      'Gov-Vendor-Version': expect.stringMatching(/^crafty-accounting=\d+\.\d+\.\d+$/),
+    });
+    expect(online).not.toHaveProperty('Gov-Client-Multi-Factor');
+
+    // On a home network nothing public is known, so nothing is made up.
+    const home = fraudPreventionHeaders({ ...common, clientIp: '192.168.1.20', vendorIp: null });
+    for (const header of ['Gov-Client-Public-IP', 'Gov-Client-Public-IP-Timestamp', 'Gov-Client-Public-Port', 'Gov-Vendor-Public-IP', 'Gov-Vendor-Forwarded']) {
+      expect(home).not.toHaveProperty(header);
+    }
+    expect(home['Gov-Client-Screens']).toBe('width=1920&height=1080&scaling-factor=2&colour-depth=24');
+  });
+
+  it('finds the self-employment business at HMRC, with fraud prevention headers', async () => {
+    await agent.post('/api/hmrc/businesses/find').expect(400);
+    await connectWithBusiness();
+    expect((await agent.get('/api/hmrc')).body.business).toEqual({ businessId: 'XAIS12345678910', tradingName: 'Bead Things' });
+
+    const call = apiRequests[0];
+    expect(call.url.pathname).toBe(NINO_PATH);
+    expect(call.headers).toMatchObject({
+      Accept: 'application/vnd.hmrc.2.0+json',
+      Authorization: 'Bearer access-1',
+      'Gov-Client-Connection-Method': 'WEB_APP_VIA_SERVER',
+      'Gov-Client-Device-ID': 'beec798b-b366-47fa-b1f8-92cede14a1ce',
+      'Gov-Client-Browser-JS-User-Agent': 'Mozilla/5.0 Test',
+      'Gov-Client-User-IDs': 'crafty-accounting=Admin',
+    });
+    // Tests connect from 127.0.0.1, which isn't a public address.
+    expect(call.headers).not.toHaveProperty('Gov-Client-Public-IP');
+
+    // Several businesses: none is picked, and one can be chosen.
+    apiReplies[NINO_PATH] = {
+      status: 200,
+      body: {
+        listOfBusinesses: [
+          { typeOfBusiness: 'self-employment', businessId: 'XAIS00000000001', tradingName: 'Beads' },
+          { typeOfBusiness: 'self-employment', businessId: 'XAIS00000000002' },
+        ],
+      },
+    };
+    await agent.put('/api/hmrc/nino').send({ nino: 'AB123456C' }).expect(200);
+    expect((await agent.get('/api/hmrc')).body.business).toMatchObject({ businessId: 'XAIS12345678910' });
+    expect((await agent.post('/api/hmrc/businesses/find').expect(200)).body.businesses).toHaveLength(2);
+    expect((await agent.get('/api/hmrc')).body.business).toMatchObject({ businessId: 'XAIS12345678910' });
+    await agent.put('/api/hmrc/business').send({ businessId: 'nonsense', tradingName: null }).expect(400);
+    await agent.put('/api/hmrc/business').send({ businessId: 'XAIS00000000002', tradingName: null }).expect(200);
+    expect((await agent.get('/api/hmrc')).body.business).toEqual({ businessId: 'XAIS00000000002', tradingName: null });
+
+    // A different taxpayer forgets the business.
+    await agent.put('/api/hmrc/nino').send({ nino: 'CE123456D' }).expect(200);
+    expect((await agent.get('/api/hmrc')).body.business).toBeNull();
+
+    // No businesses at all.
+    apiReplies['/individuals/business/details/CE123456D/list'] = { status: 404, body: { code: 'MATCHING_RESOURCE_NOT_FOUND', message: 'Matching resource not found' } };
+    expect((await agent.post('/api/hmrc/businesses/find').expect(200)).body.businesses).toEqual([]);
+  });
+
+  it('reads HMRC’s obligations for the tax year', async () => {
+    const taxYearId = await createYear(2026);
+    await agent.get('/api/hmrc/obligations').query({ taxYearId }).expect(400);
+    await connectWithBusiness();
+    apiReplies[OBLIGATIONS_PATH] = {
+      status: 200,
+      body: {
+        obligations: [
+          {
+            typeOfBusiness: 'self-employment',
+            businessId: 'XAIS12345678910',
+            obligationDetails: [
+              { periodStartDate: '2026-04-06', periodEndDate: '2026-10-05', dueDate: '2026-11-07', status: 'open' },
+              { periodStartDate: '2026-04-06', periodEndDate: '2026-07-05', dueDate: '2026-08-07', receivedDate: '2026-08-01', status: 'fulfilled' },
+            ],
+          },
+          { typeOfBusiness: 'self-employment', businessId: 'XAIS99999999999', obligationDetails: [{ periodStartDate: '2026-04-06', periodEndDate: '2026-07-05', dueDate: '2026-08-07', status: 'open' }] },
+        ],
+      },
+    };
+    const res = await agent.get('/api/hmrc/obligations').query({ taxYearId }).set('X-Fraud-Prevention', BROWSER).expect(200);
+    expect(res.body).toEqual([
+      { periodStartDate: '2026-04-06', periodEndDate: '2026-07-05', dueDate: '2026-08-07', status: 'fulfilled', receivedDate: '2026-08-01' },
+      { periodStartDate: '2026-04-06', periodEndDate: '2026-10-05', dueDate: '2026-11-07', status: 'open', receivedDate: null },
+    ]);
+    const call = apiRequests.at(-1)!;
+    expect(call.headers.Accept).toBe('application/vnd.hmrc.3.0+json');
+    expect(Object.fromEntries(call.url.searchParams)).toEqual({
+      typeOfBusiness: 'self-employment',
+      businessId: 'XAIS12345678910',
+      fromDate: '2026-04-06',
+      toDate: '2027-04-05',
+    });
+
+    // Read-only people can look too.
+    const viewer = await addPerson('Viewer', 'viewer-password', 'viewer');
+    await viewer.get('/api/hmrc/obligations').query({ taxYearId }).expect(200);
+
+    apiReplies[OBLIGATIONS_PATH] = { status: 404, body: { code: 'NO_OBLIGATIONS_FOUND', message: 'No obligations found' } };
+    expect((await agent.get('/api/hmrc/obligations').query({ taxYearId }).expect(200)).body).toEqual([]);
+
+    apiReplies[OBLIGATIONS_PATH] = { status: 422, body: { code: 'RULE_INSOLVENT_TRADER', message: 'The remote endpoint has indicated that the Trader is insolvent' } };
+    expect((await agent.get('/api/hmrc/obligations').query({ taxYearId }).expect(502)).body.error).toBe(
+      'HMRC: The remote endpoint has indicated that the Trader is insolvent',
+    );
+
+    apiReplies[OBLIGATIONS_PATH] = { status: 403, body: { code: 'CLIENT_OR_AGENT_NOT_AUTHORISED', message: 'nope' } };
+    expect((await agent.get('/api/hmrc/obligations').query({ taxYearId }).expect(403)).body.error).toMatch(/can’t act for this National Insurance number/);
+
+    // A revoked sign-in is forgotten, without signing the person out of the app.
+    apiReplies[OBLIGATIONS_PATH] = { status: 401, body: { code: 'INVALID_CREDENTIALS', message: 'Invalid Authentication information provided' } };
+    expect((await agent.get('/api/hmrc/obligations').query({ taxYearId }).expect(400)).body.error).toMatch(/Connect to HMRC again/);
+    expect((await agent.get('/api/hmrc').expect(200)).body.connection).toBeNull();
+  });
+
+  it('checks the fraud prevention headers with HMRC’s sandbox test API', async () => {
+    apiReplies['/test/fraud-prevention-headers/validate'] = {
+      status: 200,
+      body: {
+        specVersion: '3.1',
+        code: 'INVALID_HEADERS',
+        message: 'At least 1 header is invalid',
+        errors: [{ code: 'MISSING_HEADER', message: 'Header required', headers: ['gov-client-public-ip'] }],
+      },
+    };
+    const res = await agent.get('/api/hmrc/fraud-headers/check').set('X-Fraud-Prevention', BROWSER).expect(200);
+    expect(res.body).toEqual({
+      code: 'INVALID_HEADERS',
+      message: 'At least 1 header is invalid',
+      errors: [{ code: 'MISSING_HEADER', message: 'Header required', headers: ['gov-client-public-ip'] }],
+      warnings: [],
+    });
+    expect(apiRequests[0].headers).toMatchObject({ Authorization: 'Bearer app-token', 'Gov-Client-Timezone': 'UTC+01:00' });
+
+    ctx.config.hmrc.environment = 'production';
+    await agent.get('/api/hmrc/fraud-headers/check').expect(400);
   });
 
   it('upgrades a backup made before the HMRC connection', async () => {

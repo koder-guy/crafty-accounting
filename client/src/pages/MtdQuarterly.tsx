@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { CalendarCheck, FileDown, FileSpreadsheet, Info } from 'lucide-react';
+import { Link } from 'react-router';
+import { CalendarCheck, FileDown, FileSpreadsheet, Info, Landmark } from 'lucide-react';
 import {
   formatDisplayDate,
   formatGBP,
@@ -7,6 +8,7 @@ import {
   mtdQuarterStatus,
   todayIso,
   type Category,
+  type HmrcObligation,
   type MtdPeriodSummary,
   type MtdQuarterStatus,
   type MtdQuarterSummary,
@@ -14,7 +16,15 @@ import {
 import { NoTaxYear } from '../components/NoTaxYear';
 import { PageBody, PageHeader } from '../components/PageHeader';
 import { Alert, Badge, Button, Card, CardHeader, Field, Spinner, type BadgeTone } from '../components/ui';
-import { useActiveTaxYear, useCanEdit, useCategories, useMtdQuarters, useMtdSubmission } from '../lib/queries';
+import {
+  useActiveTaxYear,
+  useCanEdit,
+  useCategories,
+  useHmrc,
+  useHmrcObligations,
+  useMtdQuarters,
+  useMtdSubmission,
+} from '../lib/queries';
 
 const STATUS: Record<MtdQuarterStatus, { label: string; tone: BadgeTone }> = {
   upcoming: { label: 'Upcoming', tone: 'neutral' },
@@ -45,14 +55,27 @@ function defaultQuarter(quarters: MtdQuarterSummary[], today: string): number {
   return today < quarters[0].startDate ? 1 : 4;
 }
 
+/** What HMRC says about a quarter: expected (open) or received. */
+function HmrcObligationLine({ obligation }: { obligation: HmrcObligation | null }) {
+  if (!obligation) return <div className="text-faint">HMRC: not expected</div>;
+  return obligation.status === 'fulfilled' ? (
+    <div className="text-in-soft">HMRC: received{obligation.receivedDate ? ` ${formatDisplayDate(obligation.receivedDate)}` : ''}</div>
+  ) : (
+    <div className="text-muted">HMRC: expected by {formatDisplayDate(obligation.dueDate)}</div>
+  );
+}
+
 function QuarterCard({
   q,
   status,
+  obligation,
   selected,
   onSelect,
 }: {
   q: MtdQuarterSummary;
   status: MtdQuarterStatus;
+  /** HMRC's obligation for the quarter: undefined when not checked with HMRC. */
+  obligation: HmrcObligation | null | undefined;
   selected: boolean;
   onSelect: () => void;
 }) {
@@ -87,8 +110,9 @@ function QuarterCard({
           <dd className="tabular font-semibold text-ink">{formatGBP(t.netProfitPence)}</dd>
         </div>
       </dl>
-      <div className="mt-4 text-xs text-faint">
-        {q.submission ? `Submitted ${formatDisplayDate(q.submission.submittedOn)}` : `Due by ${formatDisplayDate(q.deadline)}`}
+      <div className="mt-4 space-y-0.5 text-xs text-faint">
+        <div>{q.submission ? `Submitted ${formatDisplayDate(q.submission.submittedOn)}` : `Due by ${formatDisplayDate(q.deadline)}`}</div>
+        {obligation !== undefined && <HmrcObligationLine obligation={obligation} />}
       </div>
     </button>
   );
@@ -233,6 +257,9 @@ export function MtdQuarterly() {
   const { taxYear, isLoading: yearLoading } = useActiveTaxYear();
   const { data, isLoading, error } = useMtdQuarters(taxYear?.id);
   const { data: categories = [] } = useCategories();
+  const { data: hmrc } = useHmrc();
+  const checkWithHmrc = Boolean(hmrc?.connection && hmrc.business);
+  const obligations = useHmrcObligations(taxYear?.id, checkWithHmrc);
   const [selected, setSelected] = useState<number | null>(null);
   const [view, setView] = useState<'cumulative' | 'period'>('cumulative');
   const today = todayIso();
@@ -240,6 +267,10 @@ export function MtdQuarterly() {
   useEffect(() => setSelected(null), [taxYear?.id]);
 
   const quarters = data?.quarters ?? [];
+  // Cumulative updates all start on 6 April, so match HMRC's obligations to quarters by their end date.
+  const obligationFor = (endDate: string) =>
+    obligations.data ? (obligations.data.find((o) => o.periodEndDate === endDate) ?? null) : undefined;
+  const unmatched = (obligations.data ?? []).filter((o) => !quarters.some((x) => x.endDate === o.periodEndDate));
   const current = quarters.length ? (selected ?? defaultQuarter(quarters, today)) : null;
   const q = quarters.find((x) => x.quarter === current);
   const summary = q ? q[view] : null;
@@ -273,12 +304,38 @@ export function MtdQuarterly() {
               </p>
             </div>
 
+            {checkWithHmrc && (
+              <div className="flex items-start gap-3 text-sm text-muted">
+                <Landmark className="mt-0.5 size-4 shrink-0 text-accent-soft" aria-hidden />
+                {obligations.isLoading ? (
+                  <span>Checking what HMRC expects…</span>
+                ) : obligations.error ? (
+                  <span className="text-out-soft">Couldn’t check with HMRC: {obligations.error.message}</span>
+                ) : (
+                  <span>
+                    Checked with HMRC for {hmrc!.business!.tradingName ?? hmrc!.business!.businessId}
+                    {hmrc!.environment === 'sandbox' && ' (sandbox, so these are HMRC’s test figures)'}.
+                    {unmatched.length > 0 &&
+                      ` HMRC also expects updates for periods that don’t match these quarters: ${unmatched
+                        .map((o) => `${formatDisplayDate(o.periodStartDate)} to ${formatDisplayDate(o.periodEndDate)}`)
+                        .join('; ')}.`}
+                  </span>
+                )}
+              </div>
+            )}
+            {hmrc?.connection && !hmrc.business && (
+              <p className="text-sm text-muted">
+                To see what HMRC expects, find your business in <Link className="text-accent-soft hover:underline" to="/settings/hmrc">Settings → HMRC</Link>.
+              </p>
+            )}
+
             <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
               {quarters.map((x) => (
                 <QuarterCard
                   key={x.quarter}
                   q={x}
                   status={mtdQuarterStatus(x, today, x.submission !== null)}
+                  obligation={obligationFor(x.endDate)}
                   selected={x.quarter === current}
                   onSelect={() => setSelected(x.quarter)}
                 />

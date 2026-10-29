@@ -2,9 +2,11 @@
 // (authorisation code with PKCE), and access tokens that refresh themselves.
 // See https://developer.service.hmrc.gov.uk/api-documentation/docs/authorisation/user-restricted-endpoints
 import crypto from 'node:crypto';
-import type { HmrcEnvironment } from '@crafty/shared';
+import type { Request } from 'express';
+import type { HmrcBusiness, HmrcEnvironment } from '@crafty/shared';
 import type { AppContext } from './context';
 import type { Db } from './db';
+import { fraudPreventionForRequest } from './fraudPrevention';
 import { HttpError } from './http';
 
 export const HMRC_HOSTS: Record<HmrcEnvironment, { web: string; api: string }> = {
@@ -30,17 +32,29 @@ export interface HmrcConnectionRow {
   scope: string | null;
   connected_by: string | null;
   connected_at: string | null;
+  business_id: string | null;
+  trading_name: string | null;
 }
 
 export function getHmrcConnection(db: Db, environment: HmrcEnvironment): HmrcConnectionRow | null {
   return (db.prepare('SELECT * FROM hmrc_connections WHERE environment = ?').get(environment) as HmrcConnectionRow | undefined) ?? null;
 }
 
+/** Sets the National Insurance number. A different one means a different taxpayer, so the business is forgotten. */
 export function setHmrcNino(db: Db, environment: HmrcEnvironment, nino: string | null): void {
   db.prepare(
     `INSERT INTO hmrc_connections (environment, nino) VALUES (?, ?)
-     ON CONFLICT (environment) DO UPDATE SET nino = excluded.nino, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')`,
+     ON CONFLICT (environment) DO UPDATE SET nino = excluded.nino,
+       business_id = CASE WHEN nino IS excluded.nino THEN business_id END,
+       trading_name = CASE WHEN nino IS excluded.nino THEN trading_name END,
+       updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')`,
   ).run(environment, nino);
+}
+
+export function setHmrcBusiness(db: Db, environment: HmrcEnvironment, business: HmrcBusiness): void {
+  db.prepare(
+    `UPDATE hmrc_connections SET business_id = ?, trading_name = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE environment = ?`,
+  ).run(business.businessId, business.tradingName, environment);
 }
 
 /** Forgets the tokens. HMRC keeps the authority until it's removed in the HMRC account or the tokens expire. */
@@ -190,4 +204,110 @@ export function hmrcAccessToken(ctx: AppContext, now = new Date()): Promise<stri
     .finally(() => refreshing.delete(ctx));
   refreshing.set(ctx, refresh);
   return refresh;
+}
+
+/** HMRC's error body: a code and message, sometimes with several errors inside. */
+interface HmrcErrorBody {
+  code?: string;
+  message?: string;
+  errors?: { code?: string; message?: string }[];
+}
+
+export interface HmrcCall {
+  method?: 'GET' | 'POST' | 'PUT' | 'DELETE';
+  path: string;
+  /** The API version, sent in the Accept header (e.g. "2.0"). */
+  version: string;
+  query?: Record<string, string>;
+  body?: unknown;
+}
+
+/**
+ * Calls one of HMRC's MTD APIs for the person behind `req`, with a fresh
+ * access token and the fraud prevention headers HMRC requires. HMRC's errors
+ * become HttpErrors with its message, never 401 (that would sign the person
+ * out of this app).
+ */
+export async function callHmrc<T>(ctx: AppContext, req: Request, call: HmrcCall): Promise<T> {
+  const environment = ctx.config.hmrc.environment;
+  const token = await hmrcAccessToken(ctx);
+  const url = new URL(call.path, HMRC_HOSTS[environment].api);
+  if (call.query) url.search = new URLSearchParams(call.query).toString();
+  const headers: Record<string, string> = {
+    ...(await fraudPreventionForRequest(req, ctx.config.trustProxy)),
+    Accept: `application/vnd.hmrc.${call.version}+json`,
+    Authorization: `Bearer ${token}`,
+  };
+  if (call.body !== undefined) headers['Content-Type'] = 'application/json';
+
+  let res: Response;
+  try {
+    res = await ctx.fetch(url, { method: call.method ?? 'GET', headers, body: call.body === undefined ? undefined : JSON.stringify(call.body) });
+  } catch {
+    throw new HttpError(502, 'Could not reach HMRC. Check the server is online and try again.');
+  }
+  if (res.status === 204) return undefined as T;
+  const body = (await res.json().catch(() => null)) as unknown;
+  if (res.ok) return body as T;
+
+  const error = (body ?? {}) as HmrcErrorBody;
+  const correlationId = res.headers.get('X-CorrelationId');
+  console.warn(`HMRC ${call.method ?? 'GET'} ${call.path} failed: ${res.status} ${error.code ?? ''}${correlationId ? ` (correlation id ${correlationId})` : ''}`);
+  if (res.status === 401) {
+    clearHmrcTokens(ctx.db, environment);
+    throw new HttpError(400, 'HMRC no longer accepts this sign-in. Connect to HMRC again.');
+  }
+  if (error.code === 'CLIENT_OR_AGENT_NOT_AUTHORISED') {
+    throw new HttpError(403, 'HMRC says the person who connected can’t act for this National Insurance number. Check it in Settings → HMRC.');
+  }
+  const messages = [error.message, ...(error.errors ?? []).map((e) => e.message)].filter(Boolean);
+  const detail = messages.length ? messages.join(' ') : `status ${res.status}`;
+  throw new HttpError(res.status === 404 ? 404 : 502, `HMRC: ${detail}`);
+}
+
+const appTokens = new WeakMap<AppContext, { token: string; until: number }>();
+
+/** A token for HMRC's application-restricted APIs (such as the fraud header test API), which act for the app rather than a person. */
+async function hmrcAppToken(ctx: AppContext): Promise<string> {
+  const cached = appTokens.get(ctx);
+  if (cached && cached.until > Date.now()) return cached.token;
+  const { environment, clientId, clientSecret } = ctx.config.hmrc;
+  if (!clientId || !clientSecret) throw new HttpError(400, 'Set HMRC_CLIENT_ID and HMRC_CLIENT_SECRET first');
+  let res: Response;
+  try {
+    res = await ctx.fetch(`${HMRC_HOSTS[environment].api}/oauth/token`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' },
+      body: new URLSearchParams({ client_id: clientId, client_secret: clientSecret, grant_type: 'client_credentials' }).toString(),
+    });
+  } catch {
+    throw new HttpError(502, 'Could not reach HMRC. Check the server is online and try again.');
+  }
+  const body = (await res.json().catch(() => null)) as { access_token?: string; expires_in?: number } | null;
+  if (!res.ok || !body?.access_token) throw new HttpError(502, `HMRC refused the app’s credentials (${res.status})`);
+  appTokens.set(ctx, { token: body.access_token, until: Date.now() + ((body.expires_in ?? 3600) - 60) * 1000 });
+  return body.access_token;
+}
+
+/** Sends this request's fraud prevention headers to HMRC's sandbox test API and returns its verdict. */
+export async function checkFraudHeaders(ctx: AppContext, req: Request): Promise<unknown> {
+  if (ctx.config.hmrc.environment !== 'sandbox') throw new HttpError(400, 'HMRC’s fraud header test API is only in the sandbox');
+  const token = await hmrcAppToken(ctx);
+  let res: Response;
+  try {
+    res = await ctx.fetch(`${HMRC_HOSTS.sandbox.api}/test/fraud-prevention-headers/validate`, {
+      headers: {
+        ...(await fraudPreventionForRequest(req, ctx.config.trustProxy)),
+        Accept: 'application/vnd.hmrc.1.0+json',
+        Authorization: `Bearer ${token}`,
+      },
+    });
+  } catch {
+    throw new HttpError(502, 'Could not reach HMRC. Check the server is online and try again.');
+  }
+  const body = (await res.json().catch(() => null)) as HmrcErrorBody | null;
+  if (!res.ok) {
+    throw new HttpError(502, `HMRC’s fraud header test API refused the request: ${body?.message ?? res.status}. Is the app subscribed to it?`);
+  }
+  return body;
 }

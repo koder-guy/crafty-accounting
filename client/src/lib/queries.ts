@@ -7,6 +7,9 @@ import type {
   DashboardData,
   ExpenseWithLineItems,
   FlatRateKind,
+  HmrcBusiness,
+  HmrcFraudHeaderCheck,
+  HmrcObligation,
   HmrcStatus,
   Income,
   MeResponse,
@@ -291,11 +294,16 @@ export function useAutoBackupMutations() {
 
 // ---- HMRC ----
 
+export const HMRC_OBLIGATIONS = 'hmrc-obligations';
+
 export const useHmrc = () => useQuery({ queryKey: ['hmrc'], queryFn: () => api.get<HmrcStatus>('/hmrc') });
 
 export function useHmrcMutations() {
   const qc = useQueryClient();
-  const onSuccess = () => qc.invalidateQueries({ queryKey: ['hmrc'] });
+  const onSuccess = () => {
+    qc.invalidateQueries({ queryKey: ['hmrc'] });
+    qc.invalidateQueries({ queryKey: [HMRC_OBLIGATIONS] });
+  };
   return {
     saveNino: useMutation({ mutationFn: (nino: string | null) => api.put('/hmrc/nino', { nino }), onSuccess }),
     // Off to HMRC's sign-in page; it sends the browser back to Settings → HMRC.
@@ -304,8 +312,24 @@ export function useHmrcMutations() {
       onSuccess: ({ url }) => window.location.assign(url),
     }),
     disconnect: useMutation({ mutationFn: () => api.delete('/hmrc/connection'), onSuccess }),
+    findBusiness: useMutation({
+      mutationFn: () => api.post<{ businesses: HmrcBusiness[] }>('/hmrc/businesses/find'),
+      onSuccess,
+    }),
+    chooseBusiness: useMutation({ mutationFn: (business: HmrcBusiness) => api.put('/hmrc/business', business), onSuccess }),
+    checkFraudHeaders: useMutation({ mutationFn: () => api.get<HmrcFraudHeaderCheck>('/hmrc/fraud-headers/check') }),
   };
 }
+
+/** What HMRC expects for the tax year. Each fetch is a call to HMRC, so it isn't refetched on every change (see liveUpdates.ts). */
+export const useHmrcObligations = (taxYearId: number | undefined, enabled: boolean) =>
+  useQuery({
+    queryKey: [HMRC_OBLIGATIONS, taxYearId],
+    queryFn: () => api.get<HmrcObligation[]>(`/hmrc/obligations${toQuery({ taxYearId })}`),
+    enabled: enabled && taxYearId !== undefined,
+    staleTime: 5 * 60 * 1000,
+    retry: false,
+  });
 
 // ---- Sample data ----
 

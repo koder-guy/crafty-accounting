@@ -19,7 +19,7 @@ Self-hosted bookkeeping for a UK sole trader, built for selling at craft fairs a
 - **Backups** (Settings): download a `.sql` dump or a full `.zip` (database plus documents), and restore from either.
 - **People** (Settings): each person signs in with their own name and password, and has their own active tax year. Transactions show who added them and who last changed them.
   - **Access**: each person is an **Editor** (can change anything, manage people and settings, and download backups) or **Read-only** (can view everything, download documents, export CSVs and the MTD JSON, and print reports, but can't change the books or download backups). Read-only people can still choose which tax year they're viewing and change their own password. The server enforces this, not just the screens. Everyone set up before this was added is an Editor, and there's always at least one.
-- **HMRC** (Settings): your National Insurance number and the connection to HMRC for Making Tax Digital. Editors connect by signing in to HMRC, which gives the app authority for 18 months. Uses HMRC's sandbox (test service) for now; see [Connecting to HMRC](#connecting-to-hmrc).
+- **HMRC** (Settings): your National Insurance number, the connection to HMRC for Making Tax Digital and your self-employment business there. Editors connect by signing in to HMRC, which gives the app authority for 18 months. Once connected, the MTD Quarterly page shows which updates HMRC expects and which it has received. Uses HMRC's sandbox (test service) for now; see [Connecting to HMRC](#connecting-to-hmrc).
 - **Working together**: when someone saves a change, every other open browser shows it within a second or so, without reloading. If two people edit the same transaction at once, the second save is refused rather than overwriting the first, and the form offers to load the other person's version. What you've typed in a form is never replaced while you're typing.
 
 ## Run with Docker Compose
@@ -178,10 +178,13 @@ You can also back up the Docker volume itself.
 The app talks to HMRC's MTD APIs as its own application, registered on HMRC's Developer Hub. It starts with the sandbox, HMRC's test service with made-up taxpayers. Using the live service needs HMRC's production approval for the application, which isn't covered here yet.
 
 1. Sign in at [developer.service.hmrc.gov.uk](https://developer.service.hmrc.gov.uk) and add a sandbox application.
-2. Subscribe it to the **Business Details (MTD)**, **Obligations (MTD)** and **Self Employment Business (MTD)** APIs.
+2. Subscribe it to the **Business Details (MTD)**, **Obligations (MTD)**, **Self Employment Business (MTD)** and **Test Fraud Prevention Headers** APIs.
 3. Add the redirect URI shown in **Settings → HMRC** (the app's address followed by `/api/hmrc/callback`, e.g. `https://crafty.local/api/hmrc/callback`).
 4. Put the application's client ID and a client secret in `.env` as `HMRC_CLIENT_ID` and `HMRC_CLIENT_SECRET`, and restart the app.
-5. Create a sandbox test user (an individual with self-employment) with HMRC's Create Test User service. In **Settings → HMRC**, enter its National Insurance number, choose **Connect to HMRC** and sign in with its user ID and password.
+5. Create a sandbox test user (an **Individual**) with HMRC's [Create test user](https://developer.service.hmrc.gov.uk/api-test-user) service. In **Settings → HMRC**, enter its National Insurance number, choose **Connect to HMRC** and sign in with its user ID and password.
+6. Choose **Find my business**. In the sandbox HMRC answers with a made-up business (RCDTS), and the MTD Quarterly page shows HMRC's test obligations, not your own.
+
+**Fraud prevention headers.** HMRC requires details of the browser, device and network with every MTD call (the `WEB_APP_VIA_SERVER` connection method). The browser sends its part (a device ID kept in the browser, screen and window size, time zone, user agent) and the server adds the rest. HMRC says never to guess a value, so values the app can't know are left out: there's no multi-factor sign-in or licence key, and when the app is reached over a home network the public IP addresses of the browser and server aren't visible to it. Behind a public domain they are (Caddy passes on the browser's port). **Settings → HMRC → Check with HMRC** sends this browser's headers to HMRC's test API and lists anything missing or wrong. HMRC asks software makers to tell it about values that can't be collected, which would be part of applying for production access.
 
 The connection lasts 18 months, after which you connect again. Like people, it belongs to the install rather than the books: the HMRC tokens never go into backups, and the connection is kept through a restore or a reset. **Disconnect** makes the app forget the tokens; to withdraw the authority at HMRC as well, do it in your HMRC online account.
 

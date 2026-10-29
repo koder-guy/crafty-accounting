@@ -13,5 +13,8 @@
 	@compressible not path /api/events
 	encode @compressible zstd gzip
 	header -Server
-	reverse_proxy crafty-accounting:3000
+	reverse_proxy crafty-accounting:3000 {
+		# The browser's port, for HMRC's fraud prevention headers.
+		header_up X-Client-Port {http.request.remote.port}
+	}
 }

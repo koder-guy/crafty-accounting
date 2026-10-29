@@ -341,10 +341,34 @@ export interface HmrcStatus {
   /** Where HMRC sends people back after they sign in; it must be registered with the HMRC app. */
   redirectUri: string;
   nino: string | null;
+  /** The self-employment business at HMRC that updates are sent for. */
+  business: HmrcBusiness | null;
   connection: {
     connectedBy: string;
     connectedAt: string;
     /** After this HMRC needs signing in to again (18 months after connecting). */
     expiresAt: string;
   } | null;
+}
+
+export interface HmrcBusiness {
+  businessId: string;
+  tradingName: string | null;
+}
+
+/** A quarterly update HMRC expects, from its Obligations API. */
+export interface HmrcObligation {
+  periodStartDate: string;
+  periodEndDate: string;
+  dueDate: string;
+  status: 'open' | 'fulfilled';
+  receivedDate: string | null;
+}
+
+/** HMRC's verdict on the fraud prevention headers, from its sandbox test API. */
+export interface HmrcFraudHeaderCheck {
+  code: string;
+  message: string;
+  errors: { code: string; message: string; headers: string[] }[];
+  warnings: { code: string; message: string; headers: string[] }[];
 }

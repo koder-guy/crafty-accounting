@@ -1,10 +1,47 @@
 // Settings → HMRC: the National Insurance number and the connection (OAuth
-// sign-in) used to talk to HMRC's Making Tax Digital APIs.
+// sign-in) used to talk to HMRC's Making Tax Digital APIs, the business that
+// updates are for, and HMRC's obligations (the updates it expects).
 import { Router, type Request } from 'express';
-import { hmrcNinoInputSchema, type HmrcStatus } from '@crafty/shared';
+import { z } from 'zod';
+import {
+  hmrcBusinessSchema,
+  hmrcNinoInputSchema,
+  type HmrcBusiness,
+  type HmrcFraudHeaderCheck,
+  type HmrcObligation,
+  type HmrcStatus,
+} from '@crafty/shared';
 import type { AppContext } from '../context';
 import { HttpError, parseWith } from '../http';
-import { clearHmrcTokens, completeHmrcAuth, getHmrcConnection, setHmrcNino, startHmrcAuth, type PendingHmrcAuth } from '../hmrc';
+import {
+  callHmrc,
+  checkFraudHeaders,
+  clearHmrcTokens,
+  completeHmrcAuth,
+  getHmrcConnection,
+  setHmrcBusiness,
+  setHmrcNino,
+  startHmrcAuth,
+  type PendingHmrcAuth,
+} from '../hmrc';
+import { getTaxYear } from '../repo';
+
+const BUSINESS_DETAILS_VERSION = '2.0';
+const OBLIGATIONS_VERSION = '3.0';
+
+const obligationsQuerySchema = z.object({ taxYearId: z.coerce.number().int().positive() });
+
+interface ListBusinessesResponse {
+  listOfBusinesses?: { typeOfBusiness: string; businessId: string; tradingName?: string }[];
+}
+
+interface ObligationsResponse {
+  obligations?: {
+    typeOfBusiness: string;
+    businessId: string;
+    obligationDetails: { periodStartDate: string; periodEndDate: string; dueDate: string; status: string; receivedDate?: string }[];
+  }[];
+}
 
 /** Where people land after signing in to HMRC, with the outcome in the query string. */
 const SETTINGS_PAGE = '/settings/hmrc';
@@ -24,6 +61,7 @@ export function hmrcRouter(ctx: AppContext): Router {
       configured: Boolean(ctx.config.hmrc.clientId && ctx.config.hmrc.clientSecret),
       redirectUri: redirectUri(req),
       nino: row?.nino ?? null,
+      business: row?.business_id ? { businessId: row.business_id, tradingName: row.trading_name } : null,
       connection:
         row?.refresh_token && row.connected_by && row.connected_at && row.refresh_expires_at
           ? { connectedBy: row.connected_by, connectedAt: row.connected_at, expiresAt: row.refresh_expires_at }
@@ -72,6 +110,86 @@ export function hmrcRouter(ctx: AppContext): Router {
     // A GET isn't broadcast automatically, so tell the other open browsers here.
     ctx.liveUpdates.publish({ area: 'hmrc', by: req.user!.name }, null);
     back({ connected: '1' });
+  });
+
+  /** The National Insurance number, or a clear error if it isn't set yet. */
+  const requireNino = () => {
+    const nino = getHmrcConnection(ctx.db, environment())?.nino;
+    if (!nino) throw new HttpError(400, 'Enter the National Insurance number in Settings → HMRC first.');
+    return nino;
+  };
+
+  // Asks HMRC for the self-employment businesses; if there's just one, it's the one.
+  router.post('/businesses/find', async (req, res) => {
+    const nino = requireNino();
+    let found: ListBusinessesResponse;
+    try {
+      found = await callHmrc<ListBusinessesResponse>(ctx, req, {
+        path: `/individuals/business/details/${nino}/list`,
+        version: BUSINESS_DETAILS_VERSION,
+      });
+    } catch (err) {
+      if (err instanceof HttpError && err.status === 404) found = {};
+      else throw err;
+    }
+    const businesses: HmrcBusiness[] = (found.listOfBusinesses ?? [])
+      .filter((b) => b.typeOfBusiness === 'self-employment')
+      .map((b) => ({ businessId: b.businessId, tradingName: b.tradingName?.trim() || null }));
+    if (businesses.length === 1) setHmrcBusiness(ctx.db, environment(), businesses[0]);
+    res.json({ businesses });
+  });
+
+  router.put('/business', (req, res) => {
+    requireNino();
+    const business = parseWith(hmrcBusinessSchema, req.body);
+    setHmrcBusiness(ctx.db, environment(), business);
+    res.json(business);
+  });
+
+  // The quarterly updates HMRC expects for the business in a tax year, and which it has received.
+  router.get('/obligations', async (req, res) => {
+    const { taxYearId } = parseWith(obligationsQuerySchema, req.query);
+    const taxYear = getTaxYear(ctx.db, taxYearId);
+    if (!taxYear) throw new HttpError(404, 'Tax year not found');
+    const nino = requireNino();
+    const businessId = getHmrcConnection(ctx.db, environment())?.business_id;
+    if (!businessId) throw new HttpError(400, 'Find your business in Settings → HMRC first.');
+
+    let found: ObligationsResponse;
+    try {
+      found = await callHmrc<ObligationsResponse>(ctx, req, {
+        path: `/obligations/details/${nino}/income-and-expenditure`,
+        version: OBLIGATIONS_VERSION,
+        query: { typeOfBusiness: 'self-employment', businessId, fromDate: taxYear.startDate, toDate: taxYear.endDate },
+      });
+    } catch (err) {
+      // HMRC answers 404 when there are no obligations in the range.
+      if (err instanceof HttpError && err.status === 404) found = {};
+      else throw err;
+    }
+    const obligations: HmrcObligation[] = (found.obligations ?? [])
+      .filter((o) => o.businessId === businessId)
+      .flatMap((o) => o.obligationDetails)
+      .map((d): HmrcObligation => ({
+        periodStartDate: d.periodStartDate,
+        periodEndDate: d.periodEndDate,
+        dueDate: d.dueDate,
+        status: d.status.toLowerCase() === 'fulfilled' ? 'fulfilled' : 'open',
+        receivedDate: d.receivedDate ?? null,
+      }))
+      .sort((a, b) => a.periodEndDate.localeCompare(b.periodEndDate));
+    res.json(obligations);
+  });
+
+  router.get('/fraud-headers/check', async (req, res) => {
+    const result = (await checkFraudHeaders(ctx, req)) as Partial<HmrcFraudHeaderCheck>;
+    const check: HmrcFraudHeaderCheck = {
+      code: result.code ?? 'UNKNOWN',
+      message: result.message ?? '',
+      errors: result.errors ?? [],
+      warnings: result.warnings ?? [],
+    };
+    res.json(check);
   });
 
   router.delete('/connection', (_req, res) => {

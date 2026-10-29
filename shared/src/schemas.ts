@@ -228,3 +228,8 @@ export const ninoSchema = z
   });
 
 export const hmrcNinoInputSchema = z.object({ nino: ninoSchema.nullable() });
+
+export const hmrcBusinessSchema = z.object({
+  businessId: z.string().regex(/^X[a-zA-Z0-9]IS\d{11}$/, 'Not an HMRC business ID'),
+  tradingName: z.string().trim().max(200).nullable(),
+});

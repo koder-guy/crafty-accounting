@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { useSearchParams } from 'react-router';
-import { Landmark, Link2, Unlink } from 'lucide-react';
-import { formatDisplayDate, type HmrcStatus } from '@crafty/shared';
+import { Landmark, Link2, ShieldCheck, Unlink } from 'lucide-react';
+import { formatDisplayDate, type HmrcBusiness, type HmrcFraudHeaderCheck, type HmrcStatus } from '@crafty/shared';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { Alert, Badge, Button, Card, CardHeader, Field, Spinner } from '../../components/ui';
 import { useCanEdit, useHmrc, useHmrcMutations } from '../../lib/queries';
@@ -86,6 +86,111 @@ function NinoForm({ status, canEdit }: { status: HmrcStatus; canEdit: boolean })
   );
 }
 
+const businessLabel = (b: HmrcBusiness) => (b.tradingName ? `${b.tradingName} (${b.businessId})` : b.businessId);
+
+/** The self-employment business at HMRC that updates go to, found by asking HMRC. */
+function BusinessRow({ status, canEdit }: { status: HmrcStatus; canEdit: boolean }) {
+  const { findBusiness, chooseBusiness } = useHmrcMutations();
+  const found = findBusiness.data?.businesses;
+  const error = findBusiness.error ?? chooseBusiness.error;
+  return (
+    <>
+      <dt className="text-muted">Business</dt>
+      <dd className="space-y-3">
+        <div className="flex flex-wrap items-center gap-3">
+          {status.business ? (
+            <span>{businessLabel(status.business)}</span>
+          ) : (
+            <span className="text-muted">Not found yet</span>
+          )}
+          {canEdit && (
+            <Button onClick={() => findBusiness.mutate()} busy={findBusiness.isPending} disabled={!status.nino}>
+              {status.business ? 'Check again' : 'Find my business'}
+            </Button>
+          )}
+        </div>
+        {!status.nino && canEdit && <p className="text-xs text-muted">Save the National Insurance number first.</p>}
+        {found && found.length === 0 && (
+          <Alert tone="warning">HMRC has no self-employment business for this National Insurance number.</Alert>
+        )}
+        {found && found.length > 1 && (
+          <fieldset className="space-y-2">
+            <legend className="mb-1 text-xs text-muted">HMRC has several self-employment businesses. Choose the one for these books:</legend>
+            {found.map((b) => (
+              <label key={b.businessId} className="flex items-center gap-3">
+                <input
+                  type="radio"
+                  name="hmrc-business"
+                  className="size-4 accent-[var(--color-accent)]"
+                  checked={status.business?.businessId === b.businessId}
+                  onChange={() => chooseBusiness.mutate(b)}
+                />
+                {businessLabel(b)}
+              </label>
+            ))}
+          </fieldset>
+        )}
+        {error && <Alert>{error.message}</Alert>}
+      </dd>
+    </>
+  );
+}
+
+const CHECK_OUTCOME: Record<string, { tone: 'success' | 'warning' | 'error'; label: string }> = {
+  VALID_HEADERS: { tone: 'success', label: 'All headers look valid' },
+  POTENTIALLY_INVALID_HEADERS: { tone: 'warning', label: 'Some headers may be wrong' },
+  INVALID_HEADERS: { tone: 'error', label: 'Some headers are missing or wrong' },
+};
+
+function CheckResult({ check }: { check: HmrcFraudHeaderCheck }) {
+  const outcome = CHECK_OUTCOME[check.code] ?? { tone: 'warning' as const, label: check.code };
+  const items = [
+    ...check.errors.map((e) => ({ ...e, kind: 'Error' })),
+    ...check.warnings.map((w) => ({ ...w, kind: 'Advisory' })),
+  ];
+  return (
+    <div className="space-y-3">
+      <Alert tone={outcome.tone}>
+        <strong>{outcome.label}.</strong> {check.message}
+      </Alert>
+      {items.length > 0 && (
+        <ul className="divide-y divide-line rounded-lg border border-line text-sm">
+          {items.map((item, i) => (
+            <li key={i} className="space-y-1 px-4 py-2.5">
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge tone={item.kind === 'Error' ? 'out' : 'warn'}>{item.kind}</Badge>
+                <code className="text-xs text-faint">{item.headers.join(', ')}</code>
+              </div>
+              <p className="text-ink">{item.message}</p>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+/** Sends this browser's fraud prevention headers to HMRC's sandbox test API. */
+function FraudHeadersCard() {
+  const { checkFraudHeaders } = useHmrcMutations();
+  return (
+    <Card>
+      <CardHeader icon={<ShieldCheck className="size-5 text-accent-soft" />} title="Fraud prevention headers" />
+      <div className="space-y-4 px-5 pb-6 sm:px-6">
+        <p className="text-sm text-muted">
+          HMRC requires details of your browser, device and network with every Making Tax Digital call. Check what this browser sends
+          with HMRC’s test service. The app must be subscribed to the Test Fraud Prevention Headers API.
+        </p>
+        <Button onClick={() => checkFraudHeaders.mutate()} busy={checkFraudHeaders.isPending}>
+          Check with HMRC
+        </Button>
+        {checkFraudHeaders.error && <Alert>{checkFraudHeaders.error.message}</Alert>}
+        {checkFraudHeaders.data && <CheckResult check={checkFraudHeaders.data} />}
+      </div>
+    </Card>
+  );
+}
+
 export function HmrcSettings() {
   const { data: status, isLoading, error } = useHmrc();
   const { connect, disconnect } = useHmrcMutations();
@@ -152,6 +257,7 @@ export function HmrcSettings() {
                         </dd>
                         <dt className="text-muted">Connect again by</dt>
                         <dd>{day(status.connection.expiresAt)}</dd>
+                        <BusinessRow status={status} canEdit={canEdit} />
                       </dl>
                       {canEdit && (
                         <div className="flex flex-wrap gap-3">
@@ -192,6 +298,8 @@ export function HmrcSettings() {
             )}
           </div>
         </Card>
+
+        {status?.environment === 'sandbox' && status.configured && <FraudHeadersCard />}
       </div>
 
       <ConfirmDialog

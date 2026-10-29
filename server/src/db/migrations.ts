@@ -207,6 +207,14 @@ CREATE TABLE hmrc_connections (
 );
 `,
   },
+  // The self-employment business at HMRC that quarterly updates are for.
+  {
+    version: 8,
+    sql: `
+ALTER TABLE hmrc_connections ADD COLUMN business_id TEXT;
+ALTER TABLE hmrc_connections ADD COLUMN trading_name TEXT;
+`,
+  },
 ];
 
 export const CURRENT_SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;

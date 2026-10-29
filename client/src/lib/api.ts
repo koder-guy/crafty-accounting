@@ -1,4 +1,5 @@
 import type { ApiErrorBody } from '@crafty/shared';
+import { fraudPreventionData } from './fraudPrevention';
 
 export class ApiError extends Error {
   constructor(
@@ -22,7 +23,10 @@ export function setUnauthorizedHandler(handler: () => void) {
 }
 
 async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
-  const init: RequestInit = { method, credentials: 'same-origin', headers: { 'X-Client-Id': CLIENT_ID } };
+  const headers: Record<string, string> = { 'X-Client-Id': CLIENT_ID };
+  // Calls that reach HMRC carry the browser's fraud prevention data.
+  if (path.startsWith('/hmrc/')) headers['X-Fraud-Prevention'] = fraudPreventionData();
+  const init: RequestInit = { method, credentials: 'same-origin', headers };
   if (body instanceof FormData) {
     init.body = body;
   } else if (body !== undefined) {
