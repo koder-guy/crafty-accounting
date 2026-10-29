@@ -359,14 +359,14 @@ export function useSendToHmrc(taxYearId: number) {
 export const HMRC_CALCULATION = 'hmrc-calculation';
 
 /**
- * HMRC's latest tax calculation for the year, or the one just asked for
- * (`awaiting`), checked every 5 seconds until HMRC has worked it out.
+ * A tax calculation just asked of HMRC, checked every 5 seconds until HMRC has
+ * worked it out. Nothing is fetched until there's one to check.
  */
-export function useHmrcCalculation(taxYearId: number | undefined, enabled: boolean, awaiting: string | null) {
+export function useHmrcCalculation(taxYearId: number | undefined, calculationId: string | null) {
   return useQuery({
-    queryKey: [HMRC_CALCULATION, taxYearId, awaiting],
-    queryFn: () => api.get<HmrcCalculationResponse>(`/hmrc/calculations/${taxYearId}${toQuery({ calculationId: awaiting })}`),
-    enabled: enabled && taxYearId !== undefined,
+    queryKey: [HMRC_CALCULATION, taxYearId, calculationId],
+    queryFn: () => api.get<HmrcCalculationResponse>(`/hmrc/calculations/${taxYearId}${toQuery({ calculationId })}`),
+    enabled: calculationId !== null && taxYearId !== undefined,
     staleTime: 5 * 60 * 1000,
     retry: false,
     refetchInterval: (query) => (query.state.data?.state === 'pending' ? 5000 : false),

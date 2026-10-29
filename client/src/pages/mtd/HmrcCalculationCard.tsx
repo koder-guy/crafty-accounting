@@ -1,5 +1,4 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router';
 import { Landmark, LoaderCircle, RefreshCw } from 'lucide-react';
 import {
@@ -11,7 +10,6 @@ import {
 } from '@crafty/shared';
 import { Alert, Button, Card, CardHeader, Spinner } from '../../components/ui';
 import {
-  HMRC_CALCULATION,
   useCanEdit,
   useHmrc,
   useHmrcCalculation,
@@ -98,26 +96,22 @@ function Figures({ calculation, data }: { calculation: HmrcCalculation; data: Ta
 /**
  * HMRC's own calculation of the year's tax, from the quarterly updates it has,
  * next to the app's estimate. Lives on the Quarterly updates page. Shown once
- * connected to HMRC.
+ * connected to HMRC. It starts empty: an earlier calculation could be well out
+ * of date, so the figures shown are always ones just asked for.
  */
 export function HmrcCalculationCard({ data }: { data: TaxEstimateResponse }) {
-  const qc = useQueryClient();
   const canEdit = useCanEdit();
   const { data: hmrc } = useHmrc();
   const taxYearId = data.taxYear.id;
   const available = useHmrcCalculationAvailable(data.taxYear.label);
-  // The calculation just asked for, until HMRC has worked it out.
-  const [awaiting, setAwaiting] = useState<{ id: string; since: number } | null>(null);
-  useEffect(() => setAwaiting(null), [taxYearId]);
-  const calc = useHmrcCalculation(taxYearId, available, awaiting?.id ?? null);
+  // The calculation asked for on this visit; it stays shown until the page is left or the year changes.
+  const [requested, setRequested] = useState<{ id: string; since: number } | null>(null);
+  useEffect(() => setRequested(null), [taxYearId]);
+  const calc = useHmrcCalculation(taxYearId, available ? (requested?.id ?? null) : null);
   const trigger = useTriggerHmrcCalculation(taxYearId);
 
   const result = calc.data;
-  const timedOut = awaiting !== null && result?.state === 'pending' && Date.now() - awaiting.since > WAIT_MS;
-  // Once ready, the latest calculation is this one too.
-  useEffect(() => {
-    if (awaiting && result?.state === 'ready') qc.invalidateQueries({ queryKey: [HMRC_CALCULATION, taxYearId, null] });
-  }, [awaiting, result?.state, qc, taxYearId]);
+  const timedOut = requested !== null && result?.state === 'pending' && Date.now() - requested.since > WAIT_MS;
 
   if (!available) return null;
   const busy = trigger.isPending || (result?.state === 'pending' && !timedOut);
@@ -131,7 +125,7 @@ export function HmrcCalculationCard({ data }: { data: TaxEstimateResponse }) {
           canEdit && (
             <Button
               className="print:hidden"
-              onClick={() => trigger.mutate(undefined, { onSuccess: ({ calculationId }) => setAwaiting({ id: calculationId, since: Date.now() }) })}
+              onClick={() => trigger.mutate(undefined, { onSuccess: ({ calculationId }) => setRequested({ id: calculationId, since: Date.now() }) })}
               busy={trigger.isPending}
               disabled={busy}
             >
@@ -152,7 +146,13 @@ export function HmrcCalculationCard({ data }: { data: TaxEstimateResponse }) {
           {hmrc?.environment === 'sandbox' && ' This is HMRC’s sandbox, so the figures are its worked example, not yours.'}
         </p>
         {trigger.error && <Alert>{trigger.error.message}</Alert>}
-        {calc.isLoading ? (
+        {!requested ? (
+          <p className="text-sm text-ink">
+            {canEdit
+              ? 'Choose “Ask HMRC to calculate” to see HMRC’s figures for the year so far. It takes a few seconds.'
+              : 'An editor can ask HMRC to calculate the tax for the year so far.'}
+          </p>
+        ) : calc.isLoading ? (
           <Spinner label="Asking HMRC…" />
         ) : calc.error ? (
           <Alert>{calc.error.message}</Alert>
@@ -160,7 +160,7 @@ export function HmrcCalculationCard({ data }: { data: TaxEstimateResponse }) {
           <p className="text-sm text-ink">HMRC hasn’t worked out the tax for {displayTaxYear(data.taxYear.label)} yet.</p>
         ) : result?.state === 'pending' ? (
           timedOut ? (
-            <Alert tone="warning">HMRC is taking longer than usual. Come back to this page later to see the result.</Alert>
+            <Alert tone="warning">HMRC is taking longer than usual. Try asking it to calculate again in a few minutes.</Alert>
           ) : (
             <p className="flex items-center gap-2 text-sm text-ink">
               <LoaderCircle className="size-4 animate-spin text-accent-soft" aria-hidden />
@@ -170,7 +170,7 @@ export function HmrcCalculationCard({ data }: { data: TaxEstimateResponse }) {
         ) : result?.state === 'ready' ? (
           <>
             <p className="text-sm text-ink">
-              {result.calculation.calculatedAt ? `Worked out on ${dateTime(result.calculation.calculatedAt)}` : 'Worked out'}, as{' '}
+              {result.calculation.calculatedAt ? `Worked out at ${dateTime(result.calculation.calculatedAt)}` : 'Worked out'}, as{' '}
               {TYPES[result.calculation.type] ?? result.calculation.type}.
             </p>
             {/* Without figures the messages say why, so they come first; otherwise after the figures. */}
