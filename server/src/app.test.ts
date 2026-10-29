@@ -1861,6 +1861,12 @@ describe('HMRC connection', () => {
       await viewer.get(`/api/hmrc/calculations/${taxYearId}`).expect(200);
       await viewer.post(`/api/hmrc/calculations/${taxYearId}`).expect(403);
 
+      // HMRC refuses an API the application isn't subscribed to; say which one.
+      apiReplies[BASE] = { status: 403, body: { code: 'RESOURCE_FORBIDDEN', message: 'The application is not subscribed to the API which it is attempting to invoke' } };
+      expect((await agent.get(`/api/hmrc/calculations/${taxYearId}`).expect(502)).body.error).toBe(
+        'The app isn’t subscribed to HMRC’s Individual Calculations (MTD) API, version 8.0. Subscribe your application to it on HMRC’s Developer Hub, then try again.',
+      );
+
       await agent.get(`/api/hmrc/calculations/${taxYearId}`).query({ calculationId: 'nope' }).expect(400);
       const old = await createYear(2024);
       expect((await agent.get(`/api/hmrc/calculations/${old}`).expect(400)).body.error).toMatch(/2025\/26/);

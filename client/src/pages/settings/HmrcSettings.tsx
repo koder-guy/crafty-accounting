@@ -24,7 +24,10 @@ function SetupSteps({ status }: { status: HmrcStatus }) {
           </a>{' '}
           and add a sandbox application.
         </li>
-        <li>Subscribe it to the Business Details, Obligations and Self Employment Business APIs.</li>
+        <li>
+          Subscribe it to Business Details (MTD) 2.0, Obligations (MTD) 3.0, Self Employment Business (MTD) 5.0, Individual
+          Calculations (MTD) 8.0 and Test Fraud Prevention Headers 1.0.
+        </li>
         <li>
           Add this redirect URI to it: <code className="break-all text-ink">{status.redirectUri}</code>
         </li>

@@ -32,16 +32,18 @@ import {
   setHmrcBusiness,
   setHmrcNino,
   startHmrcAuth,
+  type HmrcApi,
   type PendingHmrcAuth,
 } from '../hmrc';
 import { getTaxYear } from '../repo';
 import { getSubmissions, parseQuarter, quarterSummaries } from './mtd';
 
-const BUSINESS_DETAILS_VERSION = '2.0';
-const OBLIGATIONS_VERSION = '3.0';
-const SELF_EMPLOYMENT_VERSION = '5.0';
+// The README's setup steps list these, for subscribing the application to them.
+const BUSINESS_DETAILS: HmrcApi = { name: 'Business Details (MTD)', version: '2.0' };
+const OBLIGATIONS: HmrcApi = { name: 'Obligations (MTD)', version: '3.0' };
+const SELF_EMPLOYMENT: HmrcApi = { name: 'Self Employment Business (MTD)', version: '5.0' };
 // 9.0 is test only in HMRC's sandbox; 8.0 is the version for real use.
-const CALCULATIONS_VERSION = '8.0';
+const CALCULATIONS: HmrcApi = { name: 'Individual Calculations (MTD)', version: '8.0' };
 /**
  * The sandbox fills calculations with placeholder values unless asked for
  * one of its worked examples; this one is a UK self-employment business.
@@ -203,7 +205,7 @@ export function hmrcRouter(ctx: AppContext): Router {
     try {
       found = await callHmrc<ListBusinessesResponse>(ctx, req, {
         path: `/individuals/business/details/${nino}/list`,
-        version: BUSINESS_DETAILS_VERSION,
+        api: BUSINESS_DETAILS,
       });
     } catch (err) {
       if (err instanceof HttpError && err.status === 404) found = {};
@@ -236,7 +238,7 @@ export function hmrcRouter(ctx: AppContext): Router {
     try {
       found = await callHmrc<ObligationsResponse>(ctx, req, {
         path: `/obligations/details/${nino}/income-and-expenditure`,
-        version: OBLIGATIONS_VERSION,
+        api: OBLIGATIONS,
         query: { typeOfBusiness: 'self-employment', businessId, fromDate: taxYear.startDate, toDate: taxYear.endDate },
         // The sandbox's default answer is fixed 2018-19 test data; DYNAMIC answers for the dates asked.
         testScenario: 'DYNAMIC',
@@ -286,7 +288,7 @@ export function hmrcRouter(ctx: AppContext): Router {
     const { correlationId } = await callHmrcWithReceipt(ctx, req, {
       method: 'PUT',
       path: `/individuals/business/self-employment/${nino}/${businessId}/cumulative/${taxYear.label}`,
-      version: SELF_EMPLOYMENT_VERSION,
+      api: SELF_EMPLOYMENT,
       body: payload,
     });
     const sentAt = new Date().toISOString();
@@ -328,7 +330,7 @@ export function hmrcRouter(ctx: AppContext): Router {
     const result = await callHmrc<{ calculationId?: string }>(ctx, req, {
       method: 'POST',
       path: `/individuals/calculations/${nino}/self-assessment/${taxYear.label}/trigger/in-year`,
-      version: CALCULATIONS_VERSION,
+      api: CALCULATIONS,
     });
     if (!result?.calculationId) throw new HttpError(502, 'HMRC didn’t say which calculation it started.');
     res.status(202).json({ calculationId: result.calculationId });
@@ -344,7 +346,7 @@ export function hmrcRouter(ctx: AppContext): Router {
     if (!calculationId) {
       let list: { calculations?: { calculationId: string; calculationTimestamp?: string }[] };
       try {
-        list = await callHmrc(ctx, req, { path: base, version: CALCULATIONS_VERSION, testScenario: 'DYNAMIC' });
+        list = await callHmrc(ctx, req, { path: base, api: CALCULATIONS, testScenario: 'DYNAMIC' });
       } catch (err) {
         if (!notFound(err)) throw err;
         list = {};
@@ -357,7 +359,7 @@ export function hmrcRouter(ctx: AppContext): Router {
     try {
       const body = await callHmrc<HmrcCalculationBody>(ctx, req, {
         path: `${base}/${calculationId}`,
-        version: CALCULATIONS_VERSION,
+        api: CALCULATIONS,
         testScenario: SANDBOX_CALCULATION_EXAMPLE,
       });
       res.json({ state: 'ready', calculation: summariseCalculation(body, calculationId) } satisfies HmrcCalculationResponse);

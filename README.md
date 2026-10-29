@@ -178,7 +178,12 @@ You can also back up the Docker volume itself.
 The app talks to HMRC's MTD APIs as its own application, registered on HMRC's Developer Hub. It starts with the sandbox, HMRC's test service with made-up taxpayers. Using the live service needs HMRC's production approval for the application, which isn't covered here yet.
 
 1. Sign in at [developer.service.hmrc.gov.uk](https://developer.service.hmrc.gov.uk) and add a sandbox application.
-2. Subscribe it to the **Business Details (MTD)**, **Obligations (MTD)**, **Self Employment Business (MTD)** and **Test Fraud Prevention Headers** APIs.
+2. Subscribe it to these APIs, at these versions (subscriptions are per version):
+   - **Business Details (MTD)** 2.0
+   - **Obligations (MTD)** 3.0
+   - **Self Employment Business (MTD)** 5.0
+   - **Individual Calculations (MTD)** 8.0
+   - **Test Fraud Prevention Headers** 1.0 (sandbox only)
 3. Add the redirect URI shown in **Settings → HMRC** (the app's address followed by `/api/hmrc/callback`, e.g. `https://crafty.local/api/hmrc/callback`).
 4. Put the application's client ID and a client secret in `.env` as `HMRC_CLIENT_ID` and `HMRC_CLIENT_SECRET`, and restart the app.
 5. Create a sandbox test user (an **Individual**) with HMRC's [Create test user](https://developer.service.hmrc.gov.uk/api-test-user) service. In **Settings → HMRC**, enter its National Insurance number, choose **Connect to HMRC** and sign in with its user ID and password.

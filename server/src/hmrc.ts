@@ -213,11 +213,17 @@ interface HmrcErrorBody {
   errors?: { code?: string; message?: string }[];
 }
 
+/** One of HMRC's APIs. The app must be subscribed to this version of it on HMRC's Developer Hub. */
+export interface HmrcApi {
+  name: string;
+  /** Sent in the Accept header (e.g. "2.0"). */
+  version: string;
+}
+
 export interface HmrcCall {
   method?: 'GET' | 'POST' | 'PUT' | 'DELETE';
   path: string;
-  /** The API version, sent in the Accept header (e.g. "2.0"). */
-  version: string;
+  api: HmrcApi;
   query?: Record<string, string>;
   body?: unknown;
   /** Sandbox only: which of HMRC's test scenarios to answer with (Gov-Test-Scenario). */
@@ -246,7 +252,7 @@ export async function callHmrcWithReceipt<T>(
   if (call.query) url.search = new URLSearchParams(call.query).toString();
   const headers: Record<string, string> = {
     ...(await fraudPreventionForRequest(req, ctx.config.trustProxy)),
-    Accept: `application/vnd.hmrc.${call.version}+json`,
+    Accept: `application/vnd.hmrc.${call.api.version}+json`,
     Authorization: `Bearer ${token}`,
   };
   if (call.body !== undefined) headers['Content-Type'] = 'application/json';
@@ -271,6 +277,12 @@ export async function callHmrcWithReceipt<T>(
   }
   if (error.code === 'CLIENT_OR_AGENT_NOT_AUTHORISED') {
     throw new HttpError(403, 'HMRC says the person who connected can’t act for this National Insurance number. Check it in Settings → HMRC.');
+  }
+  if (/not subscribed/i.test(error.message ?? '')) {
+    throw new HttpError(
+      502,
+      `The app isn’t subscribed to HMRC’s ${call.api.name} API, version ${call.api.version}. Subscribe your application to it on HMRC’s Developer Hub, then try again.`,
+    );
   }
   const messages = [error.message, ...(error.errors ?? []).map((e) => e.message)].filter(Boolean);
   const detail = messages.length ? messages.join(' ') : `status ${res.status}`;
