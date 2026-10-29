@@ -30,6 +30,7 @@ import type {
   User,
   YearEndSummaryResponse,
 } from '@crafty/shared';
+import { MTD_FIRST_SEND_YEAR, startYearFromLabel } from '@crafty/shared';
 import { api, toQuery } from './api';
 
 // ---- Auth ----
@@ -300,6 +301,12 @@ export function useAutoBackupMutations() {
 export const HMRC_OBLIGATIONS = 'hmrc-obligations';
 
 export const useHmrc = () => useQuery({ queryKey: ['hmrc'], queryFn: () => api.get<HmrcStatus>('/hmrc') });
+
+/** Whether HMRC can calculate the tax for a year: connected, with a NINO, from 2025/26. */
+export function useHmrcCalculationAvailable(taxYearLabel: string | undefined): boolean {
+  const { data: hmrc } = useHmrc();
+  return Boolean(hmrc?.connection && hmrc.nino) && (startYearFromLabel(taxYearLabel ?? '') ?? 0) >= MTD_FIRST_SEND_YEAR;
+}
 
 export function useHmrcMutations() {
   const qc = useQueryClient();

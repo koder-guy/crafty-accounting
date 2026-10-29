@@ -16,8 +16,9 @@ import { IncomeView } from './pages/IncomeView';
 import { OutgoingList } from './pages/OutgoingList';
 import { ExpenseForm } from './pages/ExpenseForm';
 import { ExpenseView } from './pages/ExpenseView';
-import { Mileage } from './pages/Mileage';
-import { UseOfHome } from './pages/UseOfHome';
+import { ClaimsLayout } from './pages/claims/ClaimsLayout';
+import { Mileage } from './pages/claims/Mileage';
+import { UseOfHome } from './pages/claims/UseOfHome';
 import { MtdQuarterly } from './pages/MtdQuarterly';
 import { ReportsLayout } from './pages/reports/ReportsLayout';
 import { Breakdown } from './pages/reports/Breakdown';
@@ -84,8 +85,13 @@ function App() {
             </EditorOnly>
           }
         />
-        <Route path="mileage" element={<Mileage />} />
-        <Route path="use-of-home" element={<UseOfHome />} />
+        <Route path="claims" element={<ClaimsLayout />}>
+          <Route index element={<Navigate to="mileage" replace />} />
+          <Route path="mileage" element={<Mileage />} />
+          <Route path="use-of-home" element={<UseOfHome />} />
+        </Route>
+        <Route path="mileage" element={<Navigate to="/claims/mileage" replace />} />
+        <Route path="use-of-home" element={<Navigate to="/claims/use-of-home" replace />} />
         <Route path="mtd" element={<MtdQuarterly />} />
         <Route path="reports" element={<ReportsLayout />}>
           <Route index element={<Navigate to="tax-estimate" replace />} />

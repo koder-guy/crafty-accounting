@@ -3,16 +3,21 @@ import { useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router';
 import { Landmark, LoaderCircle, RefreshCw } from 'lucide-react';
 import {
-  MTD_FIRST_SEND_YEAR,
   displayTaxYear,
   formatGBP,
-  startYearFromLabel,
   type HmrcCalculation,
   type HmrcMessage,
   type TaxEstimateResponse,
 } from '@crafty/shared';
 import { Alert, Button, Card, CardHeader, Spinner } from '../components/ui';
-import { HMRC_CALCULATION, useCanEdit, useHmrc, useHmrcCalculation, useTriggerHmrcCalculation } from '../lib/queries';
+import {
+  HMRC_CALCULATION,
+  useCanEdit,
+  useHmrc,
+  useHmrcCalculation,
+  useHmrcCalculationAvailable,
+  useTriggerHmrcCalculation,
+} from '../lib/queries';
 
 /** Give up checking for a calculation HMRC is still working on after this long. */
 const WAIT_MS = 2 * 60 * 1000;
@@ -88,12 +93,6 @@ function Figures({ calculation, data }: { calculation: HmrcCalculation; data: Ta
       </table>
     </div>
   );
-}
-
-/** Whether HMRC can calculate the tax for a year: connected, with a NINO, from 2025/26. */
-export function useHmrcCalculationAvailable(taxYearLabel: string | undefined): boolean {
-  const { data: hmrc } = useHmrc();
-  return Boolean(hmrc?.connection && hmrc.nino) && (startYearFromLabel(taxYearLabel ?? '') ?? 0) >= MTD_FIRST_SEND_YEAR;
 }
 
 /**

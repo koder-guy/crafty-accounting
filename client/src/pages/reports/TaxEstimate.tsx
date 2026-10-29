@@ -21,9 +21,8 @@ import {
 import { NoTaxYear } from '../../components/NoTaxYear';
 import { SectionHeading } from '../../components/SectionLayout';
 import { Alert, Button, Card, CardHeader, Field, Spinner } from '../../components/ui';
-import { useActiveTaxYear, useCanEdit, useTaxEstimate, useTaxSettings } from '../../lib/queries';
+import { useActiveTaxYear, useCanEdit, useHmrcCalculationAvailable, useTaxEstimate, useTaxSettings } from '../../lib/queries';
 import { printPage } from '../../lib/liveUpdates';
-import { useHmrcCalculationAvailable } from '../HmrcCalculationCard';
 
 const whole = (pence: number) => formatGBP(pence).replace(/\.00$/, '');
 const percent = (rate: number) => `${Math.round(rate * 1000) / 10}%`;

@@ -6,7 +6,6 @@ import {
   CalendarDays,
   Car,
   FileSpreadsheet,
-  House,
   ChartPie,
   Menu,
   Settings,
@@ -135,8 +134,7 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
         <NavItem to="/" end icon={TrendingUp} label="Dashboard" />
         <NavItem to="/incoming" icon={ArrowDownRight} label="Incoming" count={active?.incomeCount} />
         <NavItem to="/outgoing" icon={ArrowUpRight} label="Outgoing" count={active?.expenseCount} />
-        <NavItem to="/mileage" icon={Car} label="Mileage" count={active?.mileageCount} />
-        <NavItem to="/use-of-home" icon={House} label="Use of Home" />
+        <NavItem to="/claims" icon={Car} label="Simplified expenses" />
         <NavItem to="/reports" icon={ChartPie} label="Reports" />
         <NavItem to="/mtd" icon={FileSpreadsheet} label="MTD Quarterly" />
         <NavItem to="/settings" icon={Settings} label="Settings" />

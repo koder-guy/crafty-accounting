@@ -301,9 +301,9 @@ function DrillDown({
                       <Link
                         to={
                           i.kind === 'mileage'
-                            ? '/mileage'
+                            ? '/claims/mileage'
                             : i.kind === 'home'
-                              ? '/use-of-home'
+                              ? '/claims/use-of-home'
                               : `/${i.kind === 'income' ? 'incoming' : 'outgoing'}/${i.transactionId}`
                         }
                         className="font-medium text-ink hover:text-accent-soft hover:underline"

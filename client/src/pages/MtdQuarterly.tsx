@@ -33,9 +33,10 @@ import {
   useMtdQuarters,
   useMtdSubmission,
   useSendToHmrc,
+  useHmrcCalculationAvailable,
   useTaxEstimate,
 } from '../lib/queries';
-import { HmrcCalculationCard, useHmrcCalculationAvailable } from './HmrcCalculationCard';
+import { HmrcCalculationCard } from './HmrcCalculationCard';
 
 const STATUS: Record<MtdQuarterStatus, { label: string; tone: BadgeTone }> = {
   upcoming: { label: 'Upcoming', tone: 'neutral' },

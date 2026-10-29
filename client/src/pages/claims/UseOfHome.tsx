@@ -10,12 +10,12 @@ import {
   useOfHomeNextBand,
   type UseOfHomeResponse,
 } from '@crafty/shared';
-import { ChangedElsewhere, recordedBy } from '../components/FormShell';
-import { NoTaxYear } from '../components/NoTaxYear';
-import { PageBody, PageHeader } from '../components/PageHeader';
-import { SentQuarterNotice } from '../components/SentQuarterNotice';
-import { Alert, Button, Card, CardHeader, Spinner } from '../components/ui';
-import { useActiveTaxYear, useCanEdit, useSaveUseOfHome, useUseOfHome } from '../lib/queries';
+import { ChangedElsewhere, recordedBy } from '../../components/FormShell';
+import { NoTaxYear } from '../../components/NoTaxYear';
+import { SectionHeading } from '../../components/SectionLayout';
+import { SentQuarterNotice } from '../../components/SentQuarterNotice';
+import { Alert, Button, Card, CardHeader, Spinner } from '../../components/ui';
+import { useActiveTaxYear, useCanEdit, useSaveUseOfHome, useUseOfHome } from '../../lib/queries';
 
 const parseHours = (value: string): number | null => {
   const text = value.trim();
@@ -187,41 +187,44 @@ export function UseOfHome() {
 
   return (
     <>
-      <PageHeader title="Use of Home" />
-      <PageBody>
-        {yearLoading || (taxYear && isLoading) ? (
-          <Spinner />
-        ) : !taxYear ? (
-          <NoTaxYear />
-        ) : error || !data ? (
-          <Alert>{error?.message ?? 'Could not load use of home'}</Alert>
-        ) : (
-          <>
-            <div className="grid gap-4 sm:grid-cols-3">
-              <Stat label="Months claimed" value={String(data.totals.monthsClaimed)} sub="With 25 or more hours at home" />
-              <Stat label="Hours at home" value={data.totals.hours.toLocaleString('en-GB')} sub="Business work this tax year" />
-              <Stat label="Use of home claim" value={formatGBP(data.totals.claimPence)} sub="Counted as rent, rates, power and insurance" />
-            </div>
+      <div className="space-y-6">
+        <SectionHeading
+          title="Use of Home"
+          description="Hours worked at home each month, claimed at HMRC's flat rate instead of a share of household bills."
+        />
+          {yearLoading || (taxYear && isLoading) ? (
+            <Spinner />
+          ) : !taxYear ? (
+            <NoTaxYear />
+          ) : error || !data ? (
+            <Alert>{error?.message ?? 'Could not load use of home'}</Alert>
+          ) : (
+            <>
+              <div className="grid gap-4 sm:grid-cols-3">
+                <Stat label="Months claimed" value={String(data.totals.monthsClaimed)} sub="With 25 or more hours at home" />
+                <Stat label="Hours at home" value={data.totals.hours.toLocaleString('en-GB')} sub="Business work this tax year" />
+                <Stat label="Use of home claim" value={formatGBP(data.totals.claimPence)} sub="Counted as rent, rates, power and insurance" />
+              </div>
 
-            <Alert tone="warning">
-              The flat rate covers the extra heating, lighting and power from working at home, so don't also claim a share of those
-              household bills in Outgoing. Business calls and the business share of your broadband can still go in Outgoing.
-            </Alert>
+              <Alert tone="warning">
+                The flat rate covers the extra heating, lighting and power from working at home, so don't also claim a share of those
+                household bills in Outgoing. Business calls and the business share of your broadband can still go in Outgoing.
+              </Alert>
 
-            <HoursForm key={taxYear.id} taxYearId={taxYear.id} data={data} />
+              <HoursForm key={taxYear.id} taxYearId={taxYear.id} data={data} />
 
-            <p className="flex items-start gap-2 text-xs text-faint">
-              <Info className="mt-0.5 size-3.5 shrink-0" aria-hidden />
-              HMRC's flat rate for working from home, for each month with 25 or more hours of business work at home:{' '}
-              {[...USE_OF_HOME_BANDS]
-                .reverse()
-                .map((b) => `${b.label.toLowerCase()} ${formatGBP(b.pence).replace(/\.00$/, '')}`)
-                .join(', ')}
-              . Count only time spent working on the business at home. Months run from the 6th to the 5th, like the tax year.
-            </p>
-          </>
-        )}
-      </PageBody>
+              <p className="flex items-start gap-2 text-xs text-faint">
+                <Info className="mt-0.5 size-3.5 shrink-0" aria-hidden />
+                HMRC's flat rate for working from home, for each month with 25 or more hours of business work at home:{' '}
+                {[...USE_OF_HOME_BANDS]
+                  .reverse()
+                  .map((b) => `${b.label.toLowerCase()} ${formatGBP(b.pence).replace(/\.00$/, '')}`)
+                  .join(', ')}
+                . Count only time spent working on the business at home. Months run from the 6th to the 5th, like the tax year.
+              </p>
+            </>
+          )}
+      </div>
     </>
   );
 }
