@@ -74,13 +74,10 @@ export function OutgoingList() {
               title="Outgoing payments"
               action={
                 data && (
-                  <div className="text-right">
-                    <span className="text-sm text-muted">
-                      {data.length} {data.length === 1 ? 'transaction' : 'transactions'} ·{' '}
-                      <span className="tabular font-semibold text-out-soft">{formatGBP(total)}</span>
-                    </span>
-                    <div className="text-xs text-faint">Mileage and use of home are under Simplified Expenses</div>
-                  </div>
+                  <span className="text-sm text-muted">
+                    {data.length} {data.length === 1 ? 'transaction' : 'transactions'} ·{' '}
+                    <span className="tabular font-semibold text-out-soft">{formatGBP(total)}</span>
+                  </span>
                 )
               }
             />
