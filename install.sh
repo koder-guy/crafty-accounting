@@ -1,12 +1,14 @@
 #!/bin/bash
 # Installs Crafty Accounting on macOS or Linux and starts it, or updates an existing install.
 #
-#   read -rs GITHUB_TOKEN && export GITHUB_TOKEN      (paste the token, press Enter)
-#   /bin/bash -c "$(curl -fsSL -H "Authorization: Bearer $GITHUB_TOKEN" https://raw.githubusercontent.com/koder-guy/crafty-accounting/main/install.sh)"
+#   /bin/bash -c 'read -rsp "GitHub token: " GITHUB_TOKEN && echo && export GITHUB_TOKEN && /bin/bash -c "$(curl -fsSL -H "Authorization: Bearer $GITHUB_TOKEN" https://raw.githubusercontent.com/koder-guy/crafty-accounting/main/install.sh)"'
 #
-# The repository is private, so GITHUB_TOKEN must be a GitHub token that can read
-# it: a fine-grained personal access token for koder-guy/crafty-accounting with
-# Contents: Read-only. It's only used for the downloads and isn't saved.
+# The repository is private, so it needs a GitHub token that can read it: a
+# fine-grained personal access token for koder-guy/crafty-accounting with
+# Contents: Read-only. The command above asks for it once and passes it on; run
+# any other way, the script asks for it itself unless GITHUB_TOKEN is set. It's
+# only used for the downloads and isn't saved. To update, run
+# ~/crafty-accounting/crafty update.
 #
 # Everything goes in ~/crafty-accounting: its own copy of Node 22 (from nodejs.org),
 # the app, your settings (.env) and your books (data/). Nothing is installed system
@@ -43,9 +45,35 @@ for tool in curl tar; do
   command -v "$tool" >/dev/null 2>&1 || fail "$tool is needed. Install it with your package manager (e.g. sudo apt install $tool) and run this again."
 done
 
-if [ -z "${CRAFTY_TARBALL:-}" ] && [ -z "${GITHUB_TOKEN:-}" ]; then
-  fail "GITHUB_TOKEN isn't set. The repository is private, so the download needs a GitHub token; see the README."
+# ---- GitHub token, for the private repository ----
+# The HTTP status GitHub gives the token for the repository: 200 if it can read it.
+token_status() {
+  curl -sS -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $1" \
+    https://api.github.com/repos/koder-guy/crafty-accounting 2>/dev/null || true
+}
+if [ -z "${CRAFTY_TARBALL:-}" ]; then
+  if [ -n "${GITHUB_TOKEN:-}" ]; then
+    status="$(token_status "$GITHUB_TOKEN")"
+    [ "$status" = 200 ] || fail "GitHub didn't accept GITHUB_TOKEN for koder-guy/crafty-accounting (HTTP $status). Check it can read the repository and hasn't expired."
+  elif (: </dev/tty) 2>/dev/null; then
+    echo "The app is in a private GitHub repository. Paste a GitHub token that can read"
+    echo "koder-guy/crafty-accounting (it won't be shown) and press Enter."
+    for attempt in 1 2 3; do
+      printf 'GitHub token: '
+      read -rs GITHUB_TOKEN </dev/tty || true
+      echo
+      [ -n "$GITHUB_TOKEN" ] || continue
+      status="$(token_status "$GITHUB_TOKEN")"
+      [ "$status" = 200 ] && break
+      echo "GitHub didn't accept that token (HTTP $status). Check it can read the repository and hasn't expired."
+      GITHUB_TOKEN=""
+    done
+    [ -n "$GITHUB_TOKEN" ] || fail "no working GitHub token. See \"Quick install\" in the README for how to make one."
+  else
+    fail "GITHUB_TOKEN isn't set and there's no terminal to ask for it. The repository is private, so the download needs a GitHub token; see the README."
+  fi
 fi
+
 case "$(uname -s)" in
   Darwin) OS=darwin ;;
   Linux) OS=linux ;;
@@ -143,9 +171,10 @@ PORT="$(sed -n 's/^PORT=//p' "$ENV_FILE" | tail -n 1)"; PORT="${PORT:-3000}"
 ADMIN_NAME="$(sed -n 's/^ADMIN_NAME=//p' "$ENV_FILE" | tail -n 1)"; ADMIN_NAME="${ADMIN_NAME:-Admin}"
 
 # ---- Start and stop script ----
-cat > "$DIR/crafty" <<'EOF'
+# Written to a new file and moved into place: `crafty update` is still reading the old one.
+cat > "$DIR/crafty.new" <<'EOF'
 #!/bin/sh
-# Starts and stops Crafty Accounting:  crafty start | stop | restart | status | log
+# Starts and stops Crafty Accounting:  crafty start | stop | restart | status | log | update
 DIR="$(cd "$(dirname "$0")" && pwd)"
 PID_FILE="$DIR/crafty.pid"
 LOG="$DIR/logs/crafty.log"
@@ -157,8 +186,16 @@ start() {
   if running; then echo "Crafty Accounting is already running (process $(cat "$PID_FILE"))."; return 0; fi
   mkdir -p "$DIR/logs"
   cd "$DIR/app" || exit 1
-  NODE_ENV=production nohup "$DIR/node/bin/node" --env-file="$DIR/.env" server/dist/index.js >>"$LOG" 2>&1 </dev/null &
-  echo $! >"$PID_FILE"
+  # In a session of its own (detached), so closing the terminal doesn't stop it; nohup isn't enough.
+  NODE_ENV=production "$DIR/node/bin/node" -e '
+    const { spawn } = require("node:child_process");
+    const fs = require("node:fs");
+    const [node, envFile, log, pidFile] = process.argv.slice(1);
+    const out = fs.openSync(log, "a");
+    const child = spawn(node, ["--env-file=" + envFile, "server/dist/index.js"], { detached: true, stdio: ["ignore", out, out] });
+    fs.writeFileSync(pidFile, String(child.pid));
+    child.unref();
+  ' "$DIR/node/bin/node" "$DIR/.env" "$LOG" "$PID_FILE"
   i=0
   while [ $i -lt 30 ]; do
     if curl -fsS "http://localhost:$PORT/api/health" >/dev/null 2>&1; then
@@ -190,10 +227,15 @@ case "${1:-}" in
   restart) stop && start ;;
   status) if running; then echo "Running (process $(cat "$PID_FILE")) at http://localhost:$PORT"; else echo "Not running."; exit 1; fi ;;
   log) tail -n 50 -f "$LOG" ;;
-  *) echo "Usage: $0 start | stop | restart | status | log" >&2; exit 2 ;;
+  update)
+    # A copy of the installer that came with the app, since the update replaces the app.
+    cp "$DIR/app/install.sh" "$DIR/.install.sh" || exit 1
+    CRAFTY_DIR="$DIR" exec /bin/bash "$DIR/.install.sh" ;;
+  *) echo "Usage: $0 start | stop | restart | status | log | update" >&2; exit 2 ;;
 esac
 EOF
-chmod +x "$DIR/crafty"
+chmod +x "$DIR/crafty.new"
+mv "$DIR/crafty.new" "$DIR/crafty"
 
 # ---- Swap in the new build and start it ----
 step "Starting the app"
@@ -239,7 +281,7 @@ echo "the computer. It doesn't start by itself; after a restart, run:"
 echo "  $DIR/crafty start"
 echo
 echo "  Stop / restart:  $DIR/crafty stop   (or restart, status, log)"
-echo "  Update:          run the same install command again"
+echo "  Update:          $DIR/crafty update   (asks for the GitHub token)"
 echo "  Your books:      $DIR/data (daily backups in data/backups)"
 if [ "$OS" = darwin ]; then
   echo

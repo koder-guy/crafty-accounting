@@ -26,19 +26,13 @@ Self-hosted bookkeeping for a UK sole trader, built for selling at craft fairs a
 
 The repository is private, so installing needs a GitHub token that can read it. Make one once at [github.com/settings/personal-access-tokens/new](https://github.com/settings/personal-access-tokens/new): a fine-grained token with **Repository access → Only select repositories → koder-guy/crafty-accounting** and **Permissions → Contents → Read-only**. Keep it somewhere safe, such as a password manager; it's needed again to update.
 
-In a terminal, run this, paste the token (it isn't shown) and press Enter:
+Paste this into a terminal. It asks for the token: paste it (it isn't shown) and press Enter.
 
 ```bash
-read -rs GITHUB_TOKEN && export GITHUB_TOKEN
+/bin/bash -c 'read -rsp "GitHub token: " GITHUB_TOKEN && echo && export GITHUB_TOKEN && /bin/bash -c "$(curl -fsSL -H "Authorization: Bearer $GITHUB_TOKEN" https://raw.githubusercontent.com/koder-guy/crafty-accounting/main/install.sh)"'
 ```
 
-Then run the installer:
-
-```bash
-/bin/bash -c "$(curl -fsSL -H "Authorization: Bearer $GITHUB_TOKEN" https://raw.githubusercontent.com/koder-guy/crafty-accounting/main/install.sh)"
-```
-
-The token is used only for the two downloads from GitHub and isn't saved, or kept in your shell history.
+The token is checked with GitHub before anything is downloaded, used only for the downloads from GitHub, and isn't saved or kept in your shell history. If `GITHUB_TOKEN` is already set, `install.sh` uses it; otherwise, run on its own, it asks.
 
 [`install.sh`](install.sh) works on macOS and on Linux distributions such as Ubuntu, Debian and Fedora (Intel/AMD or ARM), and needs only `curl` and `tar`. It doesn't install anything system wide or ask for an administrator password: everything goes in `~/crafty-accounting`, with its own copy of Node 22 from nodejs.org (checked against nodejs.org's checksums). It downloads and builds the app, starts it in the background, and prints the addresses to open (`http://localhost:3000`, and the computer's IP address for other devices at home) with the sign-in name, `Admin`, and a random password. Change the password in **Settings → People**.
 
@@ -48,9 +42,13 @@ The app keeps running after the terminal is closed, but doesn't start by itself 
 ~/crafty-accounting/crafty start
 ```
 
-`crafty` also takes `stop`, `restart`, `status` and `log`.
+`crafty` also takes `stop`, `restart`, `status` and `log`. To update to the latest version, run the following and give the token when asked:
 
-Running the install command again updates the app and keeps your books and settings; if the update fails, the running copy is left as it was. Settings are in `~/crafty-accounting/.env` (restart after changing them), the books in `~/crafty-accounting/data`. To choose things on a new install, put any of these before `/bin/bash`: `CRAFTY_DIR`, `CRAFTY_PORT`, `CRAFTY_ADMIN_NAME`, `CRAFTY_ADMIN_PASSWORD`.
+```bash
+~/crafty-accounting/crafty update
+```
+
+An update keeps your books and settings; if it fails, the running copy is left as it was. (Running the install command again does the same.) Settings are in `~/crafty-accounting/.env` (restart after changing them), the books in `~/crafty-accounting/data`. To choose things on a new install, put any of these before `/bin/bash`: `CRAFTY_DIR`, `CRAFTY_PORT`, `CRAFTY_ADMIN_NAME`, `CRAFTY_ADMIN_PASSWORD`.
 
 This serves plain HTTP, fine on a home network. For HTTPS, use Docker Compose below. Alpine Linux and other musl-based systems aren't covered (nodejs.org has no Node build for them); use Docker Compose there too.
 
