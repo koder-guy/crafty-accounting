@@ -1,14 +1,12 @@
 #!/bin/bash
 # Installs Crafty Accounting on macOS or Linux and starts it, or updates an existing install.
 #
-#   /bin/bash -c 'read -rsp "GitHub token: " GITHUB_TOKEN && echo && export GITHUB_TOKEN && /bin/bash -c "$(curl -fsSL -H "Authorization: Bearer $GITHUB_TOKEN" https://raw.githubusercontent.com/koder-guy/crafty-accounting/main/install.sh)"'
+#   /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/koder-guy/crafty-accounting/main/install.sh)"
 #
-# While the repository is private, it needs a GitHub token that can read it: a
-# fine-grained personal access token for koder-guy/crafty-accounting with
-# Contents: Read-only. The command above asks for it once and passes it on; run
-# any other way, the script asks for it itself unless GITHUB_TOKEN is set or the
-# repository can be read without one (if it's made public). The token is
-# only used for the downloads and isn't saved. To update, run
+# The repository is public, so no token is needed. Should it be made private
+# again, the script asks for a GitHub token that can read it (a fine-grained
+# personal access token with Contents: Read-only) unless GITHUB_TOKEN is set; the
+# token is only used for the downloads and isn't saved. To update, run
 # ~/crafty-accounting/crafty update.
 #
 # Everything goes in ~/crafty-accounting: its own copy of Node 22 (from nodejs.org),
@@ -79,9 +77,9 @@ if [ -z "${CRAFTY_TARBALL:-}" ]; then
       echo "GitHub didn't accept that token (HTTP $status). Check it can read the repository and hasn't expired."
       GITHUB_TOKEN=""
     done
-    [ -n "$GITHUB_TOKEN" ] || fail "no working GitHub token. See \"Quick install\" in the README for how to make one."
+    [ -n "$GITHUB_TOKEN" ] || fail "no working GitHub token. Make a fine-grained token for $REPO with Contents: Read-only."
   else
-    fail "GITHUB_TOKEN isn't set and there's no terminal to ask for it. The repository is private, so the download needs a GitHub token; see the README."
+    fail "GITHUB_TOKEN isn't set and there's no terminal to ask for it. The repository is private, so the download needs a GitHub token (fine-grained, Contents: Read-only)."
   fi
 fi
 
@@ -292,7 +290,7 @@ echo "the computer. It doesn't start by itself; after a restart, run:"
 echo "  $DIR/crafty start"
 echo
 echo "  Stop / restart:  $DIR/crafty stop   (or restart, status, log)"
-echo "  Update:          $DIR/crafty update   (asks for the GitHub token)"
+echo "  Update:          $DIR/crafty update"
 echo "  Your books:      $DIR/data (daily backups in data/backups)"
 if [ "$OS" = darwin ]; then
   echo

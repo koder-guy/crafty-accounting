@@ -2,14 +2,12 @@
 # Installs Crafty Accounting with Docker Compose (the app plus Caddy for HTTPS) on
 # macOS or Linux and starts it, or updates an existing install.
 #
-#   /bin/bash -c 'read -rsp "GitHub token: " GITHUB_TOKEN && echo && export GITHUB_TOKEN && /bin/bash -c "$(curl -fsSL -H "Authorization: Bearer $GITHUB_TOKEN" https://raw.githubusercontent.com/koder-guy/crafty-accounting/main/install-docker.sh)"'
+#   /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/koder-guy/crafty-accounting/main/install-docker.sh)"
 #
-# While the repository is private, it needs a GitHub token that can read it: a
-# fine-grained personal access token for koder-guy/crafty-accounting with
-# Contents: Read-only. The command above asks for it once and passes it on; run
-# any other way, the script asks for it itself unless GITHUB_TOKEN is set or the
-# repository can be read without one (if it's made public). The token is
-# only used for the download and isn't saved. To update, run
+# The repository is public, so no token is needed. Should it be made private
+# again, the script asks for a GitHub token that can read it (a fine-grained
+# personal access token with Contents: Read-only) unless GITHUB_TOKEN is set; the
+# token is only used for the downloads and isn't saved. To update, run
 # ~/crafty-accounting-docker/install-docker.sh again.
 #
 # Needs Docker with Compose: Docker Desktop (or OrbStack) on a Mac. On Linux it
@@ -206,7 +204,7 @@ Docker starts it again whenever Docker itself starts.
   Stop:        cd $DIR && $DOCKER_CMD compose stop
   Start:       cd $DIR && $DOCKER_CMD compose start
   Log:         cd $DIR && $DOCKER_CMD compose logs -f
-  Update:      $DIR/install-docker.sh   (asks for the GitHub token)
+  Update:      $DIR/install-docker.sh
   Settings:    $ENV_FILE
   Backups:     $DIR/backups (daily); the books are in the crafty-data Docker volume
 EOF
@@ -252,9 +250,9 @@ get_token() {
       echo "GitHub didn't accept that token (HTTP $status). Check it can read the repository and hasn't expired."
       GITHUB_TOKEN=""
     done
-    [ -n "$GITHUB_TOKEN" ] || fail "no working GitHub token. See \"Quick install\" in the README for how to make one."
+    [ -n "$GITHUB_TOKEN" ] || fail "no working GitHub token. Make a fine-grained token for $REPO with Contents: Read-only."
   else
-    fail "GITHUB_TOKEN isn't set and there's no terminal to ask for it. The repository is private, so the download needs a GitHub token; see the README."
+    fail "GITHUB_TOKEN isn't set and there's no terminal to ask for it. The repository is private, so the download needs a GitHub token (fine-grained, Contents: Read-only)."
   fi
 }
 

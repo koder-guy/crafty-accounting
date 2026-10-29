@@ -25,17 +25,11 @@ Self-hosted bookkeeping for a UK sole trader, built for selling at craft fairs a
 
 ## Quick install (macOS and Linux)
 
-The repository is private, so installing needs a GitHub token that can read it. Make one once at [github.com/settings/personal-access-tokens/new](https://github.com/settings/personal-access-tokens/new): a fine-grained token with **Repository access → Only select repositories → koder-guy/crafty-accounting** and **Permissions → Contents → Read-only**. Keep it somewhere safe, such as a password manager; it's needed again to update.
-
-Paste this into a terminal. It asks for the token: paste it (it isn't shown) and press Enter.
+Paste this into a terminal:
 
 ```bash
-/bin/bash -c 'read -rsp "GitHub token: " GITHUB_TOKEN && echo && export GITHUB_TOKEN && /bin/bash -c "$(curl -fsSL -H "Authorization: Bearer $GITHUB_TOKEN" https://raw.githubusercontent.com/koder-guy/crafty-accounting/main/install.sh)"'
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/koder-guy/crafty-accounting/main/install.sh)"
 ```
-
-The token is checked with GitHub before anything is downloaded, used only for the downloads from GitHub, and isn't saved or kept in your shell history. If `GITHUB_TOKEN` is already set, `install.sh` uses it; otherwise, run on its own, it asks.
-
-If the repository is made public, no token is needed: both install scripts (and `crafty update`) check whether GitHub serves the repository without one before asking. The install commands then become a plain `/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/koder-guy/crafty-accounting/main/install.sh)"` (or `install-docker.sh`).
 
 [`install.sh`](install.sh) works on macOS and on Linux distributions such as Ubuntu, Debian and Fedora (Intel/AMD or ARM), and needs only `curl` and `tar`. It doesn't install anything system wide or ask for an administrator password: everything goes in `~/crafty-accounting`, with its own copy of Node 22 from nodejs.org (checked against nodejs.org's checksums). It downloads and builds the app, starts it in the background, and prints the addresses to open (`http://localhost:3000`, and the computer's IP address for other devices at home) with the sign-in name, `Admin`, and a random password. Change the password in **Settings → People**.
 
@@ -45,7 +39,7 @@ The app keeps running after the terminal is closed, but doesn't start by itself 
 ~/crafty-accounting/crafty start
 ```
 
-`crafty` also takes `stop`, `restart`, `status` and `log`. To update to the latest version, run the following and give the token when asked:
+`crafty` also takes `stop`, `restart`, `status` and `log`. To update to the latest version:
 
 ```bash
 ~/crafty-accounting/crafty update
@@ -57,15 +51,15 @@ This serves plain HTTP, fine on a home network. For HTTPS, use Docker (next). Al
 
 ## Quick install with Docker
 
-The same, but running in Docker Compose with HTTPS (see below). It needs Docker: on a Mac, install and start [Docker Desktop](https://www.docker.com/products/docker-desktop/) or OrbStack first; on Linux, if Docker is missing, the script offers to install it with Docker's own script (get.docker.com), which asks for your password. With the same GitHub token as above:
+The same, but running in Docker Compose with HTTPS (see below). It needs Docker: on a Mac, install and start [Docker Desktop](https://www.docker.com/products/docker-desktop/) or OrbStack first; on Linux, if Docker is missing, the script offers to install it with Docker's own script (get.docker.com), which asks for your password.
 
 ```bash
-/bin/bash -c 'read -rsp "GitHub token: " GITHUB_TOKEN && echo && export GITHUB_TOKEN && /bin/bash -c "$(curl -fsSL -H "Authorization: Bearer $GITHUB_TOKEN" https://raw.githubusercontent.com/koder-guy/crafty-accounting/main/install-docker.sh)"'
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/koder-guy/crafty-accounting/main/install-docker.sh)"
 ```
 
 [`install-docker.sh`](install-docker.sh) downloads the source to `~/crafty-accounting-docker`, writes `.env` (a random password for `Admin`, and `SITE_ADDRESS` set to `localhost`, the computer's `.local` name on a Mac, and its IP address), builds and starts the containers, and prints the `https://` addresses to open with the sign-in details. It uses ports 80 and 443, or 8080 and 8443 if those are taken (choose with `CRAFTY_HTTP_PORT` and `CRAFTY_HTTPS_PORT`). It copies Caddy's certificate to `~/crafty-accounting-docker/crafty-root.crt` and prints the command to trust it on a Mac; for other devices, see [HTTPS](#https). If the computer's IP address changes, update `SITE_ADDRESS` in `.env` and run `docker compose up -d`.
 
-Docker restarts the containers whenever Docker itself starts. To update, run `~/crafty-accounting-docker/install-docker.sh`, which asks for the token and keeps your settings, books and backups. It uses the Compose project name `crafty-accounting`, the same as running `docker compose` by hand in a folder of that name, so on a computer where that's been done it uses the same volumes, and so the same books.
+Docker restarts the containers whenever Docker itself starts. To update, run `~/crafty-accounting-docker/install-docker.sh`, which keeps your settings, books and backups. It uses the Compose project name `crafty-accounting`, the same as running `docker compose` by hand in a folder of that name, so on a computer where that's been done it uses the same volumes, and so the same books.
 
 ## Run with Docker Compose
 
