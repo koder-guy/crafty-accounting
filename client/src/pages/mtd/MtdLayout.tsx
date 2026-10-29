@@ -1,5 +1,4 @@
 import { Calculator, FileSpreadsheet } from 'lucide-react';
-import { MethodNotice } from '../../components/MethodNotice';
 import { SectionLayout } from '../../components/SectionLayout';
 
 const SECTIONS = [
@@ -14,7 +13,6 @@ export function MtdLayout() {
       subtitle="Send HMRC your figures each quarter, and see the tax on your profit."
       sections={SECTIONS}
       variant="tabs"
-      notice={<MethodNotice method="mtd" />}
     />
   );
 }

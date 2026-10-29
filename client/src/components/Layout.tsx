@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { NavLink, Outlet, useLocation } from 'react-router';
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router';
 import {
   ArrowDownRight,
   ArrowUpRight,
@@ -15,10 +15,10 @@ import {
   X,
   type LucideIcon,
 } from 'lucide-react';
-import { APP_NAME, APP_VERSION, displayTaxYear, taxYearStartYearForDate, todayIso } from '@crafty/shared';
+import { APP_NAME, APP_VERSION, displayTaxYear, taxYearStartYearForDate, todayIso, type SubmissionMethod } from '@crafty/shared';
 import { useLiveUpdates } from '../lib/liveUpdates';
 import { UserMenu } from './UserMenu';
-import { useCanEdit, useTaxYearMutations, useTaxYears } from '../lib/queries';
+import { useActiveTaxYear, useCanEdit, useTaxYearMutations, useTaxYears } from '../lib/queries';
 
 function Brand() {
   return (
@@ -136,7 +136,7 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
         <NavItem to="/incoming" icon={ArrowDownRight} label="Incoming" count={active?.incomeCount} />
         <NavItem to="/outgoing" icon={ArrowUpRight} label="Outgoing" count={active?.expenseCount} />
         <NavItem to="/claims" icon={Car} label="Simplified Expenses" />
-        {/* Only the section for how the active year goes to HMRC; the other one says so if visited. */}
+        {/* Only the section for the active year's submission type; see useSectionFollowsYear. */}
         {active?.submissionMethod === 'mtd' ? (
           <NavItem to="/mtd" icon={FileSpreadsheet} label="Making Tax Digital" />
         ) : (
@@ -153,11 +153,38 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
 }
 
 
+/**
+ * Where to go instead when a page is in the section for the other submission type: the same tab if
+ * the section has one (Tax estimate), otherwise the section's first tab. Null when the page is fine.
+ */
+function pathForMethod(path: string, method: SubmissionMethod): string | null {
+  if (method === 'mtd' && /^\/self-assessment(\/|$)/.test(path)) {
+    return path.startsWith('/self-assessment/tax-estimate') ? '/mtd/tax-estimate' : '/mtd';
+  }
+  if (method === 'self_assessment' && /^\/mtd(\/|$)/.test(path)) {
+    return path.startsWith('/mtd/tax-estimate') ? '/self-assessment/tax-estimate' : '/self-assessment';
+  }
+  return null;
+}
+
+/** Keeps the page in the section the active year's submission type shows, e.g. after switching year. */
+function useSectionFollowsYear() {
+  const { taxYear } = useActiveTaxYear();
+  const { pathname } = useLocation();
+  const navigate = useNavigate();
+  const method = taxYear?.submissionMethod;
+  useEffect(() => {
+    const to = method && pathForMethod(pathname, method);
+    if (to) navigate(to, { replace: true });
+  }, [method, pathname, navigate]);
+}
+
 export function Layout() {
   const [menuOpen, setMenuOpen] = useState(false);
   const location = useLocation();
   useEffect(() => setMenuOpen(false), [location.pathname]);
   useLiveUpdates();
+  useSectionFollowsYear();
 
   return (
     <div className="min-h-screen lg:grid lg:grid-cols-[300px_1fr] print:block">

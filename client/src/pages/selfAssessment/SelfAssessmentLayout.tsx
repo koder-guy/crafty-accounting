@@ -1,5 +1,4 @@
 import { Calculator, FileText } from 'lucide-react';
-import { MethodNotice } from '../../components/MethodNotice';
 import { SectionLayout } from '../../components/SectionLayout';
 
 const SECTIONS = [
@@ -14,7 +13,6 @@ export function SelfAssessmentLayout() {
       subtitle="Estimate the tax on your profit and get the figures for your Self Assessment return."
       sections={SECTIONS}
       variant="tabs"
-      notice={<MethodNotice method="self_assessment" />}
     />
   );
 }
