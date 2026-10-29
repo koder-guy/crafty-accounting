@@ -10,7 +10,7 @@ const SECTIONS = [
 export function ClaimsLayout() {
   return (
     <SectionLayout
-      title="Simplified expenses"
+      title="Simplified Expenses"
       subtitle="Mileage and working from home, claimed at HMRC's flat rates instead of what they actually cost."
       sections={SECTIONS}
       variant="tabs"

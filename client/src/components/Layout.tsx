@@ -134,7 +134,7 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
         <NavItem to="/" end icon={TrendingUp} label="Dashboard" />
         <NavItem to="/incoming" icon={ArrowDownRight} label="Incoming" count={active?.incomeCount} />
         <NavItem to="/outgoing" icon={ArrowUpRight} label="Outgoing" count={active?.expenseCount} />
-        <NavItem to="/claims" icon={Car} label="Simplified expenses" />
+        <NavItem to="/claims" icon={Car} label="Simplified Expenses" />
         <NavItem to="/reports" icon={ChartPie} label="Reports" />
         <NavItem to="/mtd" icon={FileSpreadsheet} label="MTD Quarterly" />
         <NavItem to="/settings" icon={Settings} label="Settings" />

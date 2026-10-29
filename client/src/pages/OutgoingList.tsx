@@ -79,7 +79,7 @@ export function OutgoingList() {
                       {data.length} {data.length === 1 ? 'transaction' : 'transactions'} ·{' '}
                       <span className="tabular font-semibold text-out-soft">{formatGBP(total)}</span>
                     </span>
-                    <div className="text-xs text-faint">Mileage and use of home are under Simplified expenses</div>
+                    <div className="text-xs text-faint">Mileage and use of home are under Simplified Expenses</div>
                   </div>
                 )
               }
