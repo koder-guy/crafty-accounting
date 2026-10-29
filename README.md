@@ -34,8 +34,6 @@ Paste this into Terminal:
 
 Running the same command again updates the app and keeps your books and settings. Settings are in `~/crafty-accounting/.env`, the books in `~/crafty-accounting/data`. To choose things on a new install, put any of these before `/bin/bash`: `CRAFTY_DIR`, `CRAFTY_PORT`, `CRAFTY_ADMIN_NAME`, `CRAFTY_ADMIN_PASSWORD`.
 
-While the repository is private, the download needs a GitHub token with read access to it (`export GITHUB_TOKEN=…` first), and the `curl` needs `-H "Authorization: Bearer $GITHUB_TOKEN"`.
-
 This runs over plain HTTP, fine on a home network. For HTTPS, or on a Linux server, use Docker Compose below.
 
 ## Run with Docker Compose
