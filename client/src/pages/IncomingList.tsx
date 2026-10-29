@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
 import { ArrowDownRight, Plus } from 'lucide-react';
-import { formatDisplayDate, formatGBP, type Income } from '@crafty/shared';
+import { formatDisplayDate, formatGBP, shortCategoryName, type Income } from '@crafty/shared';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { SentQuarterNotice } from '../components/SentQuarterNotice';
 import { NoTaxYear } from '../components/NoTaxYear';
@@ -13,6 +13,7 @@ import {
   FilterBar,
   RowActions,
   SortTh,
+  TransactionCard,
   useSort,
   useTransactionFilters,
 } from '../components/transactions';
@@ -91,8 +92,23 @@ export function IncomingList() {
                 {filterState.active ? 'Try changing or clearing the filters.' : 'Record your first sale with “Add incoming”.'}
               </EmptyState>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[760px] text-sm">
+              <>
+              <ul className="divide-y divide-line border-t border-line sm:hidden">
+                {sorted.map((row) => (
+                  <TransactionCard
+                    key={row.id}
+                    to={`/incoming/${row.id}`}
+                    title={row.description}
+                    sub={`${formatDisplayDate(row.date)} · ${shortCategoryName(row.categoryName)}`}
+                    amount={formatGBP(row.amountPence)}
+                    amountClass="text-in-soft"
+                    method={row.paymentMethod}
+                    documents={row.documents}
+                  />
+                ))}
+              </ul>
+              <div className="hidden overflow-x-auto sm:block">
+                <table className="w-full min-w-[720px] text-sm">
                   <thead className="text-xs tracking-wide text-muted uppercase">
                     <tr className="border-b border-line">
                       <SortTh label="Date" sortKey="date" sort={sort} onSort={toggle} />
@@ -113,14 +129,14 @@ export function IncomingList() {
                         onClick={(e) => !(e.target as HTMLElement).closest('a,button') && navigate(`/incoming/${row.id}`)}
                       >
                         <td className="px-4 py-3 whitespace-nowrap text-muted">{formatDisplayDate(row.date)}</td>
-                        <td className="max-w-xs px-4 py-3">
+                        <td className="w-2/3 max-w-0 px-4 py-3">
                           <div className="flex items-center gap-1.5 font-medium text-ink">
                             <span className="truncate">{row.description}</span>
                             <DocDownloadLink documents={row.documents} />
                           </div>
                         </td>
-                        <td className="max-w-[220px] truncate px-4 py-3 text-muted" title={row.categoryName}>
-                          {row.categoryName}
+                        <td className="w-1/3 max-w-0 truncate px-4 py-3 text-muted" title={row.categoryName}>
+                          {shortCategoryName(row.categoryName)}
                         </td>
                         <td className="px-4 py-3">
                           <PaymentBadge method={row.paymentMethod} />
@@ -140,6 +156,7 @@ export function IncomingList() {
                   </tbody>
                 </table>
               </div>
+              </>
             )}
           </Card>
         )}

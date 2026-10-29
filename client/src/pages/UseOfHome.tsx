@@ -7,6 +7,7 @@ import {
   USE_OF_HOME_BANDS,
   useOfHomeBandLabel,
   useOfHomeClaim,
+  useOfHomeNextBand,
   type UseOfHomeResponse,
 } from '@crafty/shared';
 import { ChangedElsewhere, recordedBy } from '../components/FormShell';
@@ -126,7 +127,10 @@ function HoursForm({ taxYearId, data }: { taxYearId: number; data: UseOfHomeResp
                         {invalid ? (
                           <span className="text-out-soft">Whole hours, up to {MAX_MONTH_HOURS}</span>
                         ) : (
-                          (band ?? (parsed[i]! > 0 ? 'Under 25 hours: no claim' : '—'))
+                          <>
+                            {band ?? (parsed[i]! > 0 ? 'Under 25 hours: no claim' : '—')}
+                            {parsed[i]! > 0 && m.startDate <= today && <NextBandHint hours={parsed[i]!} />}
+                          </>
                         )}
                       </td>
                       <td className="tabular px-4 py-2.5 text-right sm:pr-6">
@@ -219,5 +223,16 @@ export function UseOfHome() {
         )}
       </PageBody>
     </>
+  );
+}
+
+/** "12 more hours reach £18" */
+function NextBandHint({ hours }: { hours: number }) {
+  const next = useOfHomeNextBand(hours);
+  if (!next) return null;
+  return (
+    <div className="text-xs text-faint">
+      {next.hoursToGo} more {next.hoursToGo === 1 ? 'hour reaches' : 'hours reach'} {formatGBP(next.pence).replace(/\.00$/, '')}
+    </div>
   );
 }

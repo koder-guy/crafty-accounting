@@ -14,7 +14,7 @@ import {
 } from '@crafty/shared';
 import { SectionHeading } from '../../components/SectionLayout';
 import { Alert, Badge, Button, Card, CardHeader, EmptyState, IconButton, Spinner } from '../../components/ui';
-import { useBreakdown, useBreakdownItems, type BreakdownSelection } from '../../lib/queries';
+import { useActiveTaxYear, useBreakdown, useBreakdownItems, type BreakdownSelection } from '../../lib/queries';
 import { printPage } from '../../lib/liveUpdates';
 
 // ---- Periods ----
@@ -65,7 +65,7 @@ function Share({ amount, total, tone }: { amount: number; total: number; tone: '
   return (
     <div className="flex items-center gap-3">
       <div className="h-1.5 w-24 overflow-hidden rounded-full bg-surface-2 print:border print:border-line">
-        <div className={`h-full rounded-full ${tone === 'in' ? 'bg-accent' : 'bg-out'}`} style={{ width: `${pct}%` }} />
+        <div className={`h-full rounded-full ${tone === 'in' ? 'bg-ok' : 'bg-out'}`} style={{ width: `${pct}%` }} />
       </div>
       <span className="tabular w-10 text-right text-xs text-muted">{Math.round(pct)}%</span>
     </div>
@@ -340,8 +340,11 @@ export function Breakdown() {
   const today = todayIso();
   const options = useMemo(() => presets(today), [today]);
   const [params, setParams] = useSearchParams();
-  const from = params.get('from') ?? options[0].from;
-  const to = params.get('to') ?? options[0].to;
+  // Until a period is picked, show the active tax year (the same year as the rest of the app).
+  const { taxYear } = useActiveTaxYear();
+  const initial = taxYear ? { from: taxYear.startDate, to: taxYear.endDate } : options.find((o) => o.key === 'this-tax-year')!;
+  const from = params.get('from') ?? initial.from;
+  const to = params.get('to') ?? initial.to;
   const selection = parseSelection(params.get('show'));
   const selectedKey = selection ? selectionKey(selection) : null;
   const rangeError =

@@ -220,9 +220,9 @@ export function YearEndSummary() {
             <TradingAllowance data={data} />
 
             <p className="text-xs text-faint">
-              A summary of the transactions in this app, laid out like HMRC's SA103S for 2024–25. It isn't tax advice and doesn't
-              cover the rest of your return or the tax due. Check the box numbers against the current form and notes on GOV.UK when you
-              file.
+              A summary of the transactions in this app, laid out like HMRC's SA103S (box numbers from the 2024–25 form). It isn't tax
+              advice and doesn't cover the rest of your return or the tax due. Check the box numbers against the {displayTaxYear(data.taxYear.label)}{' '}
+              form and notes on GOV.UK when you file.
             </p>
           </>
         )}

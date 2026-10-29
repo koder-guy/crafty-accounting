@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
 import { useNavigate, useParams, useSearchParams } from 'react-router';
-import { isDateInTaxYear, parsePoundsToPence, penceToPounds, todayIso, type Income, type PaymentMethod } from '@crafty/shared';
+import { displayTaxYear, formatDisplayDate, isDateInTaxYear, parsePoundsToPence, penceToPounds, todayIso, type Income, type PaymentMethod } from '@crafty/shared';
 import { CategoryOptions } from '../components/CategoryOptions';
 import { BackLink, ChangedElsewhere, CopiedFrom, dateInYear, duplicateDate, yearRangeHint } from '../components/FormShell';
 import { NoTaxYear } from '../components/NoTaxYear';
 import { PageBody, PageHeader } from '../components/PageHeader';
-import { DocumentField, PaymentMethodOptions } from '../components/transactions';
+import { DocumentField, PaymentMethodPicker } from '../components/transactions';
 import { SentQuarterNotice } from '../components/SentQuarterNotice';
 import { Alert, Button, Card, Field, Spinner } from '../components/ui';
 import { ApiError, transactionForm } from '../lib/api';
@@ -184,7 +184,16 @@ export function IncomeForm() {
 
   return (
     <>
-      <PageHeader title={title} />
+      <PageHeader
+        title={title}
+        subtitle={
+          existing
+            ? `${existing.description} · ${formatDisplayDate(existing.date)}`
+            : original
+              ? `Copy of ${original.description}`
+              : `In tax year ${displayTaxYear(taxYear.label)}`
+        }
+      />
       <PageBody>
         <BackLink to={backTo}>Back</BackLink>
         {original && (
@@ -244,9 +253,7 @@ export function IncomeForm() {
                 </select>
               </Field>
               <Field label="Payment method" htmlFor="paymentMethod" error={errors.paymentMethod?.message}>
-                <select id="paymentMethod" className="field" {...register('paymentMethod', { required: 'Choose a payment method' })}>
-                  <PaymentMethodOptions />
-                </select>
+                <PaymentMethodPicker registration={register('paymentMethod', { required: 'Choose a payment method' })} />
               </Field>
               <Field label="Reference" htmlFor="reference" hint="Optional, e.g. a payout or receipt number" className="sm:col-span-2">
                 <input id="reference" className="field" {...register('reference', { maxLength: 100 })} />

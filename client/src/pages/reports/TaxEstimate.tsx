@@ -1,8 +1,10 @@
 import { useState, type FormEvent, type ReactNode } from 'react';
-import { CalendarClock, Calculator, Printer, Wallet } from 'lucide-react';
+import { CalendarClock, Calculator, Printer, TrendingUp, Wallet } from 'lucide-react';
 import {
   APP_NAME,
+  daysBetween,
   displayTaxYear,
+  estimateTax,
   formatDisplayDate,
   formatGBP,
   parsePoundsToPence,
@@ -163,6 +165,8 @@ function EstimateBody({ data, today }: { data: TaxEstimateResponse; today: strin
         </Card>
       </div>
 
+      <FullYearProjection data={data} today={today} />
+
       <Card className="print:break-inside-avoid">
         <CardHeader icon={<Calculator className="size-5 text-accent-soft" />} title="How it's worked out" />
         <div className="overflow-x-auto">
@@ -244,5 +248,36 @@ function EstimateBody({ data, today }: { data: TaxEstimateResponse; today: strin
         Allowance, tax on savings or dividends, or voluntary Class 2 National Insurance. It isn't tax advice.
       </p>
     </>
+  );
+}
+
+/**
+ * Mid-year, scales the profit so far up to a whole year, so the tax to put aside isn't only what's
+ * been earned to date. Needs a month of records to say anything useful.
+ */
+function FullYearProjection({ data, today }: { data: TaxEstimateResponse; today: string }) {
+  const { startDate, endDate, label, otherIncomePence } = data.taxYear;
+  if (today > endDate || data.estimate.profitPence <= 0) return null;
+  const upTo = data.recordedTo && data.recordedTo < today ? data.recordedTo : today;
+  const elapsed = daysBetween(startDate, upTo) + 1;
+  if (elapsed < 30) return null;
+  const yearDays = daysBetween(startDate, endDate) + 1;
+  const profitPence = Math.round((data.estimate.profitPence * yearDays) / elapsed);
+  const projected = estimateTax({ label, profitPence, otherIncomePence });
+
+  return (
+    <Card className="print:break-inside-avoid">
+      <CardHeader icon={<TrendingUp className="size-5 text-accent-soft" />} title="The whole year at this rate" />
+      <div className="space-y-2 px-5 pb-6 text-sm sm:px-6">
+        <p className="text-ink">
+          If the rest of the year goes like the first {elapsed} days, a full year's profit would be about{' '}
+          <strong className="tabular text-white">{whole(Math.round(profitPence / 100) * 100)}</strong>, with tax of about{' '}
+          <strong className="tabular text-accent-soft">{whole(Math.round(projected.totalPence / 100) * 100)}</strong>.
+        </p>
+        <p className="text-muted">
+          Craft sales are seasonal (a busy run-up to Christmas can change this a lot), so treat it as a rough guide, not a forecast.
+        </p>
+      </div>
+    </Card>
   );
 }

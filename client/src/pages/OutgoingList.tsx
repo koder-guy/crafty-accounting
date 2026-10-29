@@ -1,7 +1,7 @@
 import { Fragment, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { ArrowUpRight, ChevronRight, Plus } from 'lucide-react';
-import { formatDisplayDate, formatGBP, type Expense, type ExpenseWithLineItems } from '@crafty/shared';
+import { formatDisplayDate, formatGBP, shortCategoryName, type Expense, type ExpenseWithLineItems } from '@crafty/shared';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { SentQuarterNotice } from '../components/SentQuarterNotice';
 import { NoTaxYear } from '../components/NoTaxYear';
@@ -13,6 +13,7 @@ import {
   FilterBar,
   RowActions,
   SortTh,
+  TransactionCard,
   useSort,
   useTransactionFilters,
 } from '../components/transactions';
@@ -73,10 +74,13 @@ export function OutgoingList() {
               title="Outgoing payments"
               action={
                 data && (
-                  <span className="text-sm text-muted">
-                    {data.length} {data.length === 1 ? 'transaction' : 'transactions'} ·{' '}
-                    <span className="tabular font-semibold text-out-soft">{formatGBP(total)}</span>
-                  </span>
+                  <div className="text-right">
+                    <span className="text-sm text-muted">
+                      {data.length} {data.length === 1 ? 'transaction' : 'transactions'} ·{' '}
+                      <span className="tabular font-semibold text-out-soft">{formatGBP(total)}</span>
+                    </span>
+                    <div className="text-xs text-faint">Mileage and use of home claims are on their own pages</div>
+                  </div>
                 )
               }
             />
@@ -92,8 +96,23 @@ export function OutgoingList() {
                 {filterState.active ? 'Try changing or clearing the filters.' : 'Record a purchase or invoice with “Add outgoing”.'}
               </EmptyState>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[820px] text-sm">
+              <>
+              <ul className="divide-y divide-line border-t border-line sm:hidden">
+                {sorted.map((row) => (
+                  <TransactionCard
+                    key={row.id}
+                    to={`/outgoing/${row.id}`}
+                    title={row.payee}
+                    sub={`${formatDisplayDate(row.date)} · ${categorySummary(row.categoryNames)}`}
+                    amount={formatGBP(row.totalPence)}
+                    amountClass="text-out-soft"
+                    method={row.paymentMethod}
+                    documents={row.documents}
+                  />
+                ))}
+              </ul>
+              <div className="hidden overflow-x-auto sm:block">
+                <table className="w-full min-w-[760px] text-sm">
                   <thead className="text-xs tracking-wide text-muted uppercase">
                     <tr className="border-b border-line">
                       <th scope="col" className="w-10 pl-3">
@@ -131,7 +150,7 @@ export function OutgoingList() {
                               </button>
                             </td>
                             <td className="px-4 py-3 whitespace-nowrap text-muted">{formatDisplayDate(row.date)}</td>
-                            <td className="max-w-xs px-4 py-3">
+                            <td className="w-3/5 max-w-0 px-4 py-3">
                               <div className="flex items-center gap-1.5 font-medium text-ink">
                                 <span className="truncate">{row.payee}</span>
                                 <DocDownloadLink documents={row.documents} />
@@ -141,9 +160,9 @@ export function OutgoingList() {
                                   `${row.lineItemCount} line ${row.lineItemCount === 1 ? 'item' : 'items'}`}
                               </div>
                             </td>
-                            <td className="max-w-[240px] px-4 py-3 text-muted">
+                            <td className="w-2/5 max-w-0 px-4 py-3 text-muted">
                               <div className="truncate" title={row.categoryNames.join('\n')}>
-                                {row.categoryNames[0]}
+                                {shortCategoryName(row.categoryNames[0])}
                                 {row.categoryNames.length > 1 && <span className="text-faint"> +{row.categoryNames.length - 1}</span>}
                               </div>
                             </td>
@@ -178,6 +197,7 @@ export function OutgoingList() {
                   </tbody>
                 </table>
               </div>
+              </>
             )}
           </Card>
         )}
@@ -207,6 +227,10 @@ export function OutgoingList() {
   );
 }
 
+/** "Stall fees" or "Beads +2" */
+const categorySummary = (names: string[]) =>
+  `${shortCategoryName(names[0])}${names.length > 1 ? ` +${names.length - 1}` : ''}`;
+
 /** Read-only line items shown under an expanded row. */
 function LineItemsTable({ expense }: { expense: ExpenseWithLineItems }) {
   return (
@@ -229,8 +253,8 @@ function LineItemsTable({ expense }: { expense: ExpenseWithLineItems }) {
                 </span>
               )}
             </td>
-            <td className="px-4 py-2 text-muted">
-              {li.categoryName} <span className="ml-1 font-mono text-xs text-faint">{li.hmrcCode}</span>
+            <td className="px-4 py-2 text-muted" title={li.categoryName}>
+              {shortCategoryName(li.categoryName)}
             </td>
             <td className="tabular px-4 py-2 text-right text-ink">{formatGBP(li.amountPence)}</td>
           </tr>

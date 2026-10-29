@@ -19,7 +19,7 @@
   --color-out: #dc2626;
   --color-out-soft: #f87171;
   --color-out-bg: #dc26261f;
-  --color-in-soft: #818cf8;
+  --color-in-soft: #34d399;
   --color-teal: #2dd4bf;
   --color-teal-bg: #2dd4bf1a;
   --color-warn: #fbbf24;
@@ -65,7 +65,7 @@
     --color-muted: #4b5563;
     --color-faint: #6b7280;
     --color-accent-soft: #4338ca;
-    --color-in-soft: #4338ca;
+    --color-in-soft: #047857;
     --color-out-soft: #b91c1c;
     --color-warn: #92400e;
     --color-warn-bg: #fef3c7;

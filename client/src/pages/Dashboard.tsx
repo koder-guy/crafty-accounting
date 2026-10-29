@@ -7,7 +7,9 @@ import {
   formatDisplayDate,
   formatGBP,
   PAYMENT_METHOD_LABELS,
+  mtdQuarterStatus,
   selfAssessmentDeadline,
+  shortCategoryName,
   startYearFromLabel,
   todayIso,
   type CategoryTotal,
@@ -19,9 +21,9 @@ import { PageBody, PageHeader } from '../components/PageHeader';
 import { ReadOnlyNotice } from '../components/ReadOnly';
 import { DocIndicator } from '../components/transactions';
 import { Alert, Card, CardHeader, Spinner } from '../components/ui';
-import { useActiveTaxYear, useCanEdit, useDashboard } from '../lib/queries';
+import { useActiveTaxYear, useCanEdit, useDashboard, useMtdQuarters } from '../lib/queries';
 
-const CHART_IN = '#5b63d3';
+const CHART_IN = '#10b981';
 const CHART_OUT = '#dc2626';
 
 function StatCard({
@@ -38,13 +40,13 @@ function StatCard({
   valueClass?: string;
 }) {
   return (
-    <div className="card p-6">
+    <div className="card p-4 sm:p-6">
       <div className="flex items-start justify-between gap-3">
         <div className="eyebrow pt-1.5">{label}</div>
-        {icon}
+        <div className="hidden sm:block">{icon}</div>
       </div>
-      <div className={`tabular mt-5 text-3xl font-bold tracking-tight ${valueClass}`}>{value}</div>
-      <div className="mt-2 text-sm text-muted">{sub}</div>
+      <div className={`tabular mt-1 text-2xl font-bold tracking-tight sm:mt-5 sm:text-3xl ${valueClass}`}>{value}</div>
+      <div className="mt-1 text-xs text-muted sm:mt-2 sm:text-sm">{sub}</div>
     </div>
   );
 }
@@ -121,7 +123,7 @@ function MonthlyChart({ data }: { data: DashboardData['monthly'] }) {
           <Legend
             iconType="square"
             wrapperStyle={{ fontSize: 13, paddingTop: 12 }}
-            formatter={(value: string) => <span style={{ color: value === 'incoming' ? '#818cf8' : '#f87171' }}>{value === 'incoming' ? 'Incoming (£)' : 'Outgoing (£)'}</span>}
+            formatter={(value: string) => <span style={{ color: value === 'incoming' ? '#34d399' : '#f87171' }}>{value === 'incoming' ? 'Incoming (£)' : 'Outgoing (£)'}</span>}
           />
           <Bar dataKey="incoming" fill={CHART_IN} radius={[3, 3, 0, 0]} maxBarSize={36} />
           <Bar dataKey="outgoing" fill={CHART_OUT} radius={[3, 3, 0, 0]} maxBarSize={36} />
@@ -199,14 +201,14 @@ function CategoryBreakdown({ title, rows, tone }: { title: string; rows: Categor
           {rows.map((row) => (
             <li key={row.categoryId}>
               <div className="flex items-baseline justify-between gap-3 text-sm">
-                <span className="min-w-0 truncate text-ink" title={`${row.name} (${row.hmrcCode})`}>
-                  {row.name}
+                <span className="min-w-0 truncate text-ink" title={row.name}>
+                  {shortCategoryName(row.name)}
                 </span>
                 <span className="tabular shrink-0 font-medium">{formatGBP(row.totalPence)}</span>
               </div>
               <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-surface-2">
                 <div
-                  className={`h-full rounded-full ${tone === 'in' ? 'bg-accent' : 'bg-out'}`}
+                  className={`h-full rounded-full ${tone === 'in' ? 'bg-ok' : 'bg-out'}`}
                   style={{ width: `${(row.totalPence / max) * 100}%` }}
                 />
               </div>
@@ -229,6 +231,10 @@ function KeyDates({ data }: { data: DashboardData }) {
   const daysLeft = daysBetween(today, year.endDate);
   const daysToDeadline = daysBetween(today, deadline);
 
+  const { data: mtd } = useMtdQuarters(year.id);
+  const nextUpdate = mtd?.quarters.find((q) => mtdQuarterStatus(q, today, q.submission !== null) !== 'submitted');
+  const daysToUpdate = nextUpdate ? daysBetween(today, nextUpdate.deadline) : 0;
+
   const status =
     today < year.startDate
       ? `Starts in ${daysBetween(today, year.startDate)} days`
@@ -247,6 +253,21 @@ function KeyDates({ data }: { data: DashboardData }) {
             <span className="text-xs text-faint">{status}</span>
           </dd>
         </div>
+        {nextUpdate && (
+          <div>
+            <dt className="text-muted">
+              <Link to="/mtd" className="hover:text-accent-soft hover:underline">
+                MTD update for Q{nextUpdate.quarter}
+              </Link>
+            </dt>
+            <dd className="mt-0.5 flex items-baseline justify-between gap-3">
+              <span className="font-medium text-ink">{formatDisplayDate(nextUpdate.deadline)}</span>
+              <span className={`text-xs ${daysToUpdate < 0 ? 'text-out-soft' : daysToUpdate <= 14 ? 'text-warn' : 'text-faint'}`}>
+                {daysToUpdate < 0 ? 'Overdue' : daysToUpdate === 0 ? 'Due today' : `${daysToUpdate} ${daysToUpdate === 1 ? 'day' : 'days'} left`}
+              </span>
+            </dd>
+          </div>
+        )}
         <div>
           <dt className="text-muted">Self Assessment deadline</dt>
           <dd className="mt-0.5 flex items-baseline justify-between gap-3">
@@ -297,7 +318,7 @@ export function Dashboard() {
           <>
             {!canEdit && <ReadOnlyNotice />}
             <SampleDataNotice />
-            <div className="grid gap-5 md:grid-cols-3">
+            <div className="grid gap-3 sm:gap-5 md:grid-cols-3">
               <StatCard
                 label="Total income"
                 value={formatGBP(data.totals.incomePence)}

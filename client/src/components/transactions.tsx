@@ -1,6 +1,7 @@
 // Building blocks shared by the Incoming and Outgoing pages.
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
+import type { UseFormRegisterReturn } from 'react-hook-form';
 import { Link, useSearchParams } from 'react-router';
 import { ChevronDown, ChevronsUpDown, ChevronUp, Download, Eye, FileText, Paperclip, Pencil, Search, Trash2 } from 'lucide-react';
 import {
@@ -18,7 +19,7 @@ import { documentUrl } from '../lib/api';
 import { dismissWithoutClicking } from '../lib/menus';
 import { useCanEdit } from '../lib/queries';
 import { CategoryOptions } from './CategoryOptions';
-import { Button, IconButton, SOFT_DANGER } from './ui';
+import { Button, IconButton, PaymentBadge, SOFT_DANGER } from './ui';
 
 // ---- Filters (kept in the URL so they survive navigation) ----
 
@@ -259,6 +260,43 @@ export function DocumentLinks({ documents }: { documents: TransactionDocument[] 
   );
 }
 
+/** One transaction on a phone, where the table's columns don't fit: tap to open it. */
+export function TransactionCard({
+  to,
+  title,
+  sub,
+  amount,
+  amountClass,
+  method,
+  documents,
+}: {
+  to: string;
+  title: string;
+  sub: string;
+  amount: string;
+  amountClass: string;
+  method: PaymentMethod;
+  documents: TransactionDocument[];
+}) {
+  return (
+    <li>
+      <Link to={to} className="flex items-center justify-between gap-3 px-5 py-3.5 transition-colors hover:bg-surface-2/60">
+        <div className="min-w-0">
+          <div className="flex items-center gap-1.5 font-medium text-ink">
+            <span className="truncate">{title}</span>
+            <DocIndicator documents={documents} />
+          </div>
+          <div className="truncate text-xs text-muted">{sub}</div>
+        </div>
+        <div className="flex shrink-0 flex-col items-end gap-1">
+          <span className={`tabular font-semibold ${amountClass}`}>{amount}</span>
+          <PaymentBadge method={method} />
+        </div>
+      </Link>
+    </li>
+  );
+}
+
 export function DocIndicator({ documents }: { documents: TransactionDocument[] }) {
   if (documents.length === 0) return null;
   const label = documents.length === 1 ? `Document: ${documents[0].filename}` : `${documents.length} documents`;
@@ -387,16 +425,27 @@ export function DocDownloadLink({ documents }: { documents: TransactionDocument[
 
 // ---- Payment method picker ----
 
-export function PaymentMethodOptions() {
+// Picked colours match the payment badges: cash amber, card teal, bank transfer indigo.
+const PICKED: Record<PaymentMethod, string> = {
+  cash: 'has-checked:border-amber-400/60 has-checked:bg-amber-400/15 has-checked:text-amber-300',
+  card: 'has-checked:border-teal/60 has-checked:bg-teal-bg has-checked:text-teal',
+  bank_transfer: 'has-checked:border-indigo-400/60 has-checked:bg-indigo-400/15 has-checked:text-indigo-300',
+};
+
+/** Cash / Card / Bank transfer as one tap each (a row of radio buttons); the first has id "paymentMethod" for its label. */
+export function PaymentMethodPicker({ registration }: { registration: UseFormRegisterReturn }) {
   return (
-    <>
-      <option value="">Choose…</option>
-      {PAYMENT_METHODS.map((m) => (
-        <option key={m} value={m}>
+    <div className="grid grid-cols-3 gap-2" role="radiogroup">
+      {PAYMENT_METHODS.map((m, i) => (
+        <label
+          key={m}
+          className={`flex cursor-pointer items-center justify-center rounded-lg border border-line-strong bg-surface-2 px-2 py-2.5 text-center text-sm font-medium text-muted transition-colors hover:text-ink has-focus-visible:ring-2 has-focus-visible:ring-accent-soft ${PICKED[m]}`}
+        >
+          <input type="radio" value={m} id={i === 0 ? 'paymentMethod' : undefined} className="sr-only" {...registration} />
           {PAYMENT_METHOD_LABELS[m]}
-        </option>
+        </label>
       ))}
-    </>
+    </div>
   );
 }
 

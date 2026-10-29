@@ -26,3 +26,9 @@ export function useOfHomeClaim(hours: number): number {
 export function useOfHomeBandLabel(hours: number): string | null {
   return USE_OF_HOME_BANDS.find((b) => hours >= b.minHours)?.label ?? null;
 }
+
+/** How many more hours reach the next band up, and its rate; null in the top band. */
+export function useOfHomeNextBand(hours: number): { hoursToGo: number; pence: number } | null {
+  const next = [...USE_OF_HOME_BANDS].reverse().find((b) => hours < b.minHours);
+  return next ? { hoursToGo: next.minHours - hours, pence: next.pence } : null;
+}

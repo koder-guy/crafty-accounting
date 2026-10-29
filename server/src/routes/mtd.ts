@@ -5,6 +5,8 @@ import { Router } from 'express';
 import { z } from 'zod';
 import {
   buildMtdPeriodSummary,
+  formatDisplayDate,
+  mtdEarliestSendDate,
   mtdQuarters,
   mtdSubmissionSchema,
   startYearFromLabel,
@@ -110,9 +112,14 @@ export function mtdRouter(ctx: AppContext): Router {
   router.put('/quarters/:taxYearId/:quarter/submission', (req, res) => {
     const taxYearId = parseId(req.params.taxYearId);
     const quarter = parseQuarter(req.params.quarter);
-    if (!getTaxYear(ctx.db, taxYearId)) throw new HttpError(404, 'Tax year not found');
+    const taxYear = getTaxYear(ctx.db, taxYearId);
+    if (!taxYear) throw new HttpError(404, 'Tax year not found');
     refuseIfSent(ctx.db, taxYearId, quarter, ctx.config.hmrc.environment);
     const input = parseWith(mtdSubmissionSchema, req.body);
+    const earliest = mtdEarliestSendDate(mtdQuarters(startYearFromLabel(taxYear.label)!)[quarter - 1]);
+    if (input.submittedOn < earliest) {
+      throw new HttpError(400, `HMRC doesn’t take this update until ${formatDisplayDate(earliest)}, 10 days before the quarter ends.`);
+    }
     ctx.db
       .prepare(
         `INSERT INTO mtd_submissions (tax_year_id, quarter, submitted_on, reference) VALUES (?, ?, ?, ?)

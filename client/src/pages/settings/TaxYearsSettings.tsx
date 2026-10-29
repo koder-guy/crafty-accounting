@@ -31,8 +31,9 @@ export function TaxYearsSettings() {
   }, [data, currentStart]);
 
   const [startYear, setStartYear] = useState<number | ''>('');
-  // Default to the current year, else the most recent past year still missing.
-  const selected = startYear === '' ? (available.find((y) => y <= currentStart) ?? available[0]) : startYear;
+  // Default to the current year, else next year, else the most recent past year still missing.
+  const suggested = [currentStart, currentStart + 1].find((y) => available.includes(y)) ?? available[0];
+  const selected = startYear === '' ? suggested : startYear;
   const preview = selected !== undefined ? taxYearFromStartYear(selected) : null;
 
   const createYear = () => {

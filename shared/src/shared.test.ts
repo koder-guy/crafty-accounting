@@ -24,7 +24,9 @@ import {
   taxYearFromStartYear,
   taxYearStartYearForDate,
   tenthsToMiles,
+  shortCategoryName,
   useOfHomeClaim,
+  useOfHomeNextBand,
 } from './index';
 
 describe('tax years', () => {
@@ -340,10 +342,24 @@ describe('use of home', () => {
     expect([0, 24, 25, 50, 51, 100, 101, 744].map(useOfHomeClaim)).toEqual([0, 0, 1000, 1000, 1800, 1800, 2600, 2600]);
   });
 
+  it('says how many more hours reach the next band', () => {
+    expect(useOfHomeNextBand(15)).toEqual({ hoursToGo: 10, pence: 1000 });
+    expect(useOfHomeNextBand(43)).toEqual({ hoursToGo: 8, pence: 1800 });
+    expect(useOfHomeNextBand(100)).toEqual({ hoursToGo: 1, pence: 2600 });
+    expect(useOfHomeNextBand(101)).toBeNull();
+  });
+
   it('gives each tax month its dates, from the 6th to the 5th', () => {
     const months = taxMonths(2025);
     expect(months[0]).toMatchObject({ startDate: '2025-04-06', endDate: '2025-05-05' });
     expect(months[8]).toMatchObject({ startDate: '2025-12-06', endDate: '2026-01-05' });
     expect(months[11]).toMatchObject({ startDate: '2026-03-06', endDate: '2026-04-05' });
+  });
+});
+
+describe('category short names', () => {
+  it('shortens standard categories and leaves custom ones alone', () => {
+    expect(shortCategoryName('Turnover – takings, fees, sales or money earned')).toBe('Turnover');
+    expect(shortCategoryName('Stall fees')).toBe('Stall fees');
   });
 });

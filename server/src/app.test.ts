@@ -976,6 +976,9 @@ describe('MTD quarters', () => {
     expect(body.quarters[0].submission).toEqual({ submittedOn: '2025-08-02', reference: null, sent: null });
 
     await agent.put(`/api/mtd/quarters/${yearId}/5/submission`).send({ submittedOn: '2025-08-02' }).expect(404);
+    // Q2 ends 5 Oct, so HMRC takes it from 25 Sep at the earliest.
+    const early = await agent.put(`/api/mtd/quarters/${yearId}/2/submission`).send({ submittedOn: '2025-09-24' }).expect(400);
+    expect(early.body.error).toMatch(/25 Sep 2025/);
     await agent.delete(`/api/mtd/quarters/${yearId}/1/submission`).expect(204);
     ({ body } = await agent.get('/api/mtd/quarters').query({ taxYearId: yearId }));
     expect(body.quarters[0].submission).toBeNull();

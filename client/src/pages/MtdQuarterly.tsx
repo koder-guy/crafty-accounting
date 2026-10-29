@@ -3,6 +3,7 @@ import { Link } from 'react-router';
 import { CalendarCheck, FileDown, FileSpreadsheet, Info, Landmark, Send } from 'lucide-react';
 import {
   MTD_FIRST_SEND_YEAR,
+  daysBetween,
   formatDisplayDate,
   formatGBP,
   mtdEarliestSendDate,
@@ -57,7 +58,10 @@ function downloadJson(data: unknown, filename: string) {
 }
 
 /** The quarter containing today, or the nearest end of the year. */
+/** The quarter that needs doing first: the earliest ended one not yet submitted, else the one in progress. */
 function defaultQuarter(quarters: MtdQuarterSummary[], today: string): number {
+  const waiting = quarters.find((q) => !q.submission && q.endDate < today);
+  if (waiting) return waiting.quarter;
   const current = quarters.find((q) => q.startDate <= today && today <= q.endDate);
   if (current) return current.quarter;
   return today < quarters[0].startDate ? 1 : 4;
@@ -71,6 +75,14 @@ function HmrcObligationLine({ obligation }: { obligation: HmrcObligation | null 
   ) : (
     <div className="text-muted">HMRC: expected by {formatDisplayDate(obligation.dueDate)}</div>
   );
+}
+
+/** " · 9 days left" for a quarter waiting to be submitted. */
+function dueIn(status: MtdQuarterStatus, deadline: string): string {
+  if (status === 'overdue') return ' · overdue';
+  if (status !== 'due') return '';
+  const days = daysBetween(todayIso(), deadline);
+  return days === 0 ? ' · today' : ` · ${days} ${days === 1 ? 'day' : 'days'} left`;
 }
 
 function QuarterCard({
@@ -124,7 +136,7 @@ function QuarterCard({
             ? `Sent to HMRC ${formatDisplayDate(q.submission.submittedOn)}`
             : q.submission
               ? `Submitted ${formatDisplayDate(q.submission.submittedOn)}`
-              : `Due by ${formatDisplayDate(q.deadline)}`}
+              : `Due by ${formatDisplayDate(q.deadline)}${dueIn(status, q.deadline)}`}
         </div>
         {obligation !== undefined && <HmrcObligationLine obligation={obligation} />}
       </div>
@@ -238,6 +250,16 @@ function SubmissionPanel({ taxYearId, q }: { taxYearId: number; q: MtdQuarterSum
     );
   }
 
+  const earliest = mtdEarliestSendDate(q);
+  if (!q.submission && todayIso() < earliest) {
+    return (
+      <p className="text-sm text-muted">
+        Q{q.quarter} runs until {formatDisplayDate(q.endDate)}. HMRC takes its update from {formatDisplayDate(earliest)}, so you can record
+        it as submitted after that.
+      </p>
+    );
+  }
+
   return (
     <form
       className="flex flex-col gap-4 sm:flex-row sm:items-end"
@@ -247,7 +269,7 @@ function SubmissionPanel({ taxYearId, q }: { taxYearId: number; q: MtdQuarterSum
       }}
     >
       <Field label="Date submitted" htmlFor="submitted-on" className="sm:w-48">
-        <input id="submitted-on" type="date" className="field" required value={submittedOn} onChange={(e) => setSubmittedOn(e.target.value)} />
+        <input id="submitted-on" type="date" className="field" required min={earliest} value={submittedOn} onChange={(e) => setSubmittedOn(e.target.value)} />
       </Field>
       <Field label="HMRC reference (optional)" htmlFor="submission-ref" className="sm:w-64">
         <input id="submission-ref" className="field" value={reference} onChange={(e) => setReference(e.target.value)} />
@@ -478,7 +500,7 @@ export function MtdQuarterly() {
 
   return (
     <>
-      <PageHeader title="MTD Quarterly Summaries" />
+      <PageHeader title="MTD Quarterly" />
       <PageBody>
         {yearLoading || (taxYear && isLoading) ? (
           <Spinner />

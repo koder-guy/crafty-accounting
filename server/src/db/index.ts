@@ -33,7 +33,7 @@ export function seedCategories(db: Db): void {
     ON CONFLICT (type, hmrc_code) WHERE is_custom = 0 DO UPDATE SET name = excluded.name, sort_order = excluded.sort_order
   `);
   db.transaction(() => {
-    ALL_CATEGORIES.forEach((category, sortOrder) => upsert.run({ ...category, sortOrder }));
+    ALL_CATEGORIES.forEach(({ type, name, hmrcCode }, sortOrder) => upsert.run({ type, name, hmrcCode, sortOrder }));
   })();
 }
 

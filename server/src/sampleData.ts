@@ -223,7 +223,8 @@ export function generateSampleData(db: Db, uploadsDir: string, today = todayIso(
   );
   const findCategory = db.prepare('SELECT id FROM categories WHERE is_custom = 1 AND type = ? AND name = ? COLLATE NOCASE');
   const lineCategory = (l: Line) => (l.custom ? custom.get(l.custom) : category.get(l.code));
-  const insertYear = db.prepare('INSERT INTO tax_years (label, start_date, end_date) VALUES (?, ?, ?)');
+  // A part-time job's salary, so the tax estimate has some tax to show alongside a modest craft profit.
+  const insertYear = db.prepare('INSERT INTO tax_years (label, start_date, end_date, other_income_pence) VALUES (?, ?, ?, 1200000)');
   const incomeRow = db.prepare(
     `INSERT INTO incomes (tax_year_id, date, description, reference, payment_method, amount_pence, category_id, notes)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
