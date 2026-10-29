@@ -369,16 +369,14 @@ function SendToHmrc({
 
   return (
     <div className="space-y-4">
-      <div className="space-y-1 text-sm">
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-          <Badge tone={status.tone}>{status.label}</Badge>
-          <span className="text-ink">{status.detail}</span>
-        </div>
-        {sent?.correlationId && <p className="text-xs text-faint">HMRC correlation ID {sent.correlationId}</p>}
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+        <Badge tone={status.tone}>{status.label}</Badge>
+        <span className="text-ink">{status.detail}</span>
       </div>
 
-      {(handRecord || coveredLater) && (
+      {(sent?.correlationId || handRecord || coveredLater) && (
         <div className="space-y-1 text-sm text-muted">
+          {sent?.correlationId && <p className="break-all">HMRC correlation ID {sent.correlationId}</p>}
           {handRecord && <p>You recorded it as submitted on {formatDisplayDate(handRecord.submittedOn)}.</p>}
           {coveredLater && (
             <p>
