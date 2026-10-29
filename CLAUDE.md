@@ -1,6 +1,6 @@
 # Crafty Accounting
 
-Self-hosted bookkeeping for a UK sole trader who sells at craft fairs (cash basis). The data model follows HMRC's Making Tax Digital (MTD) self-employment API so submission can be added later. README.md covers features, setup, Docker, HTTPS and backups; read it first.
+Self-hosted bookkeeping for UK sole traders (cash basis), filing by Self Assessment return or through HMRC's Making Tax Digital (MTD) self-employment APIs. It started out for craft fair sellers (the sample data still is), but isn't limited to them. Keep README.md user-facing and short; implementation detail belongs here. README.md covers features, setup, Docker, HTTPS and backups; read it first.
 
 **Status:** v1.0.0 is released but not yet in use with real books (as of 2026-10-28), so changes to the app and database structure are still fine. It stays a self-hosted web app; a native macOS version was considered and dropped.
 
