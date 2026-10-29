@@ -1,7 +1,12 @@
 #!/bin/bash
 # Installs Crafty Accounting on macOS or Linux and starts it, or updates an existing install.
 #
-#   /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/koder-guy/crafty-accounting/main/install.sh)"
+#   read -rs GITHUB_TOKEN && export GITHUB_TOKEN      (paste the token, press Enter)
+#   /bin/bash -c "$(curl -fsSL -H "Authorization: Bearer $GITHUB_TOKEN" https://raw.githubusercontent.com/koder-guy/crafty-accounting/main/install.sh)"
+#
+# The repository is private, so GITHUB_TOKEN must be a GitHub token that can read
+# it: a fine-grained personal access token for koder-guy/crafty-accounting with
+# Contents: Read-only. It's only used for the downloads and isn't saved.
 #
 # Everything goes in ~/crafty-accounting: its own copy of Node 22 (from nodejs.org),
 # the app, your settings (.env) and your books (data/). Nothing is installed system
@@ -18,11 +23,14 @@
 #   CRAFTY_ADMIN_PASSWORD  their password (default: a random one, printed at the end)
 #   CRAFTY_BRANCH          branch or tag to install (default main)
 #   CRAFTY_TARBALL         URL of the app's source .tar.gz, instead of GitHub's for CRAFTY_BRANCH
+#   GITHUB_TOKEN           token for downloading from the private repository (see above)
 
 set -euo pipefail
 
 BRANCH="${CRAFTY_BRANCH:-main}"
-TARBALL="${CRAFTY_TARBALL:-https://github.com/koder-guy/crafty-accounting/archive/$BRANCH.tar.gz}"
+# GitHub's API serves a private repository's source to a token (redirecting to a
+# short-lived download link); its public archive URLs don't take one.
+TARBALL="${CRAFTY_TARBALL:-https://api.github.com/repos/koder-guy/crafty-accounting/tarball/$BRANCH}"
 DIR="${CRAFTY_DIR:-$HOME/crafty-accounting}"
 NODE_DIST="https://nodejs.org/dist/latest-v22.x"
 
@@ -35,6 +43,9 @@ for tool in curl tar; do
   command -v "$tool" >/dev/null 2>&1 || fail "$tool is needed. Install it with your package manager (e.g. sudo apt install $tool) and run this again."
 done
 
+if [ -z "${CRAFTY_TARBALL:-}" ] && [ -z "${GITHUB_TOKEN:-}" ]; then
+  fail "GITHUB_TOKEN isn't set. The repository is private, so the download needs a GitHub token; see the README."
+fi
 case "$(uname -s)" in
   Darwin) OS=darwin ;;
   Linux) OS=linux ;;
@@ -79,8 +90,11 @@ export PATH="$DIR/node/bin:$PATH"
 # ---- The app, built next to the running copy so a failed update leaves it working ----
 step "Downloading the app ($BRANCH)"
 rm -rf app.new && mkdir app.new
-curl -fsSL "$TARBALL" | tar -xz -C app.new --strip-components=1 \
-  || fail "couldn't download the app from $TARBALL."
+# The token goes only to GitHub's API: curl drops the header when following the redirect.
+auth=()
+[ -n "${GITHUB_TOKEN:-}" ] && auth=(-H "Authorization: Bearer $GITHUB_TOKEN")
+curl -fsSL ${auth[@]+"${auth[@]}"} "$TARBALL" | tar -xz -C app.new --strip-components=1 \
+  || fail "couldn't download the app ($BRANCH). Check that GITHUB_TOKEN can read koder-guy/crafty-accounting and hasn't expired."
 
 step "Installing packages (this takes a minute or two)"
 # better-sqlite3, esbuild and fsevents ship ready-built binaries. Without

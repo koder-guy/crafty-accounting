@@ -24,11 +24,21 @@ Self-hosted bookkeeping for a UK sole trader, built for selling at craft fairs a
 
 ## Quick install (macOS and Linux)
 
-Paste this into a terminal:
+The repository is private, so installing needs a GitHub token that can read it. Make one once at [github.com/settings/personal-access-tokens/new](https://github.com/settings/personal-access-tokens/new): a fine-grained token with **Repository access → Only select repositories → koder-guy/crafty-accounting** and **Permissions → Contents → Read-only**. Keep it somewhere safe, such as a password manager; it's needed again to update.
+
+In a terminal, run this, paste the token (it isn't shown) and press Enter:
 
 ```bash
-/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/koder-guy/crafty-accounting/main/install.sh)"
+read -rs GITHUB_TOKEN && export GITHUB_TOKEN
 ```
+
+Then run the installer:
+
+```bash
+/bin/bash -c "$(curl -fsSL -H "Authorization: Bearer $GITHUB_TOKEN" https://raw.githubusercontent.com/koder-guy/crafty-accounting/main/install.sh)"
+```
+
+The token is used only for the two downloads from GitHub and isn't saved, or kept in your shell history.
 
 [`install.sh`](install.sh) works on macOS and on Linux distributions such as Ubuntu, Debian and Fedora (Intel/AMD or ARM), and needs only `curl` and `tar`. It doesn't install anything system wide or ask for an administrator password: everything goes in `~/crafty-accounting`, with its own copy of Node 22 from nodejs.org (checked against nodejs.org's checksums). It downloads and builds the app, starts it in the background, and prints the addresses to open (`http://localhost:3000`, and the computer's IP address for other devices at home) with the sign-in name, `Admin`, and a random password. Change the password in **Settings → People**.
 
