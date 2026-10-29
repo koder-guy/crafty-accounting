@@ -24,8 +24,8 @@ export interface TaxYear {
 /** A tax year as Settings lists it, with what stops it leaving MTD. */
 export interface TaxYearListItem extends TaxYear {
   /**
-   * Quarterly updates for the year: recorded by hand, or sent by the app to the HMRC service in use.
-   * While there are any the year stays MTD; recorded ones can be marked as not submitted, sent ones can't.
+   * Quarterly updates for the year: recorded by hand (sent with other software), or sent by the app to
+   * the HMRC service in use. While there are any, the year stays MTD.
    */
   mtdUpdates: { recorded: number; sent: number };
 }

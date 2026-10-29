@@ -213,7 +213,7 @@ function MethodOptions() {
   );
 }
 
-/** How the year goes to HMRC: a choice for editors, unless quarterly updates tie it to MTD. */
+/** How the year goes to HMRC: a choice for editors, unless it has quarterly updates, which tie it to MTD. */
 function YearMethod({
   year,
   canEdit,
@@ -226,6 +226,7 @@ function YearMethod({
   onChange: (method: SubmissionMethod) => void;
 }) {
   const { recorded, sent } = year.mtdUpdates;
+  // Recorded ones count too: they stand for updates sent to HMRC with other software.
   const locked = year.submissionMethod === 'mtd' && recorded + sent > 0;
   const id = `method-${year.id}`;
   return (
@@ -252,13 +253,7 @@ function YearMethod({
           {SUBMISSION_METHOD_LABELS[year.submissionMethod]}
         </span>
       )}
-      {canEdit && locked && (
-        <span className="text-xs text-faint">
-          {sent > 0
-            ? 'Quarterly updates were sent to HMRC, so this year stays Making Tax Digital.'
-            : 'To change it, first mark its quarterly updates as not submitted.'}
-        </span>
-      )}
+      {locked && <span className="text-xs text-faint">It has quarterly updates, so it stays Making Tax Digital.</span>}
     </div>
   );
 }

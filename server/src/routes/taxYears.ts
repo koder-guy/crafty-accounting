@@ -68,7 +68,7 @@ export function taxYearsRouter(ctx: AppContext): Router {
 
   /**
    * Self Assessment to MTD any time; back to Self Assessment only while the year has no quarterly
-   * updates, since those were made under MTD (and one sent to HMRC can't be taken back).
+   * updates. Recorded ones count as well as sent ones: they stand for updates sent with other software.
    */
   router.put('/:id/submission-method', (req, res) => {
     const id = parseId(req.params.id);
@@ -77,14 +77,8 @@ export function taxYearsRouter(ctx: AppContext): Router {
     const { submissionMethod } = parseWith(submissionMethodSchema, req.body);
     if (submissionMethod === 'self_assessment' && year.submissionMethod === 'mtd') {
       const { recorded, sent } = updates(id);
-      if (sent > 0) {
-        throw new HttpError(409, `${displayTaxYear(year.label)} has quarterly updates sent to HMRC, so it stays Making Tax Digital.`);
-      }
-      if (recorded > 0) {
-        throw new HttpError(
-          409,
-          `${displayTaxYear(year.label)} has quarterly updates recorded. Mark them as not submitted under Making Tax Digital → Quarterly updates first.`,
-        );
+      if (recorded + sent > 0) {
+        throw new HttpError(409, `${displayTaxYear(year.label)} has quarterly updates, so it stays Making Tax Digital.`);
       }
     }
     ctx.db.prepare('UPDATE tax_years SET submission_method = ? WHERE id = ?').run(submissionMethod, id);

@@ -1007,8 +1007,9 @@ describe('MTD quarters', () => {
     const yearId = await createYear(2025, 'mtd');
     await agent.put(`/api/mtd/quarters/${yearId}/1/submission`).send({ submittedOn: '2025-08-01' }).expect(200);
     const back = () => agent.put(`/api/tax-years/${yearId}/submission-method`).send({ submissionMethod: 'self_assessment' });
-    expect((await back().expect(409)).body.error).toMatch(/Mark them as not submitted/);
+    expect((await back().expect(409)).body.error).toMatch(/2025\/26 has quarterly updates, so it stays Making Tax Digital/);
 
+    // One recorded by mistake can be removed, and then the year can go back.
     await agent.delete(`/api/mtd/quarters/${yearId}/1/submission`).expect(204);
     expect((await back().expect(200)).body.taxYears[0].submissionMethod).toBe('self_assessment');
     await agent.put(`/api/tax-years/${yearId}/submission-method`).send({ submissionMethod: 'other' }).expect(400);
@@ -1732,7 +1733,7 @@ describe('HMRC connection', () => {
       await agent.delete(`/api/mtd/quarters/${taxYearId}/2/submission`).expect(409);
       // Nor can the year go back to Self Assessment.
       const back = await agent.put(`/api/tax-years/${taxYearId}/submission-method`).send({ submissionMethod: 'self_assessment' }).expect(409);
-      expect(back.body.error).toMatch(/sent to HMRC/);
+      expect(back.body.error).toMatch(/stays Making Tax Digital/);
 
       // It goes into backups with the books.
       expect((await agent.get('/api/backup.sql').expect(200)).text).toMatch(/c-123/);
