@@ -19,6 +19,7 @@ Node 22 comes from Homebrew and isn't on the default PATH. Prefix shell commands
 export PATH="/opt/homebrew/opt/node@22/bin:$PATH"
 ```
 
+- If `node_modules` is missing (it can be cleared between sessions), run `npm ci` first.
 - `npm run typecheck`: shared, server and client.
 - `npx vitest run`: all tests. Run both before every commit.
 - `npm run build`, `npm run seed`, `docker compose up -d --build`.
