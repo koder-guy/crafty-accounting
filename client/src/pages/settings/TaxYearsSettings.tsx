@@ -126,7 +126,7 @@ export function TaxYearsSettings() {
                         </Button>
                       )}
                       {canEdit && (
-                        <Button variant="ghost" className="hover:text-out-soft!" onClick={() => setToDelete(year)}>
+                        <Button variant="softDanger" onClick={() => setToDelete(year)}>
                           <Trash2 className="size-4" aria-hidden />
                           Delete
                         </Button>

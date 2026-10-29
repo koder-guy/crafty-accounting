@@ -39,6 +39,7 @@ export PATH="/opt/homebrew/opt/node@22/bin:$PATH"
 - **UI conventions:**
   - Dark theme with indigo/violet accents; use the tokens in `index.css`, which also define the light print theme.
   - Red for destructive actions and outgoing amounts. Green (`ok`) for income.
+  - Delete and Remove buttons use the `softDanger` button variant (`SOFT_DANGER` in `ui.tsx`): red text on a light red background with a faint red border.
   - Payment badges: cash is amber, card is teal, bank transfer is indigo.
   - Sidebar icons are muted grey; only the current page's icon takes the accent colour.
   - Sub-pages use `SectionLayout`: `variant="tabs"` in Reports, the side menu in Settings.

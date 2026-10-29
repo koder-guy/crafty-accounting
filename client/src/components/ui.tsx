@@ -3,13 +3,18 @@ import { Link, type LinkProps } from 'react-router';
 import { CircleCheck, LoaderCircle, TriangleAlert } from 'lucide-react';
 import { PAYMENT_METHOD_LABELS, type PaymentMethod } from '@crafty/shared';
 
-type Variant = 'primary' | 'secondary' | 'ghost' | 'danger';
+type Variant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'softDanger';
+
+/** Red text on a very light red background with a faint red border: Delete and Remove buttons that open a confirmation or can be undone. */
+export const SOFT_DANGER =
+  'border border-out/40 bg-out-bg text-out-soft hover:border-out/70 hover:bg-out/20 hover:text-red-300';
 
 const variants: Record<Variant, string> = {
   primary: 'bg-accent text-white hover:bg-accent-strong border border-accent',
   secondary: 'bg-surface-2 text-ink border border-line-strong hover:border-accent-soft/60 hover:text-white',
   ghost: 'text-muted hover:text-ink hover:bg-surface-2 border border-transparent',
   danger: 'bg-out text-white hover:bg-red-700 border border-out',
+  softDanger: SOFT_DANGER,
 };
 
 const base =

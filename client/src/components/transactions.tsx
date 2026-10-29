@@ -17,7 +17,7 @@ import {
 import { documentUrl } from '../lib/api';
 import { useCanEdit } from '../lib/queries';
 import { CategoryOptions } from './CategoryOptions';
-import { Button, IconButton } from './ui';
+import { Button, IconButton, SOFT_DANGER } from './ui';
 
 // ---- Filters (kept in the URL so they survive navigation) ----
 
@@ -487,10 +487,8 @@ export function DocumentField({
               </div>
               <button
                 type="button"
-                className={`rounded-md border px-3 py-1.5 text-sm transition-colors ${
-                  removing
-                    ? 'border-line-strong bg-surface text-ink hover:border-accent-soft/60'
-                    : 'border-out bg-surface text-out-soft hover:bg-out-bg hover:text-red-300'
+                className={`rounded-md px-3 py-1.5 text-sm transition-colors ${
+                  removing ? 'border border-line-strong bg-surface text-ink hover:border-accent-soft/60' : SOFT_DANGER
                 }`}
                 onClick={() => toggleRemove(doc.id)}
               >
