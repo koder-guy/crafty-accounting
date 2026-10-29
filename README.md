@@ -50,11 +50,23 @@ The app keeps running after the terminal is closed, but doesn't start by itself 
 
 An update keeps your books and settings; if it fails, the running copy is left as it was. (Running the install command again does the same.) Settings are in `~/crafty-accounting/.env` (restart after changing them), the books in `~/crafty-accounting/data`. To choose things on a new install, put any of these before `/bin/bash`: `CRAFTY_DIR`, `CRAFTY_PORT`, `CRAFTY_ADMIN_NAME`, `CRAFTY_ADMIN_PASSWORD`.
 
-This serves plain HTTP, fine on a home network. For HTTPS, use Docker Compose below. Alpine Linux and other musl-based systems aren't covered (nodejs.org has no Node build for them); use Docker Compose there too.
+This serves plain HTTP, fine on a home network. For HTTPS, use Docker (next). Alpine Linux and other musl-based systems aren't covered (nodejs.org has no Node build for them); use Docker there too.
+
+## Quick install with Docker
+
+The same, but running in Docker Compose with HTTPS (see below). It needs Docker: on a Mac, install and start [Docker Desktop](https://www.docker.com/products/docker-desktop/) or OrbStack first; on Linux, if Docker is missing, the script offers to install it with Docker's own script (get.docker.com), which asks for your password. With the same GitHub token as above:
+
+```bash
+/bin/bash -c 'read -rsp "GitHub token: " GITHUB_TOKEN && echo && export GITHUB_TOKEN && /bin/bash -c "$(curl -fsSL -H "Authorization: Bearer $GITHUB_TOKEN" https://raw.githubusercontent.com/koder-guy/crafty-accounting/main/install-docker.sh)"'
+```
+
+[`install-docker.sh`](install-docker.sh) downloads the source to `~/crafty-accounting-docker`, writes `.env` (a random password for `Admin`, and `SITE_ADDRESS` set to `localhost`, the computer's `.local` name on a Mac, and its IP address), builds and starts the containers, and prints the `https://` addresses to open with the sign-in details. It uses ports 80 and 443, or 8080 and 8443 if those are taken (choose with `CRAFTY_HTTP_PORT` and `CRAFTY_HTTPS_PORT`). It copies Caddy's certificate to `~/crafty-accounting-docker/crafty-root.crt` and prints the command to trust it on a Mac; for other devices, see [HTTPS](#https). If the computer's IP address changes, update `SITE_ADDRESS` in `.env` and run `docker compose up -d`.
+
+Docker restarts the containers whenever Docker itself starts. To update, run `~/crafty-accounting-docker/install-docker.sh`, which asks for the token and keeps your settings, books and backups. It uses the Compose project name `crafty-accounting`, the same as running `docker compose` by hand in a folder of that name, so on a computer where that's been done it uses the same volumes, and so the same books.
 
 ## Run with Docker Compose
 
-On the Linux host:
+To set it up by hand, on the Linux host:
 
 ```bash
 cp .env.example .env

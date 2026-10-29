@@ -6,3 +6,5 @@ data
 .git
 *.log
 .DS_Store
+backups
+crafty-root.crt
