@@ -22,6 +22,22 @@ Self-hosted bookkeeping for a UK sole trader, built for selling at craft fairs a
 - **HMRC** (Settings): your National Insurance number, the connection to HMRC for Making Tax Digital and your self-employment business there. Editors connect by signing in to HMRC, which gives the app authority for 18 months. Once connected, the Quarterly updates tab shows which updates HMRC expects and which it has received. Uses HMRC's sandbox (test service) for now; see [Connecting to HMRC](#connecting-to-hmrc).
 - **Working together**: when someone saves a change, every other open browser shows it within a second or so, without reloading. If two people edit the same transaction at once, the second save is refused rather than overwriting the first, and the form offers to load the other person's version. What you've typed in a form is never replaced while you're typing.
 
+## Install on a Mac
+
+Paste this into Terminal:
+
+```bash
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/koder-guy/crafty-accounting/main/install.sh)"
+```
+
+[`install.sh`](install.sh) installs Homebrew (if needed, which asks for your Mac password), Node 22 and git, downloads the app to `~/crafty-accounting`, builds it and starts it in the background with launchd, so it also starts when you sign in to the Mac. It finishes by printing the addresses to open (`http://localhost:3000` on the Mac, and its `.local` name and IP address for other devices at home) and the sign-in name, `Admin`, with a random password. Change the password in **Settings → People**.
+
+Running the same command again updates the app and keeps your books and settings. Settings are in `~/crafty-accounting/.env`, the books in `~/crafty-accounting/data`. To choose things on a new install, put any of these before `/bin/bash`: `CRAFTY_DIR`, `CRAFTY_PORT`, `CRAFTY_ADMIN_NAME`, `CRAFTY_ADMIN_PASSWORD`.
+
+While the repository is private, the download needs a GitHub token with read access to it (`export GITHUB_TOKEN=…` first), and the `curl` needs `-H "Authorization: Bearer $GITHUB_TOKEN"`.
+
+This runs over plain HTTP, fine on a home network. For HTTPS, or on a Linux server, use Docker Compose below.
+
 ## Run with Docker Compose
 
 On the Linux host:
