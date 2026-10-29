@@ -368,42 +368,45 @@ function SendToHmrc({
   const coveredLater = laterHeld !== null && !changed && (sent !== null || receivedElsewhere !== null);
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
-        <Badge tone={status.tone}>{status.label}</Badge>
-        <span className="text-ink">{status.detail}</span>
+    <>
+      <div className="space-y-4">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+          <Badge tone={status.tone}>{status.label}</Badge>
+          <span className="text-ink">{status.detail}</span>
+        </div>
+
+        {(sent?.correlationId || handRecord || coveredLater) && (
+          <div className="space-y-1 text-sm text-muted">
+            {sent?.correlationId && <p className="break-all">HMRC correlation ID {sent.correlationId}</p>}
+            {handRecord && <p>You recorded it as submitted on {formatDisplayDate(handRecord.submittedOn)}.</p>}
+            {coveredLater && (
+              <p>
+                Your Q{laterHeld!.quarter} update now covers this quarter too, so there’s nothing more to send for Q{q.quarter}.
+              </p>
+            )}
+          </div>
+        )}
+
+        {changed && (
+          <Alert tone="warning">
+            The figures up to {formatDisplayDate(q.endDate)} have changed since they were sent. Updates are cumulative, so your next
+            quarterly update brings HMRC up to date{laterHeld ? '' : ', or you can send this quarter again now'}.
+          </Alert>
+        )}
+
+        {wantsSending && !laterHeld && (
+          <div className="flex flex-wrap items-center gap-3">
+            <Button variant={replacing ? 'secondary' : 'primary'} onClick={() => setConfirming(true)} disabled={tooEarly}>
+              <Send className="size-4" aria-hidden />
+              {replacing ? `Send Q${q.quarter} again` : `Send Q${q.quarter} to HMRC`}
+            </Button>
+            {tooEarly && <span className="text-sm text-muted">HMRC takes this update from {formatDisplayDate(earliest)}.</span>}
+          </div>
+        )}
+        {send.error && !confirming && <Alert>{send.error.message}</Alert>}
       </div>
 
-      {(sent?.correlationId || handRecord || coveredLater) && (
-        <div className="space-y-1 text-sm text-muted">
-          {sent?.correlationId && <p className="break-all">HMRC correlation ID {sent.correlationId}</p>}
-          {handRecord && <p>You recorded it as submitted on {formatDisplayDate(handRecord.submittedOn)}.</p>}
-          {coveredLater && (
-            <p>
-              Your Q{laterHeld!.quarter} update now covers this quarter too, so there’s nothing more to send for Q{q.quarter}.
-            </p>
-          )}
-        </div>
-      )}
-
-      {changed && (
-        <Alert tone="warning">
-          The figures up to {formatDisplayDate(q.endDate)} have changed since they were sent. Updates are cumulative, so your next
-          quarterly update brings HMRC up to date{laterHeld ? '' : ', or you can send this quarter again now'}.
-        </Alert>
-      )}
-
-      {wantsSending && !laterHeld && (
-        <div className="flex flex-wrap items-center gap-3">
-          <Button variant={replacing ? 'secondary' : 'primary'} onClick={() => setConfirming(true)} disabled={tooEarly}>
-            <Send className="size-4" aria-hidden />
-            {replacing ? `Send Q${q.quarter} again` : `Send Q${q.quarter} to HMRC`}
-          </Button>
-          {tooEarly && <span className="text-sm text-muted">HMRC takes this update from {formatDisplayDate(earliest)}.</span>}
-        </div>
-      )}
-      {send.error && !confirming && <Alert>{send.error.message}</Alert>}
-
+      {/* Outside the spaced lines: space-y gives every child but the last a bottom margin, and the hidden dialog would be last. */}
       <ConfirmDialog
         open={confirming}
         tone="send"
@@ -420,7 +423,7 @@ function SendToHmrc({
         <PayloadSummary payload={payload} categories={categories} />
         {replacing && <p>This replaces the Q{q.quarter} update HMRC already has.</p>}
       </ConfirmDialog>
-    </div>
+    </>
   );
 }
 
