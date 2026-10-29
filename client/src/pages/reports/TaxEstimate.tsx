@@ -274,7 +274,7 @@ function FullYearProjection({ data, today }: { data: TaxEstimateResponse; today:
           <strong className="tabular text-accent-soft">{whole(Math.round(projected.totalPence / 100) * 100)}</strong>.
         </p>
         <p className="text-muted">
-          Craft sales are seasonal (a busy run-up to Christmas can change this a lot), so treat it as a rough guide, not a forecast.
+          Many businesses have busier and quieter times of year, so treat this as a rough guide, not a forecast.
         </p>
       </div>
     </Card>
