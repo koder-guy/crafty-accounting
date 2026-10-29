@@ -36,7 +36,7 @@ export function ExpenseView() {
                 <Copy className="size-4" aria-hidden />
                 Duplicate
               </ButtonLink>
-              <Button variant="ghost" className="border-out/40! hover:border-out/70! hover:text-out-soft!" onClick={() => setConfirming(true)}>
+              <Button variant="ghost" className="border-out/40! bg-out-bg! text-out-soft! hover:border-out/70! hover:bg-out/20! hover:text-red-300!" onClick={() => setConfirming(true)}>
                 <Trash2 className="size-4" aria-hidden />
                 Delete
               </Button>
