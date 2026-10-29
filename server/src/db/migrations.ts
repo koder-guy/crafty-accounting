@@ -227,6 +227,15 @@ ALTER TABLE mtd_submissions ADD COLUMN correlation_id TEXT;
 ALTER TABLE mtd_submissions ADD COLUMN sent_payload TEXT;
 `,
   },
+  // How each year reaches HMRC. Years with a quarterly update recorded are MTD.
+  {
+    version: 10,
+    sql: `
+ALTER TABLE tax_years ADD COLUMN submission_method TEXT NOT NULL DEFAULT 'self_assessment'
+  CHECK (submission_method IN ('self_assessment', 'mtd'));
+UPDATE tax_years SET submission_method = 'mtd' WHERE id IN (SELECT tax_year_id FROM mtd_submissions);
+`,
+  },
 ];
 
 export const CURRENT_SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;

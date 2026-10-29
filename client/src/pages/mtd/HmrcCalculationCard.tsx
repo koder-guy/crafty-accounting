@@ -9,7 +9,7 @@ import {
   type HmrcMessage,
   type TaxEstimateResponse,
 } from '@crafty/shared';
-import { Alert, Button, Card, CardHeader, Spinner } from '../components/ui';
+import { Alert, Button, Card, CardHeader, Spinner } from '../../components/ui';
 import {
   HMRC_CALCULATION,
   useCanEdit,
@@ -17,7 +17,7 @@ import {
   useHmrcCalculation,
   useHmrcCalculationAvailable,
   useTriggerHmrcCalculation,
-} from '../lib/queries';
+} from '../../lib/queries';
 
 /** Give up checking for a calculation HMRC is still working on after this long. */
 const WAIT_MS = 2 * 60 * 1000;
@@ -97,8 +97,8 @@ function Figures({ calculation, data }: { calculation: HmrcCalculation; data: Ta
 
 /**
  * HMRC's own calculation of the year's tax, from the quarterly updates it has,
- * next to the app's estimate. Lives on the MTD page, apart from the app's
- * Self Assessment estimate in Reports. Shown once connected to HMRC.
+ * next to the app's estimate. Lives on the Quarterly updates tab, apart from
+ * the app's own Tax estimate. Shown once connected to HMRC.
  */
 export function HmrcCalculationCard({ data }: { data: TaxEstimateResponse }) {
   const qc = useQueryClient();
@@ -144,11 +144,11 @@ export function HmrcCalculationCard({ data }: { data: TaxEstimateResponse }) {
       <div className="space-y-4 px-5 pb-5 sm:px-6">
         <p className="text-sm text-muted">
           HMRC works out your tax for the whole year from the quarterly updates it has, so it can lag behind your books. The app’s own
-          estimate is in{' '}
-          <Link className="text-accent-soft hover:underline" to="/self-assessment/tax-estimate">
-            Self Assessment → Tax estimate
-          </Link>
-          .
+          estimate is on the{' '}
+          <Link className="text-accent-soft hover:underline" to="/mtd/tax-estimate">
+            Tax estimate
+          </Link>{' '}
+          tab.
           {hmrc?.environment === 'sandbox' && ' This is HMRC’s sandbox, so the figures are its worked example, not yours.'}
         </p>
         {trigger.error && <Alert>{trigger.error.message}</Alert>}

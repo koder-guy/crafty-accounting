@@ -136,8 +136,12 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
         <NavItem to="/incoming" icon={ArrowDownRight} label="Incoming" count={active?.incomeCount} />
         <NavItem to="/outgoing" icon={ArrowUpRight} label="Outgoing" count={active?.expenseCount} />
         <NavItem to="/claims" icon={Car} label="Simplified Expenses" />
-        <NavItem to="/self-assessment" icon={Calculator} label="Self Assessment" />
-        <NavItem to="/mtd" icon={FileSpreadsheet} label="MTD Quarterly" />
+        {/* Only the section for how the active year goes to HMRC; the other one says so if visited. */}
+        {active?.submissionMethod === 'mtd' ? (
+          <NavItem to="/mtd" icon={FileSpreadsheet} label="Making Tax Digital" />
+        ) : (
+          <NavItem to="/self-assessment" icon={Calculator} label="Self Assessment" />
+        )}
         <NavItem to="/reports" icon={ChartPie} label="Reports" />
         <NavItem to="/settings" icon={Settings} label="Settings" />
       </nav>

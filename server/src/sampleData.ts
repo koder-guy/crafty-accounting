@@ -224,7 +224,9 @@ export function generateSampleData(db: Db, uploadsDir: string, today = todayIso(
   const findCategory = db.prepare('SELECT id FROM categories WHERE is_custom = 1 AND type = ? AND name = ? COLLATE NOCASE');
   const lineCategory = (l: Line) => (l.custom ? custom.get(l.custom) : category.get(l.code));
   // A part-time job's salary, so the tax estimate has some tax to show alongside a modest craft profit.
-  const insertYear = db.prepare('INSERT INTO tax_years (label, start_date, end_date, other_income_pence) VALUES (?, ?, ?, 1200000)');
+  const insertYear = db.prepare(
+    'INSERT INTO tax_years (label, start_date, end_date, other_income_pence, submission_method) VALUES (?, ?, ?, 1200000, ?)',
+  );
   const incomeRow = db.prepare(
     `INSERT INTO incomes (tax_year_id, date, description, reference, payment_method, amount_pence, category_id, notes)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -308,7 +310,9 @@ export function generateSampleData(db: Db, uploadsDir: string, today = todayIso(
     }
     for (const startYear of [currentStart - 1, currentStart]) {
       const year = taxYearFromStartYear(startYear);
-      const yearId = Number(insertYear.run(year.label, year.startDate, year.endDate).lastInsertRowid);
+      // Last year went in a Self Assessment return; this year is Making Tax Digital, to show both.
+      const mtd = startYear === currentStart;
+      const yearId = Number(insertYear.run(year.label, year.startDate, year.endDate, mtd ? 'mtd' : 'self_assessment').lastInsertRowid);
       currentYearId = yearId;
       result.taxYears++;
       const end = year.endDate < today ? year.endDate : today;
@@ -379,7 +383,7 @@ export function generateSampleData(db: Db, uploadsDir: string, today = todayIso(
 
       // Record submissions for quarters whose deadline has passed.
       for (const q of mtdQuarters(startYear)) {
-        if (q.deadline >= today) continue;
+        if (!mtd || q.deadline >= today) continue;
         const submittedOn = addDays(q.deadline, -rnd.int(2, 25));
         insertSubmission.run(yearId, q.quarter, submittedOn, `MTD-${year.label}-Q${q.quarter}`);
         result.submissions++;

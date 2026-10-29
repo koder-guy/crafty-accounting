@@ -29,9 +29,21 @@ const optionalText = (max: number) =>
     .nullish()
     .transform((v) => (v ? v : null));
 
+/** How the year's figures reach HMRC: a Self Assessment return, or MTD quarterly updates and a final declaration. */
+export const SUBMISSION_METHODS = ['self_assessment', 'mtd'] as const;
+export type SubmissionMethod = (typeof SUBMISSION_METHODS)[number];
+
+export const SUBMISSION_METHOD_LABELS: Record<SubmissionMethod, string> = {
+  self_assessment: 'Self Assessment return',
+  mtd: 'Making Tax Digital',
+};
+
 export const createTaxYearSchema = z.object({
   startYear: z.number().int().min(2000).max(2099),
+  submissionMethod: z.enum(SUBMISSION_METHODS).default('self_assessment'),
 });
+
+export const submissionMethodSchema = z.object({ submissionMethod: z.enum(SUBMISSION_METHODS) });
 
 export const setActiveTaxYearSchema = z.object({ taxYearId: id });
 

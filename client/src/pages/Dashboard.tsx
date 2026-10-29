@@ -231,7 +231,8 @@ function KeyDates({ data }: { data: DashboardData }) {
   const daysLeft = daysBetween(today, year.endDate);
   const daysToDeadline = daysBetween(today, deadline);
 
-  const { data: mtd } = useMtdQuarters(year.id);
+  const isMtd = year.submissionMethod === 'mtd';
+  const { data: mtd } = useMtdQuarters(isMtd ? year.id : undefined);
   const nextUpdate = mtd?.quarters.find((q) => mtdQuarterStatus(q, today, q.submission !== null) !== 'submitted');
   const daysToUpdate = nextUpdate ? daysBetween(today, nextUpdate.deadline) : 0;
 
@@ -256,7 +257,7 @@ function KeyDates({ data }: { data: DashboardData }) {
         {nextUpdate && (
           <div>
             <dt className="text-muted">
-              <Link to="/mtd" className="hover:text-accent-soft hover:underline">
+              <Link to="/mtd/quarterly" className="hover:text-accent-soft hover:underline">
                 MTD update for Q{nextUpdate.quarter}
               </Link>
             </dt>
@@ -269,7 +270,7 @@ function KeyDates({ data }: { data: DashboardData }) {
           </div>
         )}
         <div>
-          <dt className="text-muted">Self Assessment deadline</dt>
+          <dt className="text-muted">{isMtd ? 'Final declaration and tax due' : 'Self Assessment return and tax due'}</dt>
           <dd className="mt-0.5 flex items-baseline justify-between gap-3">
             <span className="font-medium text-ink">{formatDisplayDate(deadline)}</span>
             <span className={`text-xs ${daysToDeadline < 0 ? 'text-faint' : daysToDeadline <= 60 ? 'text-warn' : 'text-faint'}`}>
@@ -345,7 +346,10 @@ export function Dashboard() {
                 sub={
                   <>
                     Income minus allowable outgoing.{' '}
-                    <Link to="/self-assessment/tax-estimate" className="text-accent-soft hover:underline">
+                    <Link
+                      to={data.taxYear.submissionMethod === 'mtd' ? '/mtd/tax-estimate' : '/self-assessment/tax-estimate'}
+                      className="text-accent-soft hover:underline"
+                    >
                       Estimated tax {formatGBP(data.taxEstimate.totalPence)}
                     </Link>
                   </>

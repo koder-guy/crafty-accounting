@@ -93,7 +93,9 @@ export function TaxEstimate() {
     <div className="space-y-6">
       <SectionHeading
         title="Tax estimate"
-        description="The app’s own guide to the Income Tax and Class 4 National Insurance on your profit, paid through Self Assessment, so you know how much to put aside."
+        description={`The app’s own guide to the Income Tax and Class 4 National Insurance on your profit (${
+          taxYear?.submissionMethod === 'mtd' ? 'settled by your final declaration' : 'worked out on your Self Assessment return'
+        }), so you know how much to put aside.`}
         actions={
           data && (
             <Button onClick={printPage}>
@@ -160,7 +162,9 @@ function EstimateBody({ data, today }: { data: TaxEstimateResponse; today: strin
               ? `A loss of ${formatGBP(data.netLossPence)}, so no tax`
               : data.usesTradingAllowance
                 ? `Using the ${whole(TRADING_ALLOWANCE_PENCE)} trading allowance, which beats your expenses`
-                : 'From the Year-end summary'}
+                : data.taxYear.submissionMethod === 'mtd'
+                  ? 'Income less allowable expenses'
+                  : 'From the Year-end summary'}
           </div>
         </Card>
       </div>
@@ -239,7 +243,7 @@ function EstimateBody({ data, today }: { data: TaxEstimateResponse; today: strin
         </p>
       </Card>
 
-      <HmrcCalculationPointer label={data.taxYear.label} />
+      {data.taxYear.submissionMethod === 'mtd' && <HmrcCalculationPointer label={data.taxYear.label} />}
 
       <p className="flex items-start gap-2 text-xs text-faint">
         <Wallet className="mt-0.5 size-3.5 shrink-0" aria-hidden />
@@ -282,18 +286,18 @@ function FullYearProjection({ data, today }: { data: TaxEstimateResponse; today:
   );
 }
 
-/** HMRC's own calculation comes from the MTD quarterly updates, so it's on the MTD page rather than here. */
+/** HMRC's own calculation comes from the quarterly updates, so it's on that tab rather than here. */
 function HmrcCalculationPointer({ label }: { label: string }) {
   if (!useHmrcCalculationAvailable(label)) return null;
   return (
     <p className="flex items-start gap-2 text-sm text-muted print:hidden">
       <Landmark className="mt-0.5 size-4 shrink-0 text-accent-soft" aria-hidden />
       <span>
-        HMRC can also work out the tax from the quarterly updates you’ve sent. See{' '}
-        <Link className="text-accent-soft hover:underline" to="/mtd">
-          MTD Quarterly
-        </Link>
-        .
+        HMRC can also work out the tax from the quarterly updates you’ve sent, on the{' '}
+        <Link className="text-accent-soft hover:underline" to="/mtd/quarterly">
+          Quarterly updates
+        </Link>{' '}
+        tab.
       </span>
     </p>
   );

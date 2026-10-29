@@ -1,11 +1,20 @@
 import { Router, type Request } from 'express';
-import { createTaxYearSchema, setActiveTaxYearSchema, taxSettingsSchema, taxYearFromStartYear, type TaxYearsResponse } from '@crafty/shared';
+import {
+  createTaxYearSchema,
+  displayTaxYear,
+  setActiveTaxYearSchema,
+  submissionMethodSchema,
+  taxSettingsSchema,
+  taxYearFromStartYear,
+  type TaxYearsResponse,
+} from '@crafty/shared';
 import type { AppContext } from '../context';
 import { setSetting } from '../db';
 import { removeDocumentFile } from '../documents';
 import { HttpError, parseId, parseWith } from '../http';
 import { getTaxYear, listTaxYears, resolveActiveTaxYearId } from '../repo';
 import { getUser } from '../users';
+import { mtdUpdateCounts } from './mtd';
 
 export function taxYearsRouter(ctx: AppContext): Router {
   const router = Router();
@@ -15,8 +24,9 @@ export function taxYearsRouter(ctx: AppContext): Router {
   const setActive = (req: Request, taxYearId: number) =>
     ctx.db.prepare('UPDATE users SET active_tax_year_id = ? WHERE id = ?').run(taxYearId, req.user!.id);
 
+  const updates = (taxYearId: number) => mtdUpdateCounts(ctx.db, taxYearId, ctx.config.hmrc.environment);
   const respond = (req: Request): TaxYearsResponse => ({
-    taxYears: listTaxYears(ctx.db),
+    taxYears: listTaxYears(ctx.db).map((year) => ({ ...year, mtdUpdates: updates(year.id) })),
     activeTaxYearId: activeId(req),
   });
 
@@ -25,7 +35,7 @@ export function taxYearsRouter(ctx: AppContext): Router {
   });
 
   router.post('/', (req, res) => {
-    const { startYear } = parseWith(createTaxYearSchema, req.body);
+    const { startYear, submissionMethod } = parseWith(createTaxYearSchema, req.body);
     const year = taxYearFromStartYear(startYear);
     const db = ctx.db;
     if (db.prepare('SELECT 1 FROM tax_years WHERE label = ?').get(year.label)) {
@@ -34,8 +44,8 @@ export function taxYearsRouter(ctx: AppContext): Router {
     // Keep the year you were viewing (or switch to the new one if it's the first).
     const before = activeId(req);
     const { lastInsertRowid } = db
-      .prepare('INSERT INTO tax_years (label, start_date, end_date) VALUES (?, ?, ?)')
-      .run(year.label, year.startDate, year.endDate);
+      .prepare('INSERT INTO tax_years (label, start_date, end_date, submission_method) VALUES (?, ?, ?, ?)')
+      .run(year.label, year.startDate, year.endDate, submissionMethod);
     setActive(req, before ?? Number(lastInsertRowid));
     res.status(201).json({ ...respond(req), createdId: Number(lastInsertRowid) });
   });
@@ -53,6 +63,31 @@ export function taxYearsRouter(ctx: AppContext): Router {
     if (!getTaxYear(ctx.db, id)) throw new HttpError(404, 'Tax year not found');
     const { otherIncomePence } = parseWith(taxSettingsSchema, req.body);
     ctx.db.prepare('UPDATE tax_years SET other_income_pence = ? WHERE id = ?').run(otherIncomePence, id);
+    res.json(respond(req));
+  });
+
+  /**
+   * Self Assessment to MTD any time; back to Self Assessment only while the year has no quarterly
+   * updates, since those were made under MTD (and one sent to HMRC can't be taken back).
+   */
+  router.put('/:id/submission-method', (req, res) => {
+    const id = parseId(req.params.id);
+    const year = getTaxYear(ctx.db, id);
+    if (!year) throw new HttpError(404, 'Tax year not found');
+    const { submissionMethod } = parseWith(submissionMethodSchema, req.body);
+    if (submissionMethod === 'self_assessment' && year.submissionMethod === 'mtd') {
+      const { recorded, sent } = updates(id);
+      if (sent > 0) {
+        throw new HttpError(409, `${displayTaxYear(year.label)} has quarterly updates sent to HMRC, so it stays Making Tax Digital.`);
+      }
+      if (recorded > 0) {
+        throw new HttpError(
+          409,
+          `${displayTaxYear(year.label)} has quarterly updates recorded. Mark them as not submitted under Making Tax Digital → Quarterly updates first.`,
+        );
+      }
+    }
+    ctx.db.prepare('UPDATE tax_years SET submission_method = ? WHERE id = ?').run(submissionMethod, id);
     res.json(respond(req));
   });
 

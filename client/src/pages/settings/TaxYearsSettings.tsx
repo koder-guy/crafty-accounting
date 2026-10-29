@@ -3,10 +3,14 @@ import { CalendarPlus, CircleCheck, Layers, Trash2 } from 'lucide-react';
 import {
   displayTaxYear,
   formatDisplayDate,
+  SUBMISSION_METHOD_LABELS,
+  SUBMISSION_METHODS,
   taxYearFromStartYear,
   taxYearStartYearForDate,
   todayIso,
+  type SubmissionMethod,
   type TaxYear,
+  type TaxYearListItem,
 } from '@crafty/shared';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { Alert, Badge, Button, Card, CardHeader, EmptyState, Spinner } from '../../components/ui';
@@ -16,7 +20,7 @@ import { SettingsHeading } from './SettingsLayout';
 export function TaxYearsSettings() {
   const { data, isLoading } = useTaxYears();
   const canEdit = useCanEdit();
-  const { create, setActive, remove } = useTaxYearMutations();
+  const { create, setActive, setSubmissionMethod, remove } = useTaxYearMutations();
   const currentStart = taxYearStartYearForDate(todayIso());
   const [toDelete, setToDelete] = useState<TaxYear | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -36,12 +40,17 @@ export function TaxYearsSettings() {
   const selected = startYear === '' ? suggested : startYear;
   const preview = selected !== undefined ? taxYearFromStartYear(selected) : null;
 
+  // A new year usually goes in the same way as the latest one (once in MTD, you stay in).
+  const [method, setMethod] = useState<SubmissionMethod | ''>('');
+  const chosenMethod = method === '' ? (data?.taxYears[0]?.submissionMethod ?? 'self_assessment') : method;
+
   const createYear = () => {
     if (selected === undefined) return;
     setMessage(null);
-    create.mutate(selected, {
+    create.mutate({ startYear: selected, submissionMethod: chosenMethod }, {
       onSuccess: () => {
         setStartYear('');
+        setMethod('');
         setMessage(`Tax year ${displayTaxYear(taxYearFromStartYear(selected).label)} created.`);
       },
     });
@@ -52,39 +61,56 @@ export function TaxYearsSettings() {
       <div className="space-y-6">
         <SettingsHeading
           title="Tax years"
-          description="Create UK tax years (6 April to 5 April), choose the active one, or delete a year and everything in it."
+          description="Create UK tax years (6 April to 5 April), choose how each one goes to HMRC and which is active, or delete a year and everything in it."
         />
         {canEdit && (
           <Card>
             <CardHeader icon={<CalendarPlus className="size-5 text-accent-soft" />} title="Create a tax year" />
-            <div className="flex flex-col gap-4 px-5 pb-6 sm:flex-row sm:items-end sm:px-6">
-              <div className="sm:w-64">
-                <label htmlFor="start-year" className="mb-1.5 block text-sm font-medium">
-                  Tax year
-                </label>
-                <select
-                  id="start-year"
-                  className="field"
-                  value={selected ?? ''}
-                  onChange={(e) => setStartYear(Number(e.target.value))}
-                  disabled={available.length === 0}
-                >
-                  {available.map((y) => (
-                    <option key={y} value={y}>
-                      {displayTaxYear(taxYearFromStartYear(y).label)}
-                      {y === currentStart ? ' (current)' : ''}
-                    </option>
-                  ))}
-                </select>
+            <div className="space-y-4 px-5 pb-6 sm:px-6">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <label htmlFor="start-year" className="mb-1.5 block text-sm font-medium">
+                    Tax year
+                  </label>
+                  <select
+                    id="start-year"
+                    className="field"
+                    value={selected ?? ''}
+                    onChange={(e) => setStartYear(Number(e.target.value))}
+                    disabled={available.length === 0}
+                  >
+                    {available.map((y) => (
+                      <option key={y} value={y}>
+                        {displayTaxYear(taxYearFromStartYear(y).label)}
+                        {y === currentStart ? ' (current)' : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label htmlFor="submission-method" className="mb-1.5 block text-sm font-medium">
+                    Sent to HMRC by
+                  </label>
+                  <select
+                    id="submission-method"
+                    className="field"
+                    value={chosenMethod}
+                    onChange={(e) => setMethod(e.target.value as SubmissionMethod)}
+                  >
+                    <MethodOptions />
+                  </select>
+                </div>
               </div>
-              <p className="flex-1 text-sm text-muted sm:pb-2.5">
-                {preview
-                  ? `Runs from ${formatDisplayDate(preview.startDate)} to ${formatDisplayDate(preview.endDate)}.`
-                  : 'All recent tax years already exist.'}
-              </p>
-              <Button variant="primary" onClick={createYear} busy={create.isPending} disabled={!preview}>
-                Create tax year
-              </Button>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-sm text-muted">
+                  {preview
+                    ? `Runs from ${formatDisplayDate(preview.startDate)} to ${formatDisplayDate(preview.endDate)}.`
+                    : 'All recent tax years already exist.'}
+                </p>
+                <Button variant="primary" onClick={createYear} busy={create.isPending} disabled={!preview}>
+                  Create tax year
+                </Button>
+              </div>
             </div>
             {(create.error || message) && (
               <div className="px-5 pb-5 sm:px-6">
@@ -118,6 +144,17 @@ export function TaxYearsSettings() {
                         {formatDisplayDate(year.startDate)} – {formatDisplayDate(year.endDate)} · {year.incomeCount} incoming ·{' '}
                         {year.expenseCount} outgoing · {year.documentCount} documents
                       </p>
+                      <YearMethod
+                        year={year}
+                        canEdit={canEdit}
+                        busy={setSubmissionMethod.isPending && setSubmissionMethod.variables?.id === year.id}
+                        onChange={(submissionMethod) => setSubmissionMethod.mutate({ id: year.id, submissionMethod })}
+                      />
+                      {setSubmissionMethod.error && setSubmissionMethod.variables?.id === year.id && (
+                        <div className="mt-2">
+                          <Alert>{setSubmissionMethod.error.message}</Alert>
+                        </div>
+                      )}
                     </div>
                     <div className="flex gap-2">
                       {!isActive && (
@@ -161,5 +198,67 @@ export function TaxYearsSettings() {
         )}
       </ConfirmDialog>
     </>
+  );
+}
+
+function MethodOptions() {
+  return (
+    <>
+      {SUBMISSION_METHODS.map((m) => (
+        <option key={m} value={m}>
+          {SUBMISSION_METHOD_LABELS[m]}
+        </option>
+      ))}
+    </>
+  );
+}
+
+/** How the year goes to HMRC: a choice for editors, unless quarterly updates tie it to MTD. */
+function YearMethod({
+  year,
+  canEdit,
+  busy,
+  onChange,
+}: {
+  year: TaxYearListItem;
+  canEdit: boolean;
+  busy: boolean;
+  onChange: (method: SubmissionMethod) => void;
+}) {
+  const { recorded, sent } = year.mtdUpdates;
+  const locked = year.submissionMethod === 'mtd' && recorded + sent > 0;
+  const id = `method-${year.id}`;
+  return (
+    <div className="mt-3 flex flex-col gap-1.5 text-sm sm:flex-row sm:items-center sm:gap-3">
+      {canEdit && !locked ? (
+        <label htmlFor={id} className="whitespace-nowrap text-muted">
+          Sent to HMRC by
+        </label>
+      ) : (
+        <span className="whitespace-nowrap text-muted">Sent to HMRC by</span>
+      )}
+      {canEdit && !locked ? (
+        <select
+          id={id}
+          className="field sm:w-60"
+          value={year.submissionMethod}
+          disabled={busy}
+          onChange={(e) => onChange(e.target.value as SubmissionMethod)}
+        >
+          <MethodOptions />
+        </select>
+      ) : (
+        <span className="font-medium whitespace-nowrap text-ink">
+          {SUBMISSION_METHOD_LABELS[year.submissionMethod]}
+        </span>
+      )}
+      {canEdit && locked && (
+        <span className="text-xs text-faint">
+          {sent > 0
+            ? 'Quarterly updates were sent to HMRC, so this year stays Making Tax Digital.'
+            : 'To change it, first mark its quarterly updates as not submitted.'}
+        </span>
+      )}
+    </div>
   );
 }

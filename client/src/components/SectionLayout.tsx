@@ -17,11 +17,14 @@ export function SectionLayout({
   subtitle,
   sections,
   variant = 'side',
+  notice,
 }: {
   title: string;
   subtitle: string;
   sections: SectionLink[];
   variant?: 'side' | 'tabs';
+  /** Shown above every sub-page, such as a warning that the section doesn't apply. */
+  notice?: ReactNode;
 }) {
   if (variant === 'tabs') {
     return (
@@ -47,6 +50,7 @@ export function SectionLayout({
           </nav>
         )}
         <PageBody>
+          {notice}
           <Outlet />
         </PageBody>
       </>
@@ -57,6 +61,7 @@ export function SectionLayout({
     <>
       <PageHeader title={title} subtitle={subtitle} />
       <PageBody>
+        {notice}
         <div className="lg:grid lg:grid-cols-[220px_minmax(0,1fr)] lg:gap-8 print:block">
           <nav aria-label={title} className="mb-6 flex gap-2 overflow-x-auto lg:mb-0 lg:flex-col lg:gap-1 print:hidden">
             {sections.map(({ to, label, icon: Icon }) => (

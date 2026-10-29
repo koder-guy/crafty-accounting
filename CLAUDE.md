@@ -36,6 +36,7 @@ export PATH="/opt/homebrew/opt/node@22/bin:$PATH"
 - **Mileage** is stored in tenths of a mile and claimed at HMRC rates, worked out in date order per tax year (the 10,000-mile car threshold). Claims count as `carVanTravelExpenses` in every total.
 - **Use of home** is hours per tax month (`home_working_months`), claimed at HMRC's flat rate as `premisesRunningCosts`, each month's claim dated its last day (the 5th). Mileage and use of home claims reach every total through `yearEntries`, `mileageClaimLines` and `useOfHomeClaimLines` in `repo.ts`; use those rather than querying expense lines directly.
 - **Tax rates** are per tax year in `TAX_RATES` (`shared/src/taxEstimate.ts`); add each new year when HMRC confirms it. Later years fall back to the latest rates with a warning.
+- **Submission method:** each tax year goes to HMRC by Self Assessment return or MTD (`tax_years.submission_method`); the sidebar shows only that year's section. Quarterly updates can only be recorded or sent for MTD years, and an MTD year with any (`mtdUpdateCounts`) can't go back to Self Assessment.
 - **MTD:** no copy and paste of figures (digital links). Exports are files.
 - **HMRC connection** (`hmrc_connections`, one row per `HMRC_ENV`): NINO and OAuth tokens. Install-level like people: left out of backups (`INSTALL_TABLES` in `backup.ts`) and kept through a restore or reset. Call HMRC's APIs with `callHmrc(ctx, req, …)`: it adds the token (`hmrcAccessToken` refreshes once for concurrent callers) and the fraud prevention headers, and turns HMRC's errors into HttpErrors (never 401, which would sign the person out). Routes that call HMRC live under `/api/hmrc/`, so the client sends the browser's part of the fraud prevention data (`X-Fraud-Prevention`, from `client/src/lib/fraudPrevention.ts`). Never invent a header value HMRC can't be given truthfully; leave it out. Quarterly updates go through `POST /api/hmrc/quarters/:taxYearId/:quarter/send` with the payload the person confirmed (`mtdPayload`, shared with the JSON export); the server rebuilds it and refuses (409) if it differs. A sent record (`mtd_submissions.sent_*`) is never changed by hand. Develop against the sandbox; `HMRC_ENV` defaults to it.
 - **UI conventions:**
@@ -44,7 +45,7 @@ export PATH="/opt/homebrew/opt/node@22/bin:$PATH"
   - Delete and Remove buttons use the `softDanger` button variant (`SOFT_DANGER` in `ui.tsx`): red text on a light red background with a faint red border.
   - Payment badges: cash is amber, card is teal, bank transfer is indigo.
   - Sidebar icons are muted grey; only the current page's icon takes the accent colour.
-  - Sub-pages use `SectionLayout`: `variant="tabs"` in Self Assessment (Tax estimate, Year-end summary), Simplified Expenses (Mileage, Use of Home) and Reports (Breakdown; the tabs show once there's a second page), the side menu in Settings.
+  - Sub-pages use `SectionLayout`: `variant="tabs"` in Self Assessment (Tax estimate, Year-end summary), Making Tax Digital (Quarterly updates, Tax estimate), Simplified Expenses (Mileage, Use of Home) and Reports (Breakdown; the tabs show once there's a second page), the side menu in Settings.
   - Dialogs are centred `<dialog>` elements with a blurred backdrop.
 
 ## Working in this repo

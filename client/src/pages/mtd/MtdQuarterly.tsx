@@ -20,10 +20,10 @@ import {
   type MtdQuarterSummary,
   type TaxYear,
 } from '@crafty/shared';
-import { ConfirmDialog } from '../components/ConfirmDialog';
-import { NoTaxYear } from '../components/NoTaxYear';
-import { PageBody, PageHeader } from '../components/PageHeader';
-import { Alert, Badge, Button, Card, CardHeader, Field, Spinner, type BadgeTone } from '../components/ui';
+import { ConfirmDialog } from '../../components/ConfirmDialog';
+import { NoTaxYear } from '../../components/NoTaxYear';
+import { SectionHeading } from '../../components/SectionLayout';
+import { Alert, Badge, Button, Card, CardHeader, Field, Spinner, type BadgeTone } from '../../components/ui';
 import {
   useActiveTaxYear,
   useCanEdit,
@@ -35,7 +35,7 @@ import {
   useSendToHmrc,
   useHmrcCalculationAvailable,
   useTaxEstimate,
-} from '../lib/queries';
+} from '../../lib/queries';
 import { HmrcCalculationCard } from './HmrcCalculationCard';
 
 const STATUS: Record<MtdQuarterStatus, { label: string; tone: BadgeTone }> = {
@@ -503,8 +503,11 @@ export function MtdQuarterly() {
 
   return (
     <>
-      <PageHeader title="MTD Quarterly" />
-      <PageBody>
+      <div className="space-y-6">
+        <SectionHeading
+          title="Quarterly updates"
+          description="Your figures for each quarter, sent to HMRC (or recorded) by the 7th of the month after it ends."
+        />
         {yearLoading || (taxYear && isLoading) ? (
           <Spinner />
         ) : !taxYear ? (
@@ -644,7 +647,7 @@ export function MtdQuarterly() {
             <YearCalculation taxYear={taxYear} />
           </>
         )}
-      </PageBody>
+      </div>
     </>
   );
 }

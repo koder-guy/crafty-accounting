@@ -36,7 +36,7 @@ import {
   type PendingHmrcAuth,
 } from '../hmrc';
 import { getTaxYear } from '../repo';
-import { getSubmissions, parseQuarter, quarterSummaries } from './mtd';
+import { getSubmissions, parseQuarter, quarterSummaries, refuseUnlessMtd } from './mtd';
 
 // The README's setup steps list these, for subscribing the application to them.
 const BUSINESS_DETAILS: HmrcApi = { name: 'Business Details (MTD)', version: '2.0' };
@@ -272,6 +272,7 @@ export function hmrcRouter(ctx: AppContext): Router {
     if (!taxYear) throw new HttpError(404, 'Tax year not found');
     const startYear = startYearFromLabel(taxYear.label)!;
     if (startYear < MTD_FIRST_SEND_YEAR) throw new HttpError(400, 'Quarterly updates can only be sent to HMRC from the 2025/26 tax year.');
+    refuseUnlessMtd(taxYear);
     const nino = requireNino();
     const businessId = getHmrcConnection(ctx.db, environment())?.business_id;
     if (!businessId) throw new HttpError(400, 'Find your business in Settings → HMRC first.');

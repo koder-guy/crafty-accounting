@@ -1,6 +1,6 @@
 // Shapes returned by the API.
 import type { CategoryType } from './categories';
-import type { PaymentMethod } from './schemas';
+import type { PaymentMethod, SubmissionMethod } from './schemas';
 import type { MtdPayload, MtdPeriodSummary, MtdQuarter } from './mtd';
 import type { SelfAssessmentSummary } from './selfAssessment';
 import type { Vehicle } from './mileage';
@@ -18,6 +18,16 @@ export interface TaxYear {
   mileageCount: number;
   /** Other taxable income for the year (salary, pension…), used by the tax estimate. */
   otherIncomePence: number;
+  submissionMethod: SubmissionMethod;
+}
+
+/** A tax year as Settings lists it, with what stops it leaving MTD. */
+export interface TaxYearListItem extends TaxYear {
+  /**
+   * Quarterly updates for the year: recorded by hand, or sent by the app to the HMRC service in use.
+   * While there are any the year stays MTD; recorded ones can be marked as not submitted, sent ones can't.
+   */
+  mtdUpdates: { recorded: number; sent: number };
 }
 
 export interface User {
@@ -33,7 +43,7 @@ export interface MeResponse {
 }
 
 export interface TaxYearsResponse {
-  taxYears: TaxYear[];
+  taxYears: TaxYearListItem[];
   activeTaxYearId: number | null;
 }
 

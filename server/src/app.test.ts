@@ -5,7 +5,7 @@ import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import request from 'supertest';
 import Database from 'better-sqlite3';
-import { mtdPayload, type Category } from '@crafty/shared';
+import { mtdPayload, type Category, type SubmissionMethod } from '@crafty/shared';
 import { createApp } from './app';
 import { dumpSql } from './backup';
 import { NEXT_UPDATED_AT, nextTimestamp } from './repo';
@@ -43,8 +43,8 @@ afterEach(() => {
   fs.rmSync(dataDir, { recursive: true, force: true });
 });
 
-async function createYear(startYear = 2025): Promise<number> {
-  const res = await agent.post('/api/tax-years').send({ startYear }).expect(201);
+async function createYear(startYear = 2025, submissionMethod: SubmissionMethod = 'self_assessment'): Promise<number> {
+  const res = await agent.post('/api/tax-years').send({ startYear, submissionMethod }).expect(201);
   return res.body.createdId;
 }
 
@@ -969,7 +969,7 @@ describe('MTD quarters', () => {
   });
 
   it('records, updates and clears a submission, and deletes it with the tax year', async () => {
-    const yearId = await createYear();
+    const yearId = await createYear(2025, 'mtd');
     await agent.put(`/api/mtd/quarters/${yearId}/1/submission`).send({ submittedOn: '2025-08-01', reference: 'ABC123' }).expect(200);
     await agent.put(`/api/mtd/quarters/${yearId}/1/submission`).send({ submittedOn: '2025-08-02' }).expect(200);
     let { body } = await agent.get('/api/mtd/quarters').query({ taxYearId: yearId });
@@ -986,6 +986,32 @@ describe('MTD quarters', () => {
     await agent.put(`/api/mtd/quarters/${yearId}/2/submission`).send({ submittedOn: '2025-11-01' }).expect(200);
     await agent.delete(`/api/tax-years/${yearId}`).expect(200);
     expect((ctx.db.prepare('SELECT COUNT(*) AS n FROM mtd_submissions').get() as { n: number }).n).toBe(0);
+  });
+
+  it('only records quarterly updates for Making Tax Digital years', async () => {
+    const yearId = await createYear();
+    expect((await agent.get('/api/tax-years')).body.taxYears[0]).toMatchObject({
+      submissionMethod: 'self_assessment',
+      mtdUpdates: { recorded: 0, sent: 0 },
+    });
+    const refused = await agent.put(`/api/mtd/quarters/${yearId}/1/submission`).send({ submittedOn: '2025-08-01' }).expect(409);
+    expect(refused.body.error).toMatch(/Settings → Tax years/);
+
+    await agent.put(`/api/tax-years/${yearId}/submission-method`).send({ submissionMethod: 'mtd' }).expect(200);
+    await agent.put(`/api/mtd/quarters/${yearId}/1/submission`).send({ submittedOn: '2025-08-01' }).expect(200);
+    const { body } = await agent.get('/api/tax-years');
+    expect(body.taxYears[0]).toMatchObject({ submissionMethod: 'mtd', mtdUpdates: { recorded: 1, sent: 0 } });
+  });
+
+  it('only goes back to Self Assessment while a year has no quarterly updates', async () => {
+    const yearId = await createYear(2025, 'mtd');
+    await agent.put(`/api/mtd/quarters/${yearId}/1/submission`).send({ submittedOn: '2025-08-01' }).expect(200);
+    const back = () => agent.put(`/api/tax-years/${yearId}/submission-method`).send({ submissionMethod: 'self_assessment' });
+    expect((await back().expect(409)).body.error).toMatch(/Mark them as not submitted/);
+
+    await agent.delete(`/api/mtd/quarters/${yearId}/1/submission`).expect(204);
+    expect((await back().expect(200)).body.taxYears[0].submissionMethod).toBe('self_assessment');
+    await agent.put(`/api/tax-years/${yearId}/submission-method`).send({ submissionMethod: 'other' }).expect(400);
   });
 });
 
@@ -1678,7 +1704,7 @@ describe('HMRC connection', () => {
     }
 
     it('sends the year-to-date figures and keeps HMRC’s receipt', async () => {
-      const taxYearId = await createYear(2026);
+      const taxYearId = await createYear(2026, 'mtd');
       await agent.post('/api/incomes').send(income(taxYearId, { date: '2026-06-14', amountPence: 38000 })).expect(201);
       await agent.post('/api/expenses').send(expense(taxYearId, { date: '2026-08-02' })).expect(201);
       await connectWithBusiness();
@@ -1704,6 +1730,9 @@ describe('HMRC connection', () => {
       // The record of what went to HMRC can't be changed or removed by hand.
       await agent.put(`/api/mtd/quarters/${taxYearId}/2/submission`).send({ submittedOn: '2026-10-01', reference: 'x' }).expect(409);
       await agent.delete(`/api/mtd/quarters/${taxYearId}/2/submission`).expect(409);
+      // Nor can the year go back to Self Assessment.
+      const back = await agent.put(`/api/tax-years/${taxYearId}/submission-method`).send({ submissionMethod: 'self_assessment' }).expect(409);
+      expect(back.body.error).toMatch(/sent to HMRC/);
 
       // It goes into backups with the books.
       expect((await agent.get('/api/backup.sql').expect(200)).text).toMatch(/c-123/);
@@ -1711,12 +1740,16 @@ describe('HMRC connection', () => {
 
     it('only sends figures the person has seen, at the right time, to the right place', async () => {
       const old = await createYear(2024);
-      const taxYearId = await createYear(2026);
+      const taxYearId = await createYear(2026, 'mtd');
       await agent.post(`/api/hmrc/quarters/${taxYearId}/2/send`).send({ payload: {} }).expect(400); // not connected
       await connectWithBusiness();
       apiReplies[SEND_PATH] = { status: 204 };
 
       expect((await agent.post(`/api/hmrc/quarters/${old}/4/send`).send({ payload: {} }).expect(400)).body.error).toMatch(/2025\/26/);
+      const selfAssessment = await createYear(2025);
+      expect((await agent.post(`/api/hmrc/quarters/${selfAssessment}/4/send`).send({ payload: {} }).expect(409)).body.error).toMatch(
+        /Self Assessment return/,
+      );
       const tooEarly = await preview(taxYearId, 3);
       expect((await agent.post(`/api/hmrc/quarters/${taxYearId}/3/send`).send({ payload: tooEarly }).expect(400)).body.error).toMatch(
         /until 2026-12-26/,
@@ -1744,7 +1777,7 @@ describe('HMRC connection', () => {
     });
 
     it('treats an update sent to the sandbox as a test once the app uses the live service', async () => {
-      const taxYearId = await createYear(2026);
+      const taxYearId = await createYear(2026, 'mtd');
       await connectWithBusiness();
       apiReplies[SEND_PATH] = { status: 204, headers: { 'X-CorrelationId': 'sandbox-1' } };
       const payload = await preview(taxYearId, 2);
@@ -1766,7 +1799,7 @@ describe('HMRC connection', () => {
     });
 
     it('sends again to replace what HMRC has', async () => {
-      const taxYearId = await createYear(2026);
+      const taxYearId = await createYear(2026, 'mtd');
       await connectWithBusiness();
       await agent.put(`/api/mtd/quarters/${taxYearId}/2/submission`).send({ submittedOn: '2026-10-20', reference: 'by hand' }).expect(200);
       apiReplies[SEND_PATH] = { status: 204, headers: { 'X-CorrelationId': 'first' } };
@@ -1916,7 +1949,9 @@ describe('HMRC connection', () => {
     expect(dump).not.toMatch(/hmrc_connections/);
 
     await agent.post('/api/restore').attach('file', Buffer.from(dump), 'backup.sql').expect(200);
-    expect((await agent.get('/api/tax-years')).body.taxYears).toHaveLength(1);
+    expect((await agent.get('/api/tax-years')).body.taxYears).toEqual([
+      expect.objectContaining({ submissionMethod: 'mtd', mtdUpdates: { recorded: 1, sent: 0 } }),
+    ]);
     expect((await agent.get('/api/hmrc')).body.connection).toMatchObject({ connectedBy: NAME });
     expect((await agent.get('/api/mtd/quarters').query({ taxYearId: 1 })).body.quarters[0].submission).toEqual({
       submittedOn: '2025-08-01',
@@ -1935,7 +1970,7 @@ describe('sample data', () => {
     expect(result.incomes).toBeGreaterThan(40);
     expect(result.expenses).toBeGreaterThan(40);
     expect(result.documents).toBeGreaterThan(5);
-    expect(result.submissions).toBe(5);
+    expect(result.submissions).toBe(1);
     expect(result.trips).toBeGreaterThan(20);
 
     const mismatched = ctx.db
@@ -1972,6 +2007,11 @@ describe('sample data', () => {
 
     const { body } = await agent.get('/api/tax-years').expect(200);
     expect(body.taxYears.map((y: { label: string }) => y.label)).toEqual(['2026-27', '2025-26']);
+    // This year is MTD with Q1 recorded; last year was a Self Assessment return.
+    expect(body.taxYears.map((y: { submissionMethod: string; mtdUpdates: object }) => [y.submissionMethod, y.mtdUpdates])).toEqual([
+      ['mtd', { recorded: 1, sent: 0 }],
+      ['self_assessment', { recorded: 0, sent: 0 }],
+    ]);
     await agent.get('/api/dashboard').query({ taxYearId: body.activeTaxYearId }).expect(200);
     const dump = (await agent.get('/api/backup.sql').expect(200)).text;
     await agent.post('/api/restore').attach('file', Buffer.from(dump), 'backup.sql').expect(200);

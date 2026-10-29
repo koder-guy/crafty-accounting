@@ -5,6 +5,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import {
   buildMtdPeriodSummary,
+  displayTaxYear,
   formatDisplayDate,
   mtdEarliestSendDate,
   mtdQuarters,
@@ -64,6 +65,22 @@ export function getSubmissions(
   );
 }
 
+/** A year's quarterly updates that count with this HMRC service: recorded by hand, and sent by the app. */
+export function mtdUpdateCounts(db: Db, taxYearId: number, environment: HmrcEnvironment): { recorded: number; sent: number } {
+  const submissions = [...getSubmissions(db, taxYearId, environment).values()].map((s) => s.submission).filter((s) => s !== null);
+  return { recorded: submissions.filter((s) => !s.sent).length, sent: submissions.filter((s) => s.sent).length };
+}
+
+/** Quarterly updates belong to MTD years; a Self Assessment year has to be switched first. */
+export function refuseUnlessMtd(taxYear: TaxYear): void {
+  if (taxYear.submissionMethod !== 'mtd') {
+    throw new HttpError(
+      409,
+      `${displayTaxYear(taxYear.label)} is set to a Self Assessment return. Switch it to Making Tax Digital in Settings → Tax years first.`,
+    );
+  }
+}
+
 /** Each quarter's figures, on its own and for the tax year to date, with any submission. */
 export function quarterSummaries(db: Db, taxYear: TaxYear, environment: HmrcEnvironment): MtdQuarterSummary[] {
   const { incomes, lines } = yearEntries(db, taxYear.id);
@@ -115,6 +132,7 @@ export function mtdRouter(ctx: AppContext): Router {
     const taxYear = getTaxYear(ctx.db, taxYearId);
     if (!taxYear) throw new HttpError(404, 'Tax year not found');
     refuseIfSent(ctx.db, taxYearId, quarter, ctx.config.hmrc.environment);
+    refuseUnlessMtd(taxYear);
     const input = parseWith(mtdSubmissionSchema, req.body);
     const earliest = mtdEarliestSendDate(mtdQuarters(startYearFromLabel(taxYear.label)!)[quarter - 1]);
     if (input.submittedOn < earliest) {
