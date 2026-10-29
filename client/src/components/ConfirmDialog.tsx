@@ -19,6 +19,7 @@ interface Props {
 /** A modal warning shown before destructive actions. */
 export function ConfirmDialog({ open, title, children, confirmLabel, requireText, onConfirm, onClose, tone = 'danger', wide }: Props) {
   const dialogRef = useRef<HTMLDialogElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
   const [typed, setTyped] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -31,10 +32,13 @@ export function ConfirmDialog({ open, title, children, confirmLabel, requireText
       setTyped('');
       setError(null);
       dialog.showModal();
+      // showModal focuses the first button, and Chrome rings it even after a click. Focus the
+      // dialog itself instead (Tab still reaches the buttons), unless there's text to type.
+      if (requireText === undefined) contentRef.current?.focus();
     } else if (!open && dialog.open) {
       dialog.close();
     }
-  }, [open]);
+  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const confirm = async () => {
     setBusy(true);
@@ -61,7 +65,7 @@ export function ConfirmDialog({ open, title, children, confirmLabel, requireText
       }}
       className={`m-auto w-[calc(100%-32px)] ${wide ? 'max-w-xl' : 'max-w-md'} rounded-[var(--radius-card)] border border-line bg-surface p-0 text-ink shadow-2xl backdrop:bg-black/70 backdrop:backdrop-blur-sm`}
     >
-      <div className="p-6">
+      <div ref={contentRef} tabIndex={-1} className="p-6 outline-none">
         <div className="flex gap-4">
           <div
             className={`flex size-10 shrink-0 items-center justify-center rounded-full ${
