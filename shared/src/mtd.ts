@@ -1,3 +1,5 @@
+import { EXPENSE_CATEGORIES, INCOME_CATEGORIES, type CategorySeed } from './categories';
+
 // Aggregates transactions into the shape of an MTD Self-Employment period
 // summary. Amounts stay in pence here; convert with penceToMtdAmount when
 // building an API payload, which expects pounds to two decimal places.
@@ -73,18 +75,32 @@ export function penceToMtdAmount(pence: number): number {
   return Math.round(pence) / 100;
 }
 
+export interface MtdPayload {
+  periodDates: { periodStartDate: string; periodEndDate: string };
+  periodIncome: Record<string, number>;
+  periodExpenses: Record<string, number>;
+  periodDisallowableExpenses?: Record<string, number>;
+}
+
 /**
- * MTD-shaped figures in pounds, laid out like the body of HMRC's cumulative
- * period summary request, for exporting to MTD bridging software as a file.
+ * MTD-shaped figures in pounds: the body of HMRC's cumulative period summary
+ * request, sent to HMRC and also exported for MTD bridging software. HMRC
+ * wants every income and expense field even when it's zero; disallowable
+ * amounts are only listed when there are some.
  */
-export function mtdPayload(summary: MtdPeriodSummary, periodStartDate: string, periodEndDate: string) {
-  const toPounds = (values: Record<string, number>) =>
-    Object.fromEntries(Object.entries(values).map(([key, pence]) => [key, penceToMtdAmount(pence)]));
+export function mtdPayload(summary: MtdPeriodSummary, periodStartDate: string, periodEndDate: string): MtdPayload {
+  const every = (categories: CategorySeed[], values: Record<string, number>) =>
+    Object.fromEntries(categories.map((c) => [c.hmrcCode, penceToMtdAmount(values[c.hmrcCode] ?? 0)]));
+  const disallowable = Object.fromEntries(
+    EXPENSE_CATEGORIES.map((c) => `${c.hmrcCode}Disallowable`)
+      .filter((key) => summary.periodDisallowableExpenses[key])
+      .map((key) => [key, penceToMtdAmount(summary.periodDisallowableExpenses[key])]),
+  );
   return {
     periodDates: { periodStartDate, periodEndDate },
-    periodIncome: toPounds(summary.periodIncome),
-    periodExpenses: toPounds(summary.periodExpenses),
-    periodDisallowableExpenses: toPounds(summary.periodDisallowableExpenses),
+    periodIncome: every(INCOME_CATEGORIES, summary.periodIncome),
+    periodExpenses: every(EXPENSE_CATEGORIES, summary.periodExpenses),
+    ...(Object.keys(disallowable).length ? { periodDisallowableExpenses: disallowable } : {}),
   };
 }
 
@@ -110,6 +126,18 @@ export function mtdQuarters(startYear: number): MtdQuarter[] {
     { quarter: 4, startDate: `${next}-01-06`, endDate: `${next}-04-05`, deadline: `${next}-05-07` },
   ];
 }
+
+/** HMRC won't take an update more than 10 days before the end of its period. */
+export const MTD_EARLY_SEND_DAYS = 10;
+
+/** The first day a quarter's update can be sent to HMRC. */
+export function mtdEarliestSendDate(quarter: Pick<MtdQuarter, 'endDate'>): string {
+  const [y, m, d] = quarter.endDate.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d - MTD_EARLY_SEND_DAYS)).toISOString().slice(0, 10);
+}
+
+/** Cumulative updates go to HMRC from the 2025-26 tax year; earlier years used a different API. */
+export const MTD_FIRST_SEND_YEAR = 2025;
 
 export type MtdQuarterStatus = 'upcoming' | 'open' | 'due' | 'overdue' | 'submitted';
 

@@ -5,7 +5,7 @@ import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import request from 'supertest';
 import Database from 'better-sqlite3';
-import type { Category } from '@crafty/shared';
+import { mtdPayload, type Category } from '@crafty/shared';
 import { createApp } from './app';
 import { dumpSql } from './backup';
 import { NEXT_UPDATED_AT, nextTimestamp } from './repo';
@@ -973,7 +973,7 @@ describe('MTD quarters', () => {
     await agent.put(`/api/mtd/quarters/${yearId}/1/submission`).send({ submittedOn: '2025-08-01', reference: 'ABC123' }).expect(200);
     await agent.put(`/api/mtd/quarters/${yearId}/1/submission`).send({ submittedOn: '2025-08-02' }).expect(200);
     let { body } = await agent.get('/api/mtd/quarters').query({ taxYearId: yearId });
-    expect(body.quarters[0].submission).toEqual({ submittedOn: '2025-08-02', reference: null });
+    expect(body.quarters[0].submission).toEqual({ submittedOn: '2025-08-02', reference: null, sent: null });
 
     await agent.put(`/api/mtd/quarters/${yearId}/5/submission`).send({ submittedOn: '2025-08-02' }).expect(404);
     await agent.delete(`/api/mtd/quarters/${yearId}/1/submission`).expect(204);
@@ -1316,8 +1316,8 @@ describe('HMRC connection', () => {
   let tokenReply: () => { status: number; body: unknown };
   let issued: number;
   /** Calls to HMRC's APIs (anything but the token endpoint), and their answers by path. */
-  let apiRequests: { url: URL; headers: Record<string, string> }[];
-  let apiReplies: Record<string, { status: number; body: unknown }>;
+  let apiRequests: { url: URL; method: string; headers: Record<string, string>; body: unknown }[];
+  let apiReplies: Record<string, { status: number; body?: unknown; headers?: Record<string, string> }>;
 
   beforeEach(() => {
     ctx.config.hmrc = { environment: 'sandbox', clientId: 'test-client', clientSecret: 'test-secret', redirectUri: null };
@@ -1340,10 +1340,16 @@ describe('HMRC connection', () => {
       }
       const parsed = new URL(String(url));
       expect(parsed.origin).toBe('https://test-api.service.hmrc.gov.uk');
-      apiRequests.push({ url: parsed, headers: init?.headers as Record<string, string> });
+      apiRequests.push({
+        url: parsed,
+        method: init?.method ?? 'GET',
+        headers: init?.headers as Record<string, string>,
+        body: init?.body ? JSON.parse(String(init.body)) : undefined,
+      });
       const reply = apiReplies[parsed.pathname];
       if (!reply) throw new Error(`Unexpected HMRC call to ${parsed.pathname}`);
-      return json(reply.status, reply.body);
+      if (reply.status === 204) return new Response(null, { status: 204, headers: reply.headers });
+      return new Response(JSON.stringify(reply.body), { status: reply.status, headers: { 'Content-Type': 'application/json', ...reply.headers } });
     }) as typeof fetch;
   });
 
@@ -1643,12 +1649,110 @@ describe('HMRC connection', () => {
     ctx.config.hmrc.environment = 'production';
     ctx.db.prepare("UPDATE hmrc_connections SET environment = 'production'").run();
     ctx.fetch = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
-      apiRequests.push({ url: new URL(String(url)), headers: init?.headers as Record<string, string> });
+      apiRequests.push({ url: new URL(String(url)), method: 'GET', headers: init?.headers as Record<string, string>, body: undefined });
       return new Response(JSON.stringify({ obligations: [] }), { status: 200 });
     }) as typeof fetch;
     await agent.get('/api/hmrc/obligations').query({ taxYearId }).expect(200);
     expect(apiRequests.at(-1)!.url.origin).toBe('https://api.service.hmrc.gov.uk');
     expect(apiRequests.at(-1)!.headers).not.toHaveProperty('Gov-Test-Scenario');
+  });
+
+  describe('sending quarterly updates', () => {
+    const SEND_PATH = '/individuals/business/self-employment/AB123456C/XAIS12345678910/cumulative/2026-27';
+
+    beforeEach(() => {
+      // HMRC takes an update from 10 days before its quarter ends: Q2 of 2026/27 can go, Q3 can't yet.
+      vi.useFakeTimers({ toFake: ['Date'] });
+      vi.setSystemTime(new Date('2026-10-29T12:00:00Z'));
+    });
+    afterEach(() => vi.useRealTimers());
+
+    /** The year-to-date figures as the MTD page shows them, which the person confirms. */
+    async function preview(taxYearId: number, quarter: number) {
+      const { quarters, taxYear } = (await agent.get('/api/mtd/quarters').query({ taxYearId }).expect(200)).body;
+      const q = quarters.find((x: { quarter: number }) => x.quarter === quarter);
+      return mtdPayload(q.cumulative, taxYear.startDate, q.endDate);
+    }
+
+    it('sends the year-to-date figures and keeps HMRC’s receipt', async () => {
+      const taxYearId = await createYear(2026);
+      await agent.post('/api/incomes').send(income(taxYearId, { date: '2026-06-14', amountPence: 38000 })).expect(201);
+      await agent.post('/api/expenses').send(expense(taxYearId, { date: '2026-08-02' })).expect(201);
+      await connectWithBusiness();
+      apiReplies[SEND_PATH] = { status: 204, headers: { 'X-CorrelationId': 'c-123' } };
+
+      const payload = await preview(taxYearId, 2);
+      const res = await agent.post(`/api/hmrc/quarters/${taxYearId}/2/send`).set('X-Fraud-Prevention', BROWSER).send({ payload }).expect(200);
+      expect(res.body).toMatchObject({ submittedOn: '2026-10-29', sent: { by: NAME, environment: 'sandbox', correlationId: 'c-123', payload } });
+
+      const call = apiRequests.at(-1)!;
+      expect(call).toMatchObject({ method: 'PUT', url: expect.objectContaining({ pathname: SEND_PATH }) });
+      expect(call.headers).toMatchObject({ Accept: 'application/vnd.hmrc.5.0+json', 'Content-Type': 'application/json', 'Gov-Client-Timezone': 'UTC+01:00' });
+      expect(call.body).toMatchObject({
+        periodDates: { periodStartDate: '2026-04-06', periodEndDate: '2026-10-05' },
+        periodIncome: { turnover: 380, other: 0 },
+        periodExpenses: { costOfGoods: 30, adminCosts: 5.5, otherExpenses: 10, depreciation: 0 },
+        periodDisallowableExpenses: { otherExpensesDisallowable: 10 },
+      });
+
+      const q2 = (await agent.get('/api/mtd/quarters').query({ taxYearId })).body.quarters[1];
+      expect(q2.submission.sent).toMatchObject({ correlationId: 'c-123', payload });
+
+      // The record of what went to HMRC can't be changed or removed by hand.
+      await agent.put(`/api/mtd/quarters/${taxYearId}/2/submission`).send({ submittedOn: '2026-10-01', reference: 'x' }).expect(409);
+      await agent.delete(`/api/mtd/quarters/${taxYearId}/2/submission`).expect(409);
+
+      // It goes into backups with the books.
+      expect((await agent.get('/api/backup.sql').expect(200)).text).toMatch(/c-123/);
+    });
+
+    it('only sends figures the person has seen, at the right time, to the right place', async () => {
+      const old = await createYear(2024);
+      const taxYearId = await createYear(2026);
+      await agent.post(`/api/hmrc/quarters/${taxYearId}/2/send`).send({ payload: {} }).expect(400); // not connected
+      await connectWithBusiness();
+      apiReplies[SEND_PATH] = { status: 204 };
+
+      expect((await agent.post(`/api/hmrc/quarters/${old}/4/send`).send({ payload: {} }).expect(400)).body.error).toMatch(/2025\/26/);
+      const tooEarly = await preview(taxYearId, 3);
+      expect((await agent.post(`/api/hmrc/quarters/${taxYearId}/3/send`).send({ payload: tooEarly }).expect(400)).body.error).toMatch(
+        /until 2026-12-26/,
+      );
+
+      const payload = await preview(taxYearId, 2);
+      await agent.post('/api/incomes').send(income(taxYearId, { date: '2026-09-01' })).expect(201);
+      expect((await agent.post(`/api/hmrc/quarters/${taxYearId}/2/send`).send({ payload }).expect(409)).body.error).toMatch(/changed/);
+      expect(apiRequests.filter((r) => r.method === 'PUT')).toHaveLength(0);
+
+      const viewer = await addPerson('Viewer', 'viewer-password', 'viewer');
+      const viewerPayload = await preview(taxYearId, 2);
+      await viewer.post(`/api/hmrc/quarters/${taxYearId}/2/send`).send({ payload: viewerPayload }).expect(403);
+
+      // HMRC's refusal is passed on, and nothing is recorded.
+      apiReplies[SEND_PATH] = {
+        status: 400,
+        body: { code: 'RULE_SUBMISSION_END_DATE_CANNOT_MOVE_BACKWARDS', message: 'Submission end date cannot be earlier than the existing submission' },
+      };
+      const refused = await preview(taxYearId, 2);
+      expect((await agent.post(`/api/hmrc/quarters/${taxYearId}/2/send`).send({ payload: refused }).expect(502)).body.error).toMatch(
+        /cannot be earlier/,
+      );
+      expect((await agent.get('/api/mtd/quarters').query({ taxYearId })).body.quarters[1].submission).toBeNull();
+    });
+
+    it('sends again to replace what HMRC has', async () => {
+      const taxYearId = await createYear(2026);
+      await connectWithBusiness();
+      await agent.put(`/api/mtd/quarters/${taxYearId}/2/submission`).send({ submittedOn: '2026-10-20', reference: 'by hand' }).expect(200);
+      apiReplies[SEND_PATH] = { status: 204, headers: { 'X-CorrelationId': 'first' } };
+      const first = await preview(taxYearId, 2);
+      await agent.post(`/api/hmrc/quarters/${taxYearId}/2/send`).send({ payload: first }).expect(200);
+      await agent.post('/api/incomes').send(income(taxYearId, { date: '2026-09-01', amountPence: 1234 })).expect(201);
+      apiReplies[SEND_PATH] = { status: 204, headers: { 'X-CorrelationId': 'second' } };
+      const payload = await preview(taxYearId, 2);
+      const res = await agent.post(`/api/hmrc/quarters/${taxYearId}/2/send`).send({ payload }).expect(200);
+      expect(res.body).toMatchObject({ reference: 'by hand', sent: { correlationId: 'second', payload: { periodIncome: { turnover: 12.34 } } } });
+    });
   });
 
   it('checks the fraud prevention headers with HMRC’s sandbox test API', async () => {
@@ -1684,6 +1788,7 @@ describe('HMRC connection', () => {
     }
     seedCategories(old);
     old.prepare("INSERT INTO tax_years (label, start_date, end_date) VALUES ('2025-26', '2025-04-06', '2026-04-05')").run();
+    old.prepare("INSERT INTO mtd_submissions (tax_year_id, quarter, submitted_on, reference) VALUES (1, 1, '2025-08-01', 'ABC')").run();
     const dump = dumpSql(old);
     old.close();
     expect(dump).toMatch(/schema_version: 6/);
@@ -1692,6 +1797,11 @@ describe('HMRC connection', () => {
     await agent.post('/api/restore').attach('file', Buffer.from(dump), 'backup.sql').expect(200);
     expect((await agent.get('/api/tax-years')).body.taxYears).toHaveLength(1);
     expect((await agent.get('/api/hmrc')).body.connection).toMatchObject({ connectedBy: NAME });
+    expect((await agent.get('/api/mtd/quarters').query({ taxYearId: 1 })).body.quarters[0].submission).toEqual({
+      submittedOn: '2025-08-01',
+      reference: 'ABC',
+      sent: null,
+    });
   });
 });
 

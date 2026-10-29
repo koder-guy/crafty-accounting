@@ -231,6 +231,15 @@ export interface HmrcCall {
  * out of this app).
  */
 export async function callHmrc<T>(ctx: AppContext, req: Request, call: HmrcCall): Promise<T> {
+  return (await callHmrcWithReceipt<T>(ctx, req, call)).body;
+}
+
+/** callHmrc, also returning HMRC's correlation id: the only receipt HMRC gives for an update. */
+export async function callHmrcWithReceipt<T>(
+  ctx: AppContext,
+  req: Request,
+  call: HmrcCall,
+): Promise<{ body: T; correlationId: string | null }> {
   const environment = ctx.config.hmrc.environment;
   const token = await hmrcAccessToken(ctx);
   const url = new URL(call.path, HMRC_HOSTS[environment].api);
@@ -249,12 +258,12 @@ export async function callHmrc<T>(ctx: AppContext, req: Request, call: HmrcCall)
   } catch {
     throw new HttpError(502, 'Could not reach HMRC. Check the server is online and try again.');
   }
-  if (res.status === 204) return undefined as T;
+  const correlationId = res.headers.get('X-CorrelationId');
+  if (res.status === 204) return { body: undefined as T, correlationId };
   const body = (await res.json().catch(() => null)) as unknown;
-  if (res.ok) return body as T;
+  if (res.ok) return { body: body as T, correlationId };
 
   const error = (body ?? {}) as HmrcErrorBody;
-  const correlationId = res.headers.get('X-CorrelationId');
   console.warn(`HMRC ${call.method ?? 'GET'} ${call.path} failed: ${res.status} ${error.code ?? ''}${correlationId ? ` (correlation id ${correlationId})` : ''}`);
   if (res.status === 401) {
     clearHmrcTokens(ctx.db, environment);

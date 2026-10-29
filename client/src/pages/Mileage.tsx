@@ -22,6 +22,7 @@ import { ExportCsvButton } from '../components/transactions';
 import { ChangedElsewhere, dateInYear, duplicateDate, recordedBy, yearRangeHint } from '../components/FormShell';
 import { NoTaxYear } from '../components/NoTaxYear';
 import { PageBody, PageHeader } from '../components/PageHeader';
+import { SentQuarterNotice } from '../components/SentQuarterNotice';
 import { Alert, Button, Card, CardHeader, EmptyState, Field, IconButton, Spinner } from '../components/ui';
 import { useActiveTaxYear, useCanEdit, useMileage, useMileageMutations } from '../lib/queries';
 
@@ -132,6 +133,7 @@ function TripForm({
           <input id="trip-notes" className="field" maxLength={2000} value={notes} onChange={(e) => setNotes(e.target.value)} />
         </Field>
       </div>
+      <SentQuarterNotice taxYearId={taxYear.id} dates={[date, editing?.date]} />
       {save.error && <Alert>{save.error.message}</Alert>}
       <div className="flex gap-2">
         <Button type="submit" variant="primary" busy={save.isPending}>

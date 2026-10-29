@@ -16,6 +16,7 @@ import { BackLink, ChangedElsewhere, CopiedFrom, dateInYear, duplicateDate, year
 import { NoTaxYear } from '../components/NoTaxYear';
 import { PageBody, PageHeader } from '../components/PageHeader';
 import { DocumentField, PaymentMethodOptions } from '../components/transactions';
+import { SentQuarterNotice } from '../components/SentQuarterNotice';
 import { Alert, Button, Card, CardHeader, Field, IconButton, Spinner } from '../components/ui';
 import { ApiError, transactionForm } from '../lib/api';
 import { useActiveTaxYear, useCategories, useExpense, useSaveTransaction, useTaxYears } from '../lib/queries';
@@ -164,6 +165,7 @@ export function ExpenseForm() {
   }, [id, existing, copyId, original, activeYear?.id, expenseCategories.length]);
 
   const watchedLines = useWatch({ control, name: 'lineItems' });
+  const watchedDate = useWatch({ control, name: 'date' });
   const watchedTotal = useWatch({ control, name: 'total' });
   const linePence = (watchedLines ?? []).map((li) => parsePoundsToPence(li?.amount ?? ''));
   const linesValid = linePence.every((p) => p !== null && p > 0);
@@ -456,6 +458,8 @@ export function ExpenseForm() {
                 />
               </Field>
             </div>
+
+            <SentQuarterNotice className="mt-5" taxYearId={taxYear.id} dates={[watchedDate, existing?.date]} />
 
             {save.error && (
               <div className="mt-5">

@@ -10,7 +10,7 @@ Self-hosted bookkeeping for a UK sole trader, built for selling at craft fairs a
 - **Duplicate**: start a new incoming, outgoing or mileage trip from an existing one, for things that repeat like stall fees, subscriptions or the same journey. The copy is dated today and opens in the form to check before adding; references, invoice and order numbers and attached documents aren't copied.
 - **Lists**: search, filter and sort, then export the filtered rows to CSV.
 - **Dashboard**: totals, a monthly chart, a breakdown by HMRC category, and key dates.
-- **MTD Quarterly**: the four standard update periods for each tax year, with deadlines and status. It shows each quarter's figures and the year-to-date figures per MTD field, can export the figures as a JSON file for MTD bridging software, and records when each quarter was submitted.
+- **MTD Quarterly**: the four standard update periods for each tax year, with deadlines and status. It shows each quarter's figures and the year-to-date figures per MTD field, can export the figures as a JSON file for MTD bridging software, and records when each quarter was submitted. Connected to HMRC, it sends each quarter's update itself (see [Sending quarterly updates](#sending-quarterly-updates)).
 - **Reports → Breakdown**: income and spending for any period (this month, last month, an MTD quarter, a tax year or custom dates, even across tax years). It's broken down by category, with custom categories grouped under their MTD category, and outgoing spending by payee. Click any row to list the transactions or line items behind it. Print or save as PDF.
 - **Reports → Year-end summary**: the figures for each box of the Self Assessment self-employment (short) pages (SA103S), on the cash basis, with net profit or loss, a list of disallowable amounts left off the form, and a trading allowance comparison. Print it or save it as a PDF from the page.
   - **Note:** the dashboard's net profit and the Breakdown report's profit count business entertaining and depreciation as ordinary expenses, while the Year-end summary leaves them out because HMRC never allows them. They only differ if you record expenses in either of those categories; use the Year-end summary figure for your return.
@@ -171,7 +171,7 @@ You can also back up the Docker volume itself.
 - Disallowable line items are included in `periodExpenses` and also reported under `<code>Disallowable`, matching SA103.
 - `shared/src/mtd.ts` (`buildMtdPeriodSummary`) already produces MTD-shaped totals for any set of transactions, so a future quarterly or annual submission can reuse it.
 - **Quarterly update periods** are the standard tax-year quarters: 6 Apr–5 Jul, 6 Jul–5 Oct, 6 Oct–5 Jan and 6 Jan–5 Apr. Each is due by the 7th of the following month. Updates are cumulative, so the **MTD Quarterly** page defaults to year-to-date figures. Calendar-quarter periods aren't supported.
-- **Submitting** directly to HMRC is being built, starting with the connection below. For now, record each submission's date and reference on the MTD Quarterly page.
+- **Submitting**: connected to HMRC, the app sends each quarter's update itself (see below). Otherwise export the JSON for bridging software and record each submission's date and reference on the MTD Quarterly page.
 
 ### Connecting to HMRC
 
@@ -182,9 +182,19 @@ The app talks to HMRC's MTD APIs as its own application, registered on HMRC's De
 3. Add the redirect URI shown in **Settings → HMRC** (the app's address followed by `/api/hmrc/callback`, e.g. `https://crafty.local/api/hmrc/callback`).
 4. Put the application's client ID and a client secret in `.env` as `HMRC_CLIENT_ID` and `HMRC_CLIENT_SECRET`, and restart the app.
 5. Create a sandbox test user (an **Individual**) with HMRC's [Create test user](https://developer.service.hmrc.gov.uk/api-test-user) service. In **Settings → HMRC**, enter its National Insurance number, choose **Connect to HMRC** and sign in with its user ID and password.
-6. Choose **Find my business**. In the sandbox HMRC answers with a made-up business (RCDTS), and the MTD Quarterly page shows HMRC's test obligations, not your own.
+6. Choose **Find my business**. In the sandbox HMRC answers with a made-up business (such as Company X), and the MTD Quarterly page shows HMRC's test obligations (the app asks the sandbox for its `DYNAMIC` test scenario, which answers for the dates asked), not your own.
 
 **Fraud prevention headers.** HMRC requires details of the browser, device and network with every MTD call (the `WEB_APP_VIA_SERVER` connection method). The browser sends its part (a device ID kept in the browser, screen and window size, time zone, user agent) and the server adds the rest. HMRC says never to guess a value, so values the app can't know are left out: there's no multi-factor sign-in or licence key, and when the app is reached over a home network the public IP addresses of the browser and server aren't visible to it. Behind a public domain they are (Caddy passes on the browser's port). **Settings → HMRC → Check with HMRC** sends this browser's headers to HMRC's test API and lists anything missing or wrong. HMRC asks software makers to tell it about values that can't be collected, which would be part of applying for production access.
+
+### Sending quarterly updates
+
+Once connected with a business, each quarter's submission panel on the MTD Quarterly page has **Send to HMRC** (editors only), from the 2025/26 tax year:
+
+- It sends the year-to-date figures (6 April to the end of the quarter) as a cumulative period summary to the Self Employment Business API. Every income and expense field is sent, zeros included; disallowable amounts are listed separately. The JSON export is the same.
+- A confirmation lists every non-zero field before anything goes. If the figures change between opening it and sending, the app refuses and asks you to check them again.
+- HMRC takes an update from 10 days before its quarter ends.
+- HMRC gives no reference for an update, so the app records who sent it, when, to which HMRC service, HMRC's correlation ID and exactly what was sent. That record can't be changed or removed by hand, and it's part of backups.
+- If the figures change after sending, the panel says so. Updates are cumulative, so the next quarter's update puts HMRC right; the latest quarter sent can also be sent again. HMRC refuses to replace an earlier quarter once a later one has been sent. Forms for incoming, outgoing and mileage warn when a change is dated on or before the end of the latest quarter sent.
 
 The connection lasts 18 months, after which you connect again. Like people, it belongs to the install rather than the books: the HMRC tokens never go into backups, and the connection is kept through a restore or a reset. **Disconnect** makes the app forget the tokens; to withdraw the authority at HMRC as well, do it in your HMRC online account.
 

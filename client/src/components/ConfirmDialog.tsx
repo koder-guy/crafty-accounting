@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
-import { TriangleAlert } from 'lucide-react';
+import { Send, TriangleAlert } from 'lucide-react';
 import { Alert, Button } from './ui';
 
 interface Props {
@@ -11,10 +11,13 @@ interface Props {
   requireText?: string;
   onConfirm: () => Promise<unknown> | void;
   onClose: () => void;
+  /** "send" for an action that isn't destructive but can't be taken back, like sending to HMRC. */
+  tone?: 'danger' | 'send';
+  wide?: boolean;
 }
 
 /** A modal warning shown before destructive actions. */
-export function ConfirmDialog({ open, title, children, confirmLabel, requireText, onConfirm, onClose }: Props) {
+export function ConfirmDialog({ open, title, children, confirmLabel, requireText, onConfirm, onClose, tone = 'danger', wide }: Props) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const [typed, setTyped] = useState('');
   const [busy, setBusy] = useState(false);
@@ -56,12 +59,16 @@ export function ConfirmDialog({ open, title, children, confirmLabel, requireText
         e.preventDefault();
         if (!busy) onClose();
       }}
-      className="m-auto w-[calc(100%-32px)] max-w-md rounded-[var(--radius-card)] border border-line bg-surface p-0 text-ink shadow-2xl backdrop:bg-black/70 backdrop:backdrop-blur-sm"
+      className={`m-auto w-[calc(100%-32px)] ${wide ? 'max-w-xl' : 'max-w-md'} rounded-[var(--radius-card)] border border-line bg-surface p-0 text-ink shadow-2xl backdrop:bg-black/70 backdrop:backdrop-blur-sm`}
     >
       <div className="p-6">
         <div className="flex gap-4">
-          <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-out-bg text-out-soft">
-            <TriangleAlert className="size-5" aria-hidden />
+          <div
+            className={`flex size-10 shrink-0 items-center justify-center rounded-full ${
+              tone === 'send' ? 'bg-accent-bg text-accent-soft' : 'bg-out-bg text-out-soft'
+            }`}
+          >
+            {tone === 'send' ? <Send className="size-5" aria-hidden /> : <TriangleAlert className="size-5" aria-hidden />}
           </div>
           <div className="min-w-0 flex-1">
             <h2 id={titleId} className="text-base font-semibold">
@@ -96,7 +103,7 @@ export function ConfirmDialog({ open, title, children, confirmLabel, requireText
           <Button type="button" variant="ghost" onClick={onClose} disabled={busy}>
             Cancel
           </Button>
-          <Button type="button" variant="danger" onClick={confirm} busy={busy} disabled={blocked}>
+          <Button type="button" variant={tone === 'send' ? 'primary' : 'danger'} onClick={confirm} busy={busy} disabled={blocked}>
             {confirmLabel}
           </Button>
         </div>

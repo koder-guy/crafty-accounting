@@ -1,7 +1,7 @@
 // Shapes returned by the API.
 import type { CategoryType } from './categories';
 import type { PaymentMethod } from './schemas';
-import type { MtdPeriodSummary, MtdQuarter } from './mtd';
+import type { MtdPayload, MtdPeriodSummary, MtdQuarter } from './mtd';
 import type { SelfAssessmentSummary } from './selfAssessment';
 import type { Vehicle } from './mileage';
 import type { TaxEstimate } from './taxEstimate';
@@ -151,6 +151,16 @@ export interface DashboardData {
 export interface MtdQuarterSubmission {
   submittedOn: string;
   reference: string | null;
+  /** Set when the app sent the update to HMRC itself, rather than it being recorded by hand. */
+  sent: {
+    by: string;
+    at: string;
+    environment: HmrcEnvironment;
+    /** HMRC's reference for the call; it answers an update with no other receipt. */
+    correlationId: string | null;
+    /** Exactly what was sent. */
+    payload: MtdPayload;
+  } | null;
 }
 
 export interface MtdQuarterSummary extends MtdQuarter {

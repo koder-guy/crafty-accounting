@@ -16,6 +16,8 @@ import type {
   MileageInput,
   MileageResponse,
   MileageTrip,
+  MtdPayload,
+  MtdQuarterSubmission,
   MtdQuartersResponse,
   Role,
   TaxEstimateResponse,
@@ -321,15 +323,41 @@ export function useHmrcMutations() {
   };
 }
 
+/** Sends a quarter's year-to-date figures to HMRC, as previewed: the server refuses (409) if they've changed since. */
+export function useSendToHmrc(taxYearId: number) {
+  const qc = useQueryClient();
+  const refresh = () => qc.invalidateQueries({ queryKey: ['mtd', taxYearId] });
+  return useMutation({
+    mutationFn: ({ quarter, payload }: { quarter: number; payload: MtdPayload }) =>
+      api.post<MtdQuarterSubmission>(`/hmrc/quarters/${taxYearId}/${quarter}/send`, { payload }),
+    onSuccess: () => {
+      refresh();
+      qc.invalidateQueries({ queryKey: [HMRC_OBLIGATIONS] });
+    },
+    onError: () => {
+      refresh();
+      // HMRC may have refused the sign-in, which the server then forgets.
+      qc.invalidateQueries({ queryKey: ['hmrc'] });
+    },
+  });
+}
+
 /** What HMRC expects for the tax year. Each fetch is a call to HMRC, so it isn't refetched on every change (see liveUpdates.ts). */
-export const useHmrcObligations = (taxYearId: number | undefined, enabled: boolean) =>
-  useQuery({
+export function useHmrcObligations(taxYearId: number | undefined, enabled: boolean) {
+  const qc = useQueryClient();
+  return useQuery({
     queryKey: [HMRC_OBLIGATIONS, taxYearId],
-    queryFn: () => api.get<HmrcObligation[]>(`/hmrc/obligations${toQuery({ taxYearId })}`),
+    queryFn: () =>
+      api.get<HmrcObligation[]>(`/hmrc/obligations${toQuery({ taxYearId })}`).catch((err) => {
+        // HMRC may have refused the sign-in, which the server then forgets.
+        qc.invalidateQueries({ queryKey: ['hmrc'] });
+        throw err;
+      }),
     enabled: enabled && taxYearId !== undefined,
     staleTime: 5 * 60 * 1000,
     retry: false,
   });
+}
 
 // ---- Sample data ----
 

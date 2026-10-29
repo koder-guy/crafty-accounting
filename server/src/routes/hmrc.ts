@@ -1,9 +1,15 @@
 // Settings → HMRC: the National Insurance number and the connection (OAuth
 // sign-in) used to talk to HMRC's Making Tax Digital APIs, the business that
 // updates are for, and HMRC's obligations (the updates it expects).
+import { isDeepStrictEqual } from 'node:util';
 import { Router, type Request } from 'express';
 import { z } from 'zod';
 import {
+  MTD_FIRST_SEND_YEAR,
+  mtdEarliestSendDate,
+  mtdPayload,
+  startYearFromLabel,
+  todayIso,
   hmrcBusinessSchema,
   hmrcNinoInputSchema,
   type HmrcBusiness,
@@ -12,9 +18,10 @@ import {
   type HmrcStatus,
 } from '@crafty/shared';
 import type { AppContext } from '../context';
-import { HttpError, parseWith } from '../http';
+import { HttpError, parseId, parseWith } from '../http';
 import {
   callHmrc,
+  callHmrcWithReceipt,
   checkFraudHeaders,
   clearHmrcTokens,
   completeHmrcAuth,
@@ -25,9 +32,14 @@ import {
   type PendingHmrcAuth,
 } from '../hmrc';
 import { getTaxYear } from '../repo';
+import { getSubmissions, parseQuarter, quarterSummaries } from './mtd';
 
 const BUSINESS_DETAILS_VERSION = '2.0';
 const OBLIGATIONS_VERSION = '3.0';
+const SELF_EMPLOYMENT_VERSION = '5.0';
+
+/** The update as the person saw it before confirming, so it's only sent if the figures haven't changed since. */
+const sendSchema = z.object({ payload: z.unknown() });
 
 const obligationsQuerySchema = z.object({ taxYearId: z.coerce.number().int().positive() });
 
@@ -181,6 +193,57 @@ export function hmrcRouter(ctx: AppContext): Router {
       }))
       .sort((a, b) => a.periodEndDate.localeCompare(b.periodEndDate));
     res.json(obligations);
+  });
+
+  // Sends a quarter's year-to-date figures to HMRC as a cumulative period
+  // summary. Sending again replaces what HMRC has (HMRC refuses if a later
+  // quarter has been sent since).
+  router.post('/quarters/:taxYearId/:quarter/send', async (req, res) => {
+    const taxYearId = parseId(req.params.taxYearId);
+    const quarter = parseQuarter(req.params.quarter);
+    const taxYear = getTaxYear(ctx.db, taxYearId);
+    if (!taxYear) throw new HttpError(404, 'Tax year not found');
+    const startYear = startYearFromLabel(taxYear.label)!;
+    if (startYear < MTD_FIRST_SEND_YEAR) throw new HttpError(400, 'Quarterly updates can only be sent to HMRC from the 2025/26 tax year.');
+    const nino = requireNino();
+    const businessId = getHmrcConnection(ctx.db, environment())?.business_id;
+    if (!businessId) throw new HttpError(400, 'Find your business in Settings → HMRC first.');
+
+    const q = quarterSummaries(ctx.db, taxYear).find((x) => x.quarter === quarter)!;
+    if (todayIso() < mtdEarliestSendDate(q)) {
+      throw new HttpError(400, `HMRC won’t take this update until ${mtdEarliestSendDate(q)}, 10 days before the quarter ends.`);
+    }
+    const payload = mtdPayload(q.cumulative, taxYear.startDate, q.endDate);
+    if (!isDeepStrictEqual(parseWith(sendSchema, req.body).payload, payload)) {
+      throw new HttpError(409, 'The figures have changed since you checked them. Check them again before sending.');
+    }
+
+    const { correlationId } = await callHmrcWithReceipt(ctx, req, {
+      method: 'PUT',
+      path: `/individuals/business/self-employment/${nino}/${businessId}/cumulative/${taxYear.label}`,
+      version: SELF_EMPLOYMENT_VERSION,
+      body: payload,
+    });
+    const sentAt = new Date().toISOString();
+    ctx.db
+      .prepare(
+        `INSERT INTO mtd_submissions (tax_year_id, quarter, submitted_on, sent_by, sent_at, sent_environment, correlation_id, sent_payload)
+         VALUES (@taxYearId, @quarter, @submittedOn, @by, @sentAt, @environment, @correlationId, @payload)
+         ON CONFLICT (tax_year_id, quarter) DO UPDATE SET submitted_on = excluded.submitted_on, sent_by = excluded.sent_by,
+           sent_at = excluded.sent_at, sent_environment = excluded.sent_environment, correlation_id = excluded.correlation_id,
+           sent_payload = excluded.sent_payload`,
+      )
+      .run({
+        taxYearId,
+        quarter,
+        submittedOn: todayIso(),
+        by: req.user!.name,
+        sentAt,
+        environment: environment(),
+        correlationId,
+        payload: JSON.stringify(payload),
+      });
+    res.json(getSubmissions(ctx.db, taxYearId).get(quarter));
   });
 
   router.get('/fraud-headers/check', async (req, res) => {

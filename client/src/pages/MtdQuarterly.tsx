@@ -1,18 +1,25 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router';
-import { CalendarCheck, FileDown, FileSpreadsheet, Info, Landmark } from 'lucide-react';
+import { CalendarCheck, FileDown, FileSpreadsheet, Info, Landmark, Send } from 'lucide-react';
 import {
+  MTD_FIRST_SEND_YEAR,
   formatDisplayDate,
   formatGBP,
+  mtdEarliestSendDate,
   mtdPayload,
+  startYearFromLabel,
   mtdQuarterStatus,
   todayIso,
   type Category,
   type HmrcObligation,
+  type HmrcStatus,
+  type MtdPayload,
   type MtdPeriodSummary,
   type MtdQuarterStatus,
   type MtdQuarterSummary,
+  type TaxYear,
 } from '@crafty/shared';
+import { ConfirmDialog } from '../components/ConfirmDialog';
 import { NoTaxYear } from '../components/NoTaxYear';
 import { PageBody, PageHeader } from '../components/PageHeader';
 import { Alert, Badge, Button, Card, CardHeader, Field, Spinner, type BadgeTone } from '../components/ui';
@@ -24,6 +31,7 @@ import {
   useHmrcObligations,
   useMtdQuarters,
   useMtdSubmission,
+  useSendToHmrc,
 } from '../lib/queries';
 
 const STATUS: Record<MtdQuarterStatus, { label: string; tone: BadgeTone }> = {
@@ -59,7 +67,7 @@ function defaultQuarter(quarters: MtdQuarterSummary[], today: string): number {
 function HmrcObligationLine({ obligation }: { obligation: HmrcObligation | null }) {
   if (!obligation) return <div className="text-faint">HMRC: not expected</div>;
   return obligation.status === 'fulfilled' ? (
-    <div className="text-in-soft">HMRC: received{obligation.receivedDate ? ` ${formatDisplayDate(obligation.receivedDate)}` : ''}</div>
+    <div className="text-ok">HMRC: received{obligation.receivedDate ? ` ${formatDisplayDate(obligation.receivedDate)}` : ''}</div>
   ) : (
     <div className="text-muted">HMRC: expected by {formatDisplayDate(obligation.dueDate)}</div>
   );
@@ -111,7 +119,13 @@ function QuarterCard({
         </div>
       </dl>
       <div className="mt-4 space-y-0.5 text-xs text-faint">
-        <div>{q.submission ? `Submitted ${formatDisplayDate(q.submission.submittedOn)}` : `Due by ${formatDisplayDate(q.deadline)}`}</div>
+        <div>
+          {q.submission?.sent
+            ? `Sent to HMRC ${formatDisplayDate(q.submission.submittedOn)}`
+            : q.submission
+              ? `Submitted ${formatDisplayDate(q.submission.submittedOn)}`
+              : `Due by ${formatDisplayDate(q.deadline)}`}
+        </div>
         {obligation !== undefined && <HmrcObligationLine obligation={obligation} />}
       </div>
     </button>
@@ -253,12 +267,130 @@ function SubmissionPanel({ taxYearId, q }: { taxYearId: number; q: MtdQuarterSum
   );
 }
 
+const sameFigures = (a: MtdPayload, b: MtdPayload) => JSON.stringify(a) === JSON.stringify(b);
+
+/** The fields being sent, listed for checking before they go: everything that isn't zero. */
+function PayloadSummary({ payload, categories }: { payload: MtdPayload; categories: Category[] }) {
+  const names = new Map(categories.filter((c) => !c.isCustom).map((c) => [c.hmrcCode, c.name]));
+  const rows = [
+    ...Object.entries(payload.periodIncome).map(([code, pounds]) => ({ code, label: names.get(code) ?? code, pounds })),
+    ...Object.entries(payload.periodExpenses).map(([code, pounds]) => ({ code, label: names.get(code) ?? code, pounds })),
+    ...Object.entries(payload.periodDisallowableExpenses ?? {}).map(([code, pounds]) => ({
+      code,
+      label: `${names.get(code.replace(/Disallowable$/, '')) ?? code}, disallowable`,
+      pounds,
+    })),
+  ].filter((r) => r.pounds !== 0);
+  const pence = (pounds: number) => Math.round(pounds * 100);
+  return (
+    <div className="space-y-2">
+      <table className="w-full text-sm">
+        <tbody className="divide-y divide-line">
+          {rows.map((r) => (
+            <tr key={r.code}>
+              <td className="py-1.5 pr-3 text-ink">
+                {r.label}
+                <div className="font-mono text-xs text-faint">{r.code}</div>
+              </td>
+              <td className="tabular py-1.5 text-right text-ink">{formatGBP(pence(r.pounds))}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <p className="text-xs text-faint">{rows.length ? 'Every other field is sent as zero.' : 'Every field is zero.'}</p>
+    </div>
+  );
+}
+
+/** Sending a quarter's year-to-date figures to HMRC, and what was sent. */
+function SendToHmrc({
+  taxYear,
+  q,
+  hmrc,
+  categories,
+  canSend,
+}: {
+  taxYear: TaxYear;
+  q: MtdQuarterSummary;
+  hmrc: HmrcStatus | undefined;
+  categories: Category[];
+  /** Connected, with a business, and this person can edit. */
+  canSend: boolean;
+}) {
+  const send = useSendToHmrc(taxYear.id);
+  const [confirming, setConfirming] = useState(false);
+  const resetSend = send.reset;
+  // An error belongs to the quarter it happened on.
+  useEffect(() => resetSend(), [q.quarter, resetSend]);
+  const payload = mtdPayload(q.cumulative, taxYear.startDate, q.endDate);
+  const sent = q.submission?.sent ?? null;
+  const changed = sent !== null && !sameFigures(sent.payload, payload);
+  const earliest = mtdEarliestSendDate(q);
+  const tooEarly = todayIso() < earliest;
+  const service = (environment: string) => (environment === 'sandbox' ? 'HMRC’s sandbox' : 'HMRC');
+
+  return (
+    <div className="space-y-4">
+      {sent ? (
+        <div className="space-y-1 text-sm">
+          <p className="text-ink">
+            Sent to {service(sent.environment)} by {sent.by} on <strong>{formatDisplayDate(sent.at.slice(0, 10))}</strong>.
+          </p>
+          {sent.correlationId && <p className="text-xs text-faint">HMRC correlation ID {sent.correlationId}</p>}
+        </div>
+      ) : (
+        q.submission && (
+          <p className="text-sm text-muted">Recorded by hand as submitted on {formatDisplayDate(q.submission.submittedOn)}.</p>
+        )
+      )}
+
+      {changed && (
+        <Alert tone="warning">
+          The figures up to {formatDisplayDate(q.endDate)} have changed since they were sent. Updates are cumulative, so your next
+          quarterly update brings HMRC up to date. If this is the latest quarter you’ve sent, you can also send it again.
+        </Alert>
+      )}
+
+      {canSend && (!sent || changed) && (
+        <div className="flex flex-wrap items-center gap-3">
+          <Button variant={sent ? 'secondary' : 'primary'} onClick={() => setConfirming(true)} disabled={tooEarly}>
+            <Send className="size-4" aria-hidden />
+            {sent ? `Send Q${q.quarter} again` : `Send Q${q.quarter} to HMRC`}
+          </Button>
+          {tooEarly && <span className="text-sm text-muted">HMRC takes this update from {formatDisplayDate(earliest)}.</span>}
+        </div>
+      )}
+      {send.error && !confirming && <Alert>{send.error.message}</Alert>}
+
+      <ConfirmDialog
+        open={confirming}
+        tone="send"
+        wide
+        title={`Send Q${q.quarter} to ${service(hmrc?.environment ?? 'production')}?`}
+        confirmLabel="Send to HMRC"
+        onClose={() => setConfirming(false)}
+        onConfirm={() => send.mutateAsync({ quarter: q.quarter, payload })}
+      >
+        <p>
+          Year-to-date figures for {hmrc?.business?.tradingName ?? hmrc?.business?.businessId}, {formatDisplayDate(taxYear.startDate)}{' '}
+          to {formatDisplayDate(q.endDate)}:
+        </p>
+        <PayloadSummary payload={payload} categories={categories} />
+        {sent && <p>This replaces the Q{q.quarter} update HMRC already has.</p>}
+      </ConfirmDialog>
+    </div>
+  );
+}
+
 export function MtdQuarterly() {
   const { taxYear, isLoading: yearLoading } = useActiveTaxYear();
   const { data, isLoading, error } = useMtdQuarters(taxYear?.id);
   const { data: categories = [] } = useCategories();
   const { data: hmrc } = useHmrc();
   const checkWithHmrc = Boolean(hmrc?.connection && hmrc.business);
+  const canEdit = useCanEdit();
+  // Cumulative updates can be sent from 2025/26.
+  const sendable = checkWithHmrc && !!taxYear && (startYearFromLabel(taxYear.label) ?? 0) >= MTD_FIRST_SEND_YEAR;
   const obligations = useHmrcObligations(taxYear?.id, checkWithHmrc);
   const [selected, setSelected] = useState<number | null>(null);
   const [view, setView] = useState<'cumulative' | 'period'>('cumulative');
@@ -303,9 +435,20 @@ export function MtdQuarterly() {
               <Info className="mt-0.5 size-4 shrink-0 text-accent-soft" aria-hidden />
               <p>
                 Making Tax Digital quarterly updates are <span className="text-ink">cumulative</span>: each one reports the tax year so
-                far. To keep a digital link, use <span className="text-ink">Export to JSON</span> on the year-to-date figures and
-                import the file into your MTD bridging software rather than retyping or copying them. Sending directly to HMRC isn't
-                available yet, so record each submission here to keep track.
+                far.{' '}
+                {sendable ? (
+                  <>
+                    Send each quarter’s year-to-date figures to HMRC from its submission panel below. A mistake is put right by your next
+                    update.
+                  </>
+                ) : (
+                  <>
+                    To keep a digital link, use <span className="text-ink">Export to JSON</span> on the year-to-date figures and import
+                    the file into your MTD bridging software rather than retyping or copying them, then record each submission here. Or
+                    connect to HMRC in <Link className="text-accent-soft hover:underline" to="/settings/hmrc">Settings → HMRC</Link>{' '}
+                    to send updates from here.
+                  </>
+                )}
               </p>
             </div>
 
@@ -398,7 +541,11 @@ export function MtdQuarterly() {
               <CardHeader icon={<CalendarCheck className="size-5 text-accent-soft" />} title={`Q${q.quarter} submission`} />
               <div className="px-5 pb-6 sm:px-6">
                 <p className="mb-4 text-sm text-muted">Due by {formatDisplayDate(q.deadline)}.</p>
-                <SubmissionPanel taxYearId={taxYear.id} q={q} />
+                {sendable || q.submission?.sent ? (
+                  <SendToHmrc taxYear={taxYear} q={q} hmrc={hmrc} categories={categories} canSend={sendable && canEdit} />
+                ) : (
+                  <SubmissionPanel taxYearId={taxYear.id} q={q} />
+                )}
               </div>
             </Card>
           </>

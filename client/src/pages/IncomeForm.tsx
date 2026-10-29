@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { useForm } from 'react-hook-form';
+import { useForm, useWatch } from 'react-hook-form';
 import { useNavigate, useParams, useSearchParams } from 'react-router';
 import { isDateInTaxYear, parsePoundsToPence, penceToPounds, todayIso, type Income, type PaymentMethod } from '@crafty/shared';
 import { CategoryOptions } from '../components/CategoryOptions';
@@ -7,6 +7,7 @@ import { BackLink, ChangedElsewhere, CopiedFrom, dateInYear, duplicateDate, year
 import { NoTaxYear } from '../components/NoTaxYear';
 import { PageBody, PageHeader } from '../components/PageHeader';
 import { DocumentField, PaymentMethodOptions } from '../components/transactions';
+import { SentQuarterNotice } from '../components/SentQuarterNotice';
 import { Alert, Button, Card, Field, Spinner } from '../components/ui';
 import { ApiError, transactionForm } from '../lib/api';
 import { useActiveTaxYear, useCategories, useIncome, useSaveTransaction, useTaxYears } from '../lib/queries';
@@ -47,6 +48,7 @@ export function IncomeForm() {
     handleSubmit,
     reset,
     setError,
+    control,
     formState: { errors },
   } = useForm<Values>({
     defaultValues: {
@@ -59,6 +61,7 @@ export function IncomeForm() {
       notes: '',
     },
   });
+  const watchedDate = useWatch({ control, name: 'date' });
 
   // The version of the record the form was filled from; saving is refused if it has changed since.
   const [loaded, setLoaded] = useState<Income | null>(null);
@@ -261,6 +264,8 @@ export function IncomeForm() {
                 />
               </Field>
             </div>
+
+            <SentQuarterNotice className="mt-5" taxYearId={taxYear.id} dates={[watchedDate, existing?.date]} />
 
             {save.error && (
               <div className="mt-5">

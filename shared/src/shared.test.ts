@@ -8,6 +8,7 @@ import {
   isDateInTaxYear,
   isValidIsoDate,
   mileageClaims,
+  mtdEarliestSendDate,
   mtdPayload,
   mtdQuarters,
   mtdQuarterStatus,
@@ -140,12 +141,22 @@ describe('MTD quarters', () => {
       [{ hmrcCode: 'turnover', amountPence: 51805 }],
       [{ hmrcCode: 'adminCosts', amountPence: 1001, disallowable: true }],
     );
-    expect(mtdPayload(summary, '2025-04-06', '2025-07-05')).toEqual({
+    const payload = mtdPayload(summary, '2025-04-06', '2025-07-05');
+    expect(payload).toMatchObject({
       periodDates: { periodStartDate: '2025-04-06', periodEndDate: '2025-07-05' },
-      periodIncome: { turnover: 518.05 },
-      periodExpenses: { adminCosts: 10.01 },
+      // HMRC wants every field, zeros included.
+      periodIncome: { turnover: 518.05, other: 0 },
+      periodExpenses: { adminCosts: 10.01, costOfGoods: 0, otherExpenses: 0 },
       periodDisallowableExpenses: { adminCostsDisallowable: 10.01 },
     });
+    expect(Object.keys(payload.periodExpenses)).toHaveLength(15);
+    expect(Object.keys(payload.periodDisallowableExpenses!)).toEqual(['adminCostsDisallowable']);
+    expect(mtdPayload(buildMtdPeriodSummary([], []), '2025-04-06', '2025-07-05')).not.toHaveProperty('periodDisallowableExpenses');
+  });
+
+  it('knows the first day a quarter can be sent', () => {
+    expect(mtdEarliestSendDate({ endDate: '2026-07-05' })).toBe('2026-06-25');
+    expect(mtdEarliestSendDate({ endDate: '2027-01-05' })).toBe('2026-12-26');
   });
 });
 

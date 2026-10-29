@@ -215,6 +215,18 @@ ALTER TABLE hmrc_connections ADD COLUMN business_id TEXT;
 ALTER TABLE hmrc_connections ADD COLUMN trading_name TEXT;
 `,
   },
+  // Quarterly updates the app sent to HMRC itself: who, when, to which HMRC
+  // service, HMRC's correlation id and exactly what was sent.
+  {
+    version: 9,
+    sql: `
+ALTER TABLE mtd_submissions ADD COLUMN sent_by TEXT;
+ALTER TABLE mtd_submissions ADD COLUMN sent_at TEXT;
+ALTER TABLE mtd_submissions ADD COLUMN sent_environment TEXT;
+ALTER TABLE mtd_submissions ADD COLUMN correlation_id TEXT;
+ALTER TABLE mtd_submissions ADD COLUMN sent_payload TEXT;
+`,
+  },
 ];
 
 export const CURRENT_SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;
