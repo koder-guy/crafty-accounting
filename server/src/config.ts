@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import type { HmrcEnvironment } from '@crafty/shared';
 
 export interface Config {
   dataDir: string;
@@ -15,6 +16,14 @@ export interface Config {
   cookieSecure: boolean;
   trustProxy: boolean;
   clientDist: string | null;
+  /** The app registered on HMRC's Developer Hub, for Making Tax Digital. */
+  hmrc: {
+    environment: HmrcEnvironment;
+    clientId: string | null;
+    clientSecret: string | null;
+    /** Overrides the redirect URI worked out from the address the app is reached at. */
+    redirectUri: string | null;
+  };
 }
 
 const truthy = (value: string | undefined) => value === 'true' || value === '1';
@@ -37,7 +46,20 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     cookieSecure: truthy(env.COOKIE_SECURE),
     trustProxy: truthy(env.TRUST_PROXY),
     clientDist: fs.existsSync(path.join(clientDist, 'index.html')) ? clientDist : null,
+    hmrc: {
+      environment: hmrcEnvironment(env.HMRC_ENV),
+      clientId: env.HMRC_CLIENT_ID?.trim() || null,
+      clientSecret: env.HMRC_CLIENT_SECRET?.trim() || null,
+      redirectUri: env.HMRC_REDIRECT_URI?.trim() || null,
+    },
   };
+}
+
+/** HMRC's test service unless HMRC_ENV says otherwise, so nothing reaches the live service by accident. */
+function hmrcEnvironment(value: string | undefined): HmrcEnvironment {
+  const env = value?.trim() || 'sandbox';
+  if (env !== 'sandbox' && env !== 'production') throw new Error(`HMRC_ENV must be sandbox or production, not "${env}"`);
+  return env;
 }
 
 /** Generates a session secret on first run so sessions survive restarts. */

@@ -1,7 +1,8 @@
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import request from 'supertest';
 import Database from 'better-sqlite3';
 import type { Category } from '@crafty/shared';
@@ -14,6 +15,7 @@ import { isAutoBackupDue, nextAutoBackup, runAutoBackup } from './autoBackup';
 import { loadConfig } from './config';
 import { createContext, type AppContext } from './context';
 import { documentNameProblem } from './documents';
+import { hmrcAccessToken } from './hmrc';
 import { clearData, generateSampleData } from './sampleData';
 
 const NAME = 'Admin';
@@ -1304,6 +1306,167 @@ describe('backup and restore', () => {
     expect((await agent.get('/api/use-of-home').query({ taxYearId: 1 }).expect(200)).body.totals.claimPence).toBe(0);
     expect(ctx.db.prepare("SELECT 1 FROM settings WHERE key = 'active_tax_year_id'").get()).toBeUndefined();
     expect((await agent.get('/api/users')).body.map((u: { name: string }) => u.name)).toEqual([NAME]);
+  });
+});
+
+describe('HMRC connection', () => {
+  const TOKEN_URL = 'https://test-api.service.hmrc.gov.uk/oauth/token';
+  let tokenRequests: URLSearchParams[];
+  let tokenReply: () => { status: number; body: unknown };
+  let issued: number;
+
+  beforeEach(() => {
+    ctx.config.hmrc = { environment: 'sandbox', clientId: 'test-client', clientSecret: 'test-secret', redirectUri: null };
+    tokenRequests = [];
+    issued = 0;
+    tokenReply = () => {
+      issued += 1;
+      return { status: 200, body: { access_token: `access-${issued}`, refresh_token: `refresh-${issued}`, expires_in: 14400, scope: 'read:self-assessment write:self-assessment' } };
+    };
+    ctx.fetch = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+      expect(String(url)).toBe(TOKEN_URL);
+      tokenRequests.push(new URLSearchParams(String(init?.body)));
+      const { status, body } = tokenReply();
+      return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
+    }) as typeof fetch;
+  });
+
+  /** Starts a sign-in and comes back from HMRC with a code, as the browser would. */
+  async function connect(as = agent) {
+    const { url } = (await as.post('/api/hmrc/connect').expect(200)).body;
+    const state = new URL(url).searchParams.get('state')!;
+    return as.get('/api/hmrc/callback').query({ code: 'the-code', state }).expect(302);
+  }
+
+  it('explains what to set up before connecting', async () => {
+    ctx.config.hmrc = { environment: 'sandbox', clientId: null, clientSecret: null, redirectUri: null };
+    const status = (await agent.get('/api/hmrc').expect(200)).body;
+    expect(status).toEqual({ environment: 'sandbox', configured: false, redirectUri: expect.stringMatching(/^http:\/\/127\.0\.0\.1:\d+\/api\/hmrc\/callback$/), nino: null, connection: null });
+    expect((await agent.post('/api/hmrc/connect').expect(400)).body.error).toMatch(/HMRC_CLIENT_ID/);
+
+    ctx.config.hmrc.redirectUri = 'https://books.example.com/api/hmrc/callback';
+    expect((await agent.get('/api/hmrc')).body.redirectUri).toBe('https://books.example.com/api/hmrc/callback');
+  });
+
+  it('checks and tidies the National Insurance number', async () => {
+    expect((await agent.put('/api/hmrc/nino').send({ nino: 'qq 12 34 56 c' }).expect(400)).body.error).toMatch(/National Insurance/);
+    expect((await agent.put('/api/hmrc/nino').send({ nino: 'AB123456E' }).expect(400)).body.error).toMatch(/National Insurance/);
+    await agent.put('/api/hmrc/nino').send({ nino: 'ab 12 34 56 c' }).expect(200);
+    expect((await agent.get('/api/hmrc')).body.nino).toBe('AB123456C');
+    await agent.put('/api/hmrc/nino').send({ nino: null }).expect(200);
+    expect((await agent.get('/api/hmrc')).body.nino).toBeNull();
+  });
+
+  it('signs in to HMRC with PKCE and stores the tokens', async () => {
+    const { url } = (await agent.post('/api/hmrc/connect').expect(200)).body;
+    const authorize = new URL(url);
+    expect(authorize.origin + authorize.pathname).toBe('https://test-www.tax.service.gov.uk/oauth/authorize');
+    expect(Object.fromEntries(authorize.searchParams)).toMatchObject({
+      response_type: 'code',
+      client_id: 'test-client',
+      scope: 'read:self-assessment write:self-assessment',
+      code_challenge_method: 'S256',
+      redirect_uri: expect.stringMatching(/\/api\/hmrc\/callback$/),
+    });
+
+    // A made-up state is refused without asking HMRC for tokens, and ends the attempt.
+    const forged = await agent.get('/api/hmrc/callback').query({ code: 'x', state: 'forged' }).expect(302);
+    expect(decodeURIComponent(forged.headers.location)).toMatch(/^\/settings\/hmrc\?error=.*expired/);
+    expect(tokenRequests).toHaveLength(0);
+
+    const res = await connect();
+    expect(res.headers.location).toBe('/settings/hmrc?connected=1');
+    const sent = Object.fromEntries(tokenRequests[0]);
+    expect(sent).toMatchObject({ grant_type: 'authorization_code', code: 'the-code', client_id: 'test-client', client_secret: 'test-secret' });
+
+    const status = (await agent.get('/api/hmrc').expect(200)).body;
+    expect(status.connection).toMatchObject({ connectedBy: NAME });
+    const months = (Date.parse(status.connection.expiresAt) - Date.parse(status.connection.connectedAt)) / (30.4 * 24 * 3600 * 1000);
+    expect(Math.round(months)).toBe(18);
+    expect(JSON.stringify(status)).not.toMatch(/access-|refresh-/);
+    await expect(hmrcAccessToken(ctx)).resolves.toBe('access-1');
+
+    await agent.delete('/api/hmrc/connection').expect(204);
+    expect((await agent.get('/api/hmrc')).body.connection).toBeNull();
+    await expect(hmrcAccessToken(ctx)).rejects.toThrow(/Connect to HMRC first/);
+  });
+
+  it('sends the PKCE verifier that matches the challenge', async () => {
+    const { url } = (await agent.post('/api/hmrc/connect').expect(200)).body;
+    const params = new URL(url).searchParams;
+    await agent.get('/api/hmrc/callback').query({ code: 'c', state: params.get('state') }).expect(302);
+    const verifier = tokenRequests[0].get('code_verifier')!;
+    expect(crypto.createHash('sha256').update(verifier).digest('base64url')).toBe(params.get('code_challenge'));
+  });
+
+  it('reports a refused or cancelled sign-in on the settings page', async () => {
+    await agent.post('/api/hmrc/connect').expect(200);
+    const cancelled = await agent.get('/api/hmrc/callback').query({ error: 'access_denied' }).expect(302);
+    expect(new URL(cancelled.headers.location, 'http://x').searchParams.get('error')).toMatch(/didn’t give the app authority/);
+
+    tokenReply = () => ({ status: 400, body: { error: 'invalid_client' } });
+    const refused = await connect();
+    expect(new URL(refused.headers.location, 'http://x').searchParams.get('error')).toMatch(/HMRC_CLIENT_ID/);
+    expect((await agent.get('/api/hmrc')).body.connection).toBeNull();
+  });
+
+  it('only lets editors connect', async () => {
+    const viewer = await addPerson('Viewer', 'viewer-password', 'viewer');
+    await viewer.post('/api/hmrc/connect').expect(403);
+    await viewer.put('/api/hmrc/nino').send({ nino: 'AB123456C' }).expect(403);
+    await viewer.delete('/api/hmrc/connection').expect(403);
+    const res = await viewer.get('/api/hmrc/callback').query({ code: 'c', state: 's' }).expect(302);
+    expect(new URL(res.headers.location, 'http://x').searchParams.get('error')).toMatch(/Only editors/);
+    expect((await viewer.get('/api/hmrc').expect(200)).body.configured).toBe(true);
+  });
+
+  it('refreshes an expired access token once, however many calls want it', async () => {
+    await connect();
+    const later = new Date(Date.now() + 4 * 3600 * 1000);
+    const tokens = await Promise.all([hmrcAccessToken(ctx, later), hmrcAccessToken(ctx, later), hmrcAccessToken(ctx, later)]);
+    expect(tokens).toEqual(['access-2', 'access-2', 'access-2']);
+    expect(tokenRequests.map((r) => r.get('grant_type'))).toEqual(['authorization_code', 'refresh_token']);
+    expect(tokenRequests[1].get('refresh_token')).toBe('refresh-1');
+    await expect(hmrcAccessToken(ctx, later)).resolves.toBe('access-2');
+
+    // When HMRC refuses the refresh token, the connection is forgotten.
+    tokenReply = () => ({ status: 400, body: { error: 'invalid_grant' } });
+    await expect(hmrcAccessToken(ctx, new Date(later.getTime() + 5 * 3600 * 1000))).rejects.toThrow(/Connect to HMRC again/);
+    expect((await agent.get('/api/hmrc')).body.connection).toBeNull();
+  });
+
+  it('keeps tokens out of backups and keeps the connection through a restore and a reset', async () => {
+    await agent.put('/api/hmrc/nino').send({ nino: 'AB123456C' }).expect(200);
+    await connect();
+    const dump = (await agent.get('/api/backup.sql').expect(200)).text;
+    expect(dump).not.toMatch(/INSERT INTO "hmrc_connections"/);
+    expect(dump).not.toMatch(/access-1|refresh-1/);
+
+    await agent.post('/api/restore').attach('file', Buffer.from(dump), 'backup.sql').expect(200);
+    expect((await agent.get('/api/hmrc')).body).toMatchObject({ nino: 'AB123456C', connection: { connectedBy: NAME } });
+    await agent.post('/api/reset').send({ confirm: 'RESET' }).expect(200);
+    expect((await agent.get('/api/hmrc')).body).toMatchObject({ nino: 'AB123456C', connection: { connectedBy: NAME } });
+    await expect(hmrcAccessToken(ctx)).resolves.toBe('access-1');
+  });
+
+  it('upgrades a backup made before the HMRC connection', async () => {
+    await connect();
+    const old = new Database(':memory:');
+    old.exec('CREATE TABLE schema_migrations (version INTEGER PRIMARY KEY, applied_at TEXT)');
+    for (const migration of MIGRATIONS.filter((m) => m.version <= 6)) {
+      old.exec(migration.sql);
+      old.prepare('INSERT INTO schema_migrations (version) VALUES (?)').run(migration.version);
+    }
+    seedCategories(old);
+    old.prepare("INSERT INTO tax_years (label, start_date, end_date) VALUES ('2025-26', '2025-04-06', '2026-04-05')").run();
+    const dump = dumpSql(old);
+    old.close();
+    expect(dump).toMatch(/schema_version: 6/);
+    expect(dump).not.toMatch(/hmrc_connections/);
+
+    await agent.post('/api/restore').attach('file', Buffer.from(dump), 'backup.sql').expect(200);
+    expect((await agent.get('/api/tax-years')).body.taxYears).toHaveLength(1);
+    expect((await agent.get('/api/hmrc')).body.connection).toMatchObject({ connectedBy: NAME });
   });
 });
 

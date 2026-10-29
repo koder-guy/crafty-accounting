@@ -7,6 +7,7 @@ import type {
   DashboardData,
   ExpenseWithLineItems,
   FlatRateKind,
+  HmrcStatus,
   Income,
   MeResponse,
   MileageInput,
@@ -285,6 +286,24 @@ export function useAutoBackupMutations() {
       onSuccess,
       onError: () => qc.invalidateQueries({ queryKey: ['auto-backup'] }),
     }),
+  };
+}
+
+// ---- HMRC ----
+
+export const useHmrc = () => useQuery({ queryKey: ['hmrc'], queryFn: () => api.get<HmrcStatus>('/hmrc') });
+
+export function useHmrcMutations() {
+  const qc = useQueryClient();
+  const onSuccess = () => qc.invalidateQueries({ queryKey: ['hmrc'] });
+  return {
+    saveNino: useMutation({ mutationFn: (nino: string | null) => api.put('/hmrc/nino', { nino }), onSuccess }),
+    // Off to HMRC's sign-in page; it sends the browser back to Settings → HMRC.
+    connect: useMutation({
+      mutationFn: () => api.post<{ url: string }>('/hmrc/connect'),
+      onSuccess: ({ url }) => window.location.assign(url),
+    }),
+    disconnect: useMutation({ mutationFn: () => api.delete('/hmrc/connection'), onSuccess }),
   };
 }
 

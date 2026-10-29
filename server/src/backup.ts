@@ -20,6 +20,7 @@ import { HttpError } from './http';
 
 const REQUIRED_TABLES = ['schema_migrations', 'tax_years', 'settings', 'categories', 'incomes', 'expenses', 'expense_line_items', 'mtd_submissions'];
 const ALLOWED_STATEMENT = /^(CREATE TABLE |CREATE INDEX |CREATE UNIQUE INDEX |INSERT INTO )/;
+const INSTALL_TABLES = new Set(['users', 'hmrc_connections']);
 const MAX_ZIP_BYTES = 4 * 1024 ** 3;
 
 const quoteIdent = (name: string) => `"${name.replace(/"/g, '""')}"`;
@@ -50,8 +51,9 @@ export function dumpSql(db: Db): string {
     .all() as { name: string; sql: string }[];
   for (const table of tables) lines.push(`${table.sql.replace(/\s+/g, ' ')};`);
   for (const table of tables) {
-    // Sign-ins belong to the install, not the books, so password hashes stay out of backups.
-    if (table.name === 'users') continue;
+    // Sign-ins and the HMRC connection belong to the install, not the books,
+    // so password hashes and HMRC tokens stay out of backups.
+    if (INSTALL_TABLES.has(table.name)) continue;
     const select = db.prepare(`SELECT * FROM ${quoteIdent(table.name)} ORDER BY rowid`);
     const columns = select
       .columns()
@@ -122,12 +124,13 @@ export function restoreBackup(ctx: AppContext, sql: string, uploadsFrom?: string
   const newDbFile = buildDatabaseFromDump(ctx, sql);
   const { dbFile, uploadsDir } = ctx.paths;
 
-  // Automatic backup settings and sign-ins belong to this install, so they survive a restore.
+  // Automatic backup settings, sign-ins and the HMRC connection belong to this install, so they survive a restore.
   const keepSettings = ctx.db.prepare("SELECT key, value FROM settings WHERE key LIKE 'auto\\_backup\\_%' ESCAPE '\\'").all() as {
     key: string;
     value: string | null;
   }[];
   const keepUsers = ctx.db.prepare('SELECT id, name, password_hash, role, created_at FROM users').all();
+  const keepHmrc = ctx.db.prepare('SELECT * FROM hmrc_connections').all() as Record<string, unknown>[];
 
   ctx.db.pragma('wal_checkpoint(TRUNCATE)');
   ctx.db.close();
@@ -142,6 +145,13 @@ export function restoreBackup(ctx: AppContext, sql: string, uploadsFrom?: string
     ctx.db.prepare('DELETE FROM users').run();
     const insert = ctx.db.prepare('INSERT INTO users (id, name, password_hash, role, created_at) VALUES (@id, @name, @password_hash, @role, @created_at)');
     for (const user of keepUsers) insert.run(user);
+    ctx.db.prepare('DELETE FROM hmrc_connections').run();
+    for (const row of keepHmrc) {
+      const columns = Object.keys(row);
+      ctx.db
+        .prepare(`INSERT INTO hmrc_connections (${columns.join(', ')}) VALUES (${columns.map((c) => `@${c}`).join(', ')})`)
+        .run(row);
+    }
   })();
 
   if (uploadsFrom) {

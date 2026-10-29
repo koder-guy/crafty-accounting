@@ -19,6 +19,7 @@ Self-hosted bookkeeping for a UK sole trader, built for selling at craft fairs a
 - **Backups** (Settings): download a `.sql` dump or a full `.zip` (database plus documents), and restore from either.
 - **People** (Settings): each person signs in with their own name and password, and has their own active tax year. Transactions show who added them and who last changed them.
   - **Access**: each person is an **Editor** (can change anything, manage people and settings, and download backups) or **Read-only** (can view everything, download documents, export CSVs and the MTD JSON, and print reports, but can't change the books or download backups). Read-only people can still choose which tax year they're viewing and change their own password. The server enforces this, not just the screens. Everyone set up before this was added is an Editor, and there's always at least one.
+- **HMRC** (Settings): your National Insurance number and the connection to HMRC for Making Tax Digital. Editors connect by signing in to HMRC, which gives the app authority for 18 months. Uses HMRC's sandbox (test service) for now; see [Connecting to HMRC](#connecting-to-hmrc).
 - **Working together**: when someone saves a change, every other open browser shows it within a second or so, without reloading. If two people edit the same transaction at once, the second save is refused rather than overwriting the first, and the form offers to load the other person's version. What you've typed in a form is never replaced while you're typing.
 
 ## Run with Docker Compose
@@ -127,6 +128,9 @@ It refuses to run if any tax years already exist. Adding `--reset` first **delet
 | `BACKUP_HOST_DIR` | `./backups` | **With Docker:** the folder on the server where automatic backups appear. This is the one to change. |
 | `BACKUP_DIR` | `DATA_DIR/backups` | **Without Docker only:** where automatic backups are written. Ignored in Docker, where Compose fixes it to `/backups` inside the container and connects that to `BACKUP_HOST_DIR`. |
 | `TZ` | `Europe/London` | Time zone for the daily backup time |
+| `HMRC_CLIENT_ID` / `HMRC_CLIENT_SECRET` | *(none)* | Your application's credentials from HMRC's Developer Hub. See [Connecting to HMRC](#connecting-to-hmrc). |
+| `HMRC_ENV` | `sandbox` | `sandbox` for HMRC's test service, or `production` for the live one |
+| `HMRC_REDIRECT_URI` | worked out | Only if Settings → HMRC shows the wrong redirect URI (an unusual proxy setup) |
 
 ## Backups
 
@@ -152,7 +156,7 @@ Use **Settings → Backup and restore** in the app:
 - **Full backup (.zip)** contains `backup.sql` plus every document in `uploads/`. Restoring it replaces the database and all documents.
 - **Database only (.sql)** is a plain-text SQL dump with one statement per line. Restoring it replaces the database and leaves the documents folder alone.
 
-**Start again with an empty database** (also in Backup and restore) deletes all tax years, transactions, documents, custom categories and MTD submission records, after you type `RESET` to confirm. The standard categories and the people who can sign in stay. The old database is kept as `/data/crafty.pre-reset.db` and the old documents as `/data/uploads.pre-reset/` until the next reset.
+**Start again with an empty database** (also in Backup and restore) deletes all tax years, transactions, documents, custom categories and MTD submission records, after you type `RESET` to confirm. The standard categories, the people who can sign in and the HMRC connection stay. The old database is kept as `/data/crafty.pre-reset.db` and the old documents as `/data/uploads.pre-reset/` until the next reset.
 
 Before a restore replaces anything, the file is loaded into a separate database and checked: only `CREATE TABLE`, `CREATE INDEX` and `INSERT` statements are accepted, the expected tables must exist, and foreign-key and integrity checks must pass. Backups from older versions are migrated forward automatically.
 
@@ -167,7 +171,19 @@ You can also back up the Docker volume itself.
 - Disallowable line items are included in `periodExpenses` and also reported under `<code>Disallowable`, matching SA103.
 - `shared/src/mtd.ts` (`buildMtdPeriodSummary`) already produces MTD-shaped totals for any set of transactions, so a future quarterly or annual submission can reuse it.
 - **Quarterly update periods** are the standard tax-year quarters: 6 Apr–5 Jul, 6 Jul–5 Oct, 6 Oct–5 Jan and 6 Jan–5 Apr. Each is due by the 7th of the following month. Updates are cumulative, so the **MTD Quarterly** page defaults to year-to-date figures. Calendar-quarter periods aren't supported.
-- **Submitting** directly to HMRC isn't built yet. For now, record each submission's date and reference on the MTD Quarterly page.
+- **Submitting** directly to HMRC is being built, starting with the connection below. For now, record each submission's date and reference on the MTD Quarterly page.
+
+### Connecting to HMRC
+
+The app talks to HMRC's MTD APIs as its own application, registered on HMRC's Developer Hub. It starts with the sandbox, HMRC's test service with made-up taxpayers. Using the live service needs HMRC's production approval for the application, which isn't covered here yet.
+
+1. Sign in at [developer.service.hmrc.gov.uk](https://developer.service.hmrc.gov.uk) and add a sandbox application.
+2. Subscribe it to the **Business Details (MTD)**, **Obligations (MTD)** and **Self Employment Business (MTD)** APIs.
+3. Add the redirect URI shown in **Settings → HMRC** (the app's address followed by `/api/hmrc/callback`, e.g. `https://crafty.local/api/hmrc/callback`).
+4. Put the application's client ID and a client secret in `.env` as `HMRC_CLIENT_ID` and `HMRC_CLIENT_SECRET`, and restart the app.
+5. Create a sandbox test user (an individual with self-employment) with HMRC's Create Test User service. In **Settings → HMRC**, enter its National Insurance number, choose **Connect to HMRC** and sign in with its user ID and password.
+
+The connection lasts 18 months, after which you connect again. Like people, it belongs to the install rather than the books: the HMRC tokens never go into backups, and the connection is kept through a restore or a reset. **Disconnect** makes the app forget the tokens; to withdraw the authority at HMRC as well, do it in your HMRC online account.
 
 ## Development
 

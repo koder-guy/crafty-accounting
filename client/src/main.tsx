@@ -28,6 +28,7 @@ import { TaxYearsSettings } from './pages/settings/TaxYearsSettings';
 import { CustomCategories } from './pages/settings/CustomCategories';
 import { BackupSettings } from './pages/settings/BackupSettings';
 import { People } from './pages/settings/People';
+import { HmrcSettings } from './pages/settings/HmrcSettings';
 import { NotFound } from './pages/NotFound';
 
 const queryClient = new QueryClient({
@@ -98,6 +99,7 @@ function App() {
           <Route path="tax-years" element={<TaxYearsSettings />} />
           <Route path="categories" element={<CustomCategories />} />
           <Route path="people" element={<People />} />
+          <Route path="hmrc" element={<HmrcSettings />} />
           <Route
             path="backup"
             element={

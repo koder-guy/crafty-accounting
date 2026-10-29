@@ -187,6 +187,26 @@ UPDATE incomes SET document_filename = NULL;
 UPDATE expenses SET document_filename = NULL;
 `,
   },
+  // The connection to HMRC for Making Tax Digital, one row per HMRC service
+  // (sandbox or production). Like users it belongs to the install, not the
+  // books: left out of backups and kept through a restore or reset.
+  {
+    version: 7,
+    sql: `
+CREATE TABLE hmrc_connections (
+  environment TEXT PRIMARY KEY CHECK (environment IN ('sandbox', 'production')),
+  nino TEXT,
+  access_token TEXT,
+  refresh_token TEXT,
+  access_expires_at TEXT,
+  refresh_expires_at TEXT,
+  scope TEXT,
+  connected_by TEXT,
+  connected_at TEXT,
+  updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+);
+`,
+  },
 ];
 
 export const CURRENT_SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;

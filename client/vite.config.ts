@@ -7,7 +7,9 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      '/api': process.env.API_URL ?? 'http://localhost:3000',
+      // Keep the browser's Host header, so the API works out addresses (like
+      // the HMRC redirect URI) as the browser sees them.
+      '/api': { target: process.env.API_URL ?? 'http://localhost:3000', changeOrigin: false },
     },
   },
 });

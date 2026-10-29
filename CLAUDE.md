@@ -8,7 +8,7 @@ Self-hosted bookkeeping for a UK sole trader who sells at craft fairs (cash basi
 
 npm workspaces, all TypeScript:
 - `shared/` (`@crafty/shared`): consumed as source, no build. Tax years, money, categories, zod schemas, API types, MTD and SA103S calculations (`mtd.ts`, `selfAssessment.ts`), mileage rates (`mileage.ts`), use of home flat rate (`useOfHome.ts`), Income Tax and Class 4 rates and the tax estimate (`taxEstimate.ts`).
-- `server/`: Express 5 + better-sqlite3, bundled with tsup. Routes in `src/routes/`, SQL in `src/repo.ts`, migrations in `src/db/migrations.ts`, backup/restore/reset in `src/backup.ts`, daily backups in `src/autoBackup.ts`, people and password hashing in `src/users.ts`, the live-update event stream in `src/liveUpdates.ts`. Tests in `src/app.test.ts` (Vitest + supertest against a temporary database).
+- `server/`: Express 5 + better-sqlite3, bundled with tsup. Routes in `src/routes/`, SQL in `src/repo.ts`, migrations in `src/db/migrations.ts`, backup/restore/reset in `src/backup.ts`, daily backups in `src/autoBackup.ts`, people and password hashing in `src/users.ts`, the live-update event stream in `src/liveUpdates.ts`, the HMRC OAuth connection and token refresh in `src/hmrc.ts` (calls go through `ctx.fetch`, which tests replace). Tests in `src/app.test.ts` (Vitest + supertest against a temporary database).
 - `client/`: Vite, React 19, react-router 7, TanStack Query, react-hook-form, Tailwind v4, Recharts, lucide-react. API hooks in `src/lib/queries.ts`, theme tokens in `src/index.css`.
 
 ## Commands
@@ -37,6 +37,7 @@ export PATH="/opt/homebrew/opt/node@22/bin:$PATH"
 - **Use of home** is hours per tax month (`home_working_months`), claimed at HMRC's flat rate as `premisesRunningCosts`, each month's claim dated its last day (the 5th). Mileage and use of home claims reach every total through `yearEntries`, `mileageClaimLines` and `useOfHomeClaimLines` in `repo.ts`; use those rather than querying expense lines directly.
 - **Tax rates** are per tax year in `TAX_RATES` (`shared/src/taxEstimate.ts`); add each new year when HMRC confirms it. Later years fall back to the latest rates with a warning.
 - **MTD:** no copy and paste of figures (digital links). Exports are files.
+- **HMRC connection** (`hmrc_connections`, one row per `HMRC_ENV`): NINO and OAuth tokens. Install-level like people: left out of backups (`INSTALL_TABLES` in `backup.ts`) and kept through a restore or reset. Get tokens with `hmrcAccessToken(ctx)`, which refreshes once for concurrent callers. Develop against the sandbox; `HMRC_ENV` defaults to it.
 - **UI conventions:**
   - Dark theme with indigo/violet accents; use the tokens in `index.css`, which also define the light print theme.
   - Red for destructive actions and outgoing amounts. Green (`ok`) for income.
@@ -59,4 +60,4 @@ export PATH="/opt/homebrew/opt/node@22/bin:$PATH"
 
 ## Open ideas
 
-MTD stage 2 (submitting to HMRC), locking submitted quarters, change history, recurring transactions, bank statement CSV/OFX import with matching, card reader and marketplace imports (SumUp, Square, Etsy), profit per craft fair, phone camera capture for receipts, VAT threshold warning, deadline reminders, Scottish tax rates, code splitting.
+MTD stage 2 (submitting to HMRC; the sandbox connection is built, next are fraud prevention headers, business details and obligations, then submitting quarters), locking submitted quarters, change history, recurring transactions, bank statement CSV/OFX import with matching, card reader and marketplace imports (SumUp, Square, Etsy), profit per craft fair, phone camera capture for receipts, VAT threshold warning, deadline reminders, Scottish tax rates, code splitting.

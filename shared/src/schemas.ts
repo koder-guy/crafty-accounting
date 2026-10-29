@@ -215,3 +215,16 @@ export const createUserSchema = z.object({ name: userName, password: newPassword
 export const updateUserSchema = z
   .object({ name: userName.optional(), password: newPassword.optional(), role: role.optional() })
   .refine((v) => v.name !== undefined || v.password !== undefined || v.role !== undefined, 'Nothing to change');
+
+/**
+ * A National Insurance number such as QQ 12 34 56 C. Spaces are dropped and
+ * letters upper-cased; the prefix letters HMRC never issues are refused.
+ */
+export const ninoSchema = z
+  .string()
+  .transform((value) => value.replace(/\s+/g, '').toUpperCase())
+  .refine((value) => /^(?!BG|GB|KN|NK|NT|TN|ZZ)[A-CEGHJ-PR-TW-Z][A-CEGHJ-NPR-TW-Z]\d{6}[A-D]$/.test(value), {
+    message: 'Enter a National Insurance number like QQ 12 34 56 C',
+  });
+
+export const hmrcNinoInputSchema = z.object({ nino: ninoSchema.nullable() });

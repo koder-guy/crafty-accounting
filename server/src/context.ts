@@ -16,6 +16,8 @@ export interface AppContext {
     backupDir: string;
   };
   liveUpdates: LiveUpdates;
+  /** Used for calls to HMRC; tests replace it. */
+  fetch: typeof fetch;
 }
 
 export function createContext(config: Config): AppContext {
@@ -30,5 +32,5 @@ export function createContext(config: Config): AppContext {
   fs.mkdirSync(paths.tmpDir, { recursive: true });
   const db = openDatabase(paths.dbFile);
   ensureFirstUser(db, config.adminName, config.adminPassword);
-  return { config, db, paths, liveUpdates: new LiveUpdates() };
+  return { config, db, paths, liveUpdates: new LiveUpdates(), fetch: (...args) => globalThis.fetch(...args) };
 }

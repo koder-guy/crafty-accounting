@@ -330,3 +330,21 @@ export interface UseOfHomeResponse {
   updatedAt: string | null;
   updatedBy: string | null;
 }
+
+export type HmrcEnvironment = 'sandbox' | 'production';
+
+export interface HmrcStatus {
+  /** Set by HMRC_ENV on the server: HMRC's test service or the live one. */
+  environment: HmrcEnvironment;
+  /** Whether HMRC_CLIENT_ID and HMRC_CLIENT_SECRET are set. */
+  configured: boolean;
+  /** Where HMRC sends people back after they sign in; it must be registered with the HMRC app. */
+  redirectUri: string;
+  nino: string | null;
+  connection: {
+    connectedBy: string;
+    connectedAt: string;
+    /** After this HMRC needs signing in to again (18 months after connecting). */
+    expiresAt: string;
+  } | null;
+}
