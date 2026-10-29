@@ -309,6 +309,8 @@ function SendToHmrc({
   hmrc,
   categories,
   canSend,
+  obligation,
+  laterHeld,
 }: {
   taxYear: TaxYear;
   q: MtdQuarterSummary;
@@ -316,6 +318,10 @@ function SendToHmrc({
   categories: Category[];
   /** Connected, with a business, and this person can edit. */
   canSend: boolean;
+  /** HMRC's obligation for this quarter, if checked with HMRC. */
+  obligation: HmrcObligation | null | undefined;
+  /** The latest later quarter HMRC already has, if any: HMRC won't take this one now. */
+  laterHeld: MtdQuarterSummary | null;
 }) {
   const send = useSendToHmrc(taxYear.id);
   const [confirming, setConfirming] = useState(false);
@@ -325,6 +331,9 @@ function SendToHmrc({
   const payload = mtdPayload(q.cumulative, taxYear.startDate, q.endDate);
   const sent = q.submission?.sent ?? null;
   const changed = sent !== null && !sameFigures(sent.payload, payload);
+  // HMRC has an update for this quarter that the app didn't send (other software, or sandbox test data).
+  const receivedElsewhere = !sent && obligation?.status === 'fulfilled' ? obligation : null;
+  const replacing = sent !== null || receivedElsewhere !== null;
   const earliest = mtdEarliestSendDate(q);
   const tooEarly = todayIso() < earliest;
   const service = (environment: string) => (environment === 'sandbox' ? 'HMRC’s sandbox' : 'HMRC');
@@ -344,22 +353,38 @@ function SendToHmrc({
         )
       )}
 
+      {receivedElsewhere && (
+        <p className="text-sm text-muted">
+          HMRC already has an update for Q{q.quarter}
+          {receivedElsewhere.receivedDate ? `, received ${formatDisplayDate(receivedElsewhere.receivedDate)}` : ''}, not sent from this
+          app.{!laterHeld && canSend && ' Sending replaces it.'}
+        </p>
+      )}
+
       {changed && (
         <Alert tone="warning">
           The figures up to {formatDisplayDate(q.endDate)} have changed since they were sent. Updates are cumulative, so your next
-          quarterly update brings HMRC up to date. If this is the latest quarter you’ve sent, you can also send it again.
+          quarterly update brings HMRC up to date{laterHeld ? '' : ', or you can send this quarter again now'}.
         </Alert>
       )}
 
-      {canSend && (!sent || changed) && (
-        <div className="flex flex-wrap items-center gap-3">
-          <Button variant={sent ? 'secondary' : 'primary'} onClick={() => setConfirming(true)} disabled={tooEarly}>
-            <Send className="size-4" aria-hidden />
-            {sent ? `Send Q${q.quarter} again` : `Send Q${q.quarter} to HMRC`}
-          </Button>
-          {tooEarly && <span className="text-sm text-muted">HMRC takes this update from {formatDisplayDate(earliest)}.</span>}
-        </div>
-      )}
+      {canSend &&
+        (!sent || changed) &&
+        (laterHeld ? (
+          <p className="text-sm text-muted">
+            HMRC already has your Q{laterHeld.quarter} update, which covers the year to {formatDisplayDate(laterHeld.endDate)}, so it
+            won’t take {replacing ? 'a replacement for' : 'an update for'} Q{q.quarter} now. Any changes reach HMRC with your next
+            update.
+          </p>
+        ) : (
+          <div className="flex flex-wrap items-center gap-3">
+            <Button variant={replacing ? 'secondary' : 'primary'} onClick={() => setConfirming(true)} disabled={tooEarly}>
+              <Send className="size-4" aria-hidden />
+              {replacing ? `Send Q${q.quarter} again` : `Send Q${q.quarter} to HMRC`}
+            </Button>
+            {tooEarly && <span className="text-sm text-muted">HMRC takes this update from {formatDisplayDate(earliest)}.</span>}
+          </div>
+        ))}
       {send.error && !confirming && <Alert>{send.error.message}</Alert>}
 
       <ConfirmDialog
@@ -376,7 +401,7 @@ function SendToHmrc({
           to {formatDisplayDate(q.endDate)}:
         </p>
         <PayloadSummary payload={payload} categories={categories} />
-        {sent && <p>This replaces the Q{q.quarter} update HMRC already has.</p>}
+        {replacing && <p>This replaces the Q{q.quarter} update HMRC already has.</p>}
       </ConfirmDialog>
     </div>
   );
@@ -408,6 +433,11 @@ export function MtdQuarterly() {
   const obligationFor = (endDate: string) =>
     obligations.data ? (inYear.find((o) => o.periodEndDate === endDate) ?? null) : undefined;
   const unmatched = inYear.filter((o) => !quarters.some((x) => x.endDate === o.periodEndDate));
+  // HMRC won't take an update ending before the latest one it has: sent from here, or received from elsewhere.
+  const laterHeld = (q: MtdQuarterSummary) =>
+    quarters
+      .filter((x) => x.endDate > q.endDate && (x.submission?.sent || obligationFor(x.endDate)?.status === 'fulfilled'))
+      .at(-1) ?? null;
   const current = quarters.length ? (selected ?? defaultQuarter(quarters, today)) : null;
   const q = quarters.find((x) => x.quarter === current);
   const summary = q ? q[view] : null;
@@ -542,7 +572,15 @@ export function MtdQuarterly() {
               <div className="px-5 pb-6 sm:px-6">
                 <p className="mb-4 text-sm text-muted">Due by {formatDisplayDate(q.deadline)}.</p>
                 {sendable || q.submission?.sent ? (
-                  <SendToHmrc taxYear={taxYear} q={q} hmrc={hmrc} categories={categories} canSend={sendable && canEdit} />
+                  <SendToHmrc
+                    taxYear={taxYear}
+                    q={q}
+                    hmrc={hmrc}
+                    categories={categories}
+                    canSend={sendable && canEdit}
+                    obligation={obligationFor(q.endDate)}
+                    laterHeld={laterHeld(q)}
+                  />
                 ) : (
                   <SubmissionPanel taxYearId={taxYear.id} q={q} />
                 )}
