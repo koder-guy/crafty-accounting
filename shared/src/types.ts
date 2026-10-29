@@ -183,9 +183,21 @@ export interface MtdQuarterSummary extends MtdQuarter {
   otherServiceSend: { environment: HmrcEnvironment; at: string; by: string } | null;
 }
 
+/** The year's final declaration, made through the app to this HMRC service. */
+export interface MtdFinalDeclaration {
+  calculationId: string;
+  /** The total in the calculation that was agreed to. */
+  totalDuePence: number;
+  by: string;
+  at: string;
+  environment: HmrcEnvironment;
+  correlationId: string | null;
+}
+
 export interface MtdQuartersResponse {
   taxYear: TaxYear;
   quarters: MtdQuarterSummary[];
+  finalDeclaration: MtdFinalDeclaration | null;
 }
 
 export interface YearEndSummaryResponse {
@@ -400,6 +412,16 @@ export interface HmrcMessage {
   text: string;
 }
 
+export interface HmrcTaxBand {
+  /** What the band taxes: profit (with pay and pensions), savings, dividends or Class 4 National Insurance. */
+  kind: 'income' | 'savings' | 'dividends' | 'class4';
+  /** HMRC's band name, such as BRT (basic rate) or ZRT (zero rate). */
+  name: string;
+  ratePercent: number;
+  incomePence: number;
+  taxPence: number;
+}
+
 /** HMRC's own tax calculation for a tax year (Individual Calculations API), in pence. */
 export interface HmrcCalculation {
   calculationId: string;
@@ -418,6 +440,8 @@ export interface HmrcCalculation {
     class4Pence: number;
     totalDuePence: number;
   } | null;
+  /** How the Income Tax and Class 4 were worked out, band by band (what an SA302 shows). */
+  bands: HmrcTaxBand[];
   /** HMRC's projection of the whole year's Income Tax and National Insurance, for an in-year calculation. */
   endOfYearTotalPence: number | null;
   messages: { errors: HmrcMessage[]; warnings: HmrcMessage[]; info: HmrcMessage[] };

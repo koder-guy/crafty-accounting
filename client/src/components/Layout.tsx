@@ -159,7 +159,7 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
  */
 function pathForMethod(path: string, method: SubmissionMethod): string | null {
   if (method === 'mtd' && /^\/self-assessment(\/year-end)?\/?$/.test(path)) return '/mtd';
-  if (method === 'self_assessment' && /^\/mtd(\/quarterly)?\/?$/.test(path)) return '/self-assessment';
+  if (method === 'self_assessment' && /^\/mtd(\/quarterly|\/final-declaration)?\/?$/.test(path)) return '/self-assessment';
   return null;
 }
 

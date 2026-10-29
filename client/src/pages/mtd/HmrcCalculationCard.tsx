@@ -6,6 +6,7 @@ import {
   formatGBP,
   type HmrcCalculation,
   type HmrcMessage,
+  type HmrcTaxBand,
   type TaxEstimateResponse,
 } from '@crafty/shared';
 import { Alert, Button, Card, CardHeader, Spinner } from '../../components/ui';
@@ -20,14 +21,14 @@ import {
 /** Give up checking for a calculation HMRC is still working on after this long. */
 const WAIT_MS = 2 * 60 * 1000;
 
-const TYPES: Record<string, string> = {
+export const TYPES: Record<string, string> = {
   'in-year': 'an in-year calculation',
   'intent-to-finalise': 'a calculation for the final declaration',
   'intent-to-amend': 'a calculation for an amendment',
   'final-declaration': 'the final declaration',
 };
 
-const dateTime = (iso: string) =>
+export const dateTime = (iso: string) =>
   new Date(iso).toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 
 const amount = (pence: number | null | undefined) => (pence === null || pence === undefined ? '—' : formatGBP(pence));
@@ -45,7 +46,7 @@ function Row({ label, detail, hmrc, app, strong = false }: { label: string; deta
   );
 }
 
-function Messages({ messages }: { messages: HmrcCalculation['messages'] }) {
+export function Messages({ messages }: { messages: HmrcCalculation['messages'] }) {
   const list = (items: HmrcMessage[]) =>
     items.length === 1 ? (
       <p>{items[0].text}</p>
@@ -65,7 +66,7 @@ function Messages({ messages }: { messages: HmrcCalculation['messages'] }) {
   );
 }
 
-function Figures({ calculation, data }: { calculation: HmrcCalculation; data: TaxEstimateResponse }) {
+export function Figures({ calculation, data }: { calculation: HmrcCalculation; data: TaxEstimateResponse }) {
   const f = calculation.figures!;
   const e = data.estimate;
   return (
@@ -88,6 +89,61 @@ function Figures({ calculation, data }: { calculation: HmrcCalculation; data: Ta
           <Row label="Class 4 National Insurance" hmrc={amount(f.class4Pence)} app={formatGBP(e.class4Pence)} />
           <Row label="Total due" hmrc={amount(f.totalDuePence)} app={formatGBP(e.totalPence)} strong />
         </tbody>
+      </table>
+    </div>
+  );
+}
+
+const BAND_NAMES: Record<string, string> = {
+  SRT: 'Starting rate',
+  ZRT: 'Nil rate',
+  BRT: 'Basic rate',
+  IRT: 'Intermediate rate',
+  HRT: 'Higher rate',
+  ART: 'Additional rate',
+};
+
+const BAND_KINDS: Record<HmrcTaxBand['kind'], string> = {
+  income: 'Income Tax on profit, pay and pensions',
+  savings: 'Income Tax on savings',
+  dividends: 'Income Tax on dividends',
+  class4: 'Class 4 National Insurance',
+};
+
+/** How HMRC worked out the tax, band by band, as an SA302 shows it. */
+export function Bands({ bands }: { bands: HmrcTaxBand[] }) {
+  if (!bands.length) return null;
+  const kinds = (Object.keys(BAND_KINDS) as HmrcTaxBand['kind'][]).filter((k) => bands.some((b) => b.kind === k));
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full min-w-[520px] text-sm">
+        <thead className="text-xs tracking-wide text-muted uppercase">
+          <tr className="border-y border-line">
+            <th scope="col" className="py-2.5 pr-3 pl-5 text-left font-medium sm:pl-6">Band</th>
+            <th scope="col" className="px-3 py-2.5 text-right font-medium">On</th>
+            <th scope="col" className="px-3 py-2.5 text-right font-medium">Rate</th>
+            <th scope="col" className="py-2.5 pr-5 pl-3 text-right font-medium sm:pr-6">Tax</th>
+          </tr>
+        </thead>
+        {kinds.map((kind) => (
+          <tbody key={kind} className="divide-y divide-line border-b border-line">
+            <tr>
+              <th scope="rowgroup" colSpan={4} className="py-2.5 pr-5 pl-5 text-left text-xs font-medium text-muted sm:pl-6">
+                {BAND_KINDS[kind]}
+              </th>
+            </tr>
+            {bands
+              .filter((b) => b.kind === kind)
+              .map((b) => (
+                <tr key={`${b.kind}-${b.name}-${b.ratePercent}`} className="text-ink">
+                  <td className="py-2.5 pr-3 pl-5 sm:pl-6">{BAND_NAMES[b.name] ?? b.name}</td>
+                  <td className="tabular px-3 py-2.5 text-right whitespace-nowrap">{formatGBP(b.incomePence)}</td>
+                  <td className="tabular px-3 py-2.5 text-right whitespace-nowrap">{b.ratePercent}%</td>
+                  <td className="tabular py-2.5 pr-5 pl-3 text-right whitespace-nowrap sm:pr-6">{formatGBP(b.taxPence)}</td>
+                </tr>
+              ))}
+          </tbody>
+        ))}
       </table>
     </div>
   );

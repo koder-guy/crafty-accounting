@@ -6,6 +6,8 @@ import { Router, type Request } from 'express';
 import { z } from 'zod';
 import {
   MTD_FIRST_SEND_YEAR,
+  displayTaxYear,
+  formatDisplayDate,
   mtdEarliestSendDate,
   mtdPayload,
   startYearFromLabel,
@@ -19,6 +21,7 @@ import {
   type HmrcFraudHeaderCheck,
   type HmrcObligation,
   type HmrcStatus,
+  type HmrcTaxBand,
 } from '@crafty/shared';
 import type { AppContext } from '../context';
 import { HttpError, parseId, parseWith } from '../http';
@@ -36,7 +39,7 @@ import {
   type PendingHmrcAuth,
 } from '../hmrc';
 import { getTaxYear } from '../repo';
-import { getSubmissions, parseQuarter, quarterSummaries, refuseUnlessMtd } from './mtd';
+import { getFinalDeclaration, getSubmissions, parseQuarter, quarterSummaries, refuseUnlessMtd } from './mtd';
 
 // The README's setup steps list these, for subscribing the application to them.
 const BUSINESS_DETAILS: HmrcApi = { name: 'Business Details (MTD)', version: '2.0' };
@@ -50,10 +53,21 @@ const CALCULATIONS: HmrcApi = { name: 'Individual Calculations (MTD)', version: 
  */
 const SANDBOX_CALCULATION_EXAMPLE = 'UK_SE_SAVINGS_EXAMPLE';
 
-const calculationQuerySchema = z.object({ calculationId: z.string().regex(/^[0-9a-f-]{36}$/i).optional() });
+const calculationIdSchema = z.string().regex(/^[0-9a-f-]{36}$/i);
+const calculationQuerySchema = z.object({ calculationId: calculationIdSchema.optional() });
+/** The calculation the person agreed to, and its total as they saw it. */
+const declareSchema = z.object({ calculationId: calculationIdSchema, totalDuePence: z.number().int() });
 
 /** Pounds from HMRC to pence; absent values are null. */
 const pence = (pounds: unknown): number | null => (typeof pounds === 'number' ? Math.round(pounds * 100) : null);
+
+interface HmrcBand {
+  name?: string;
+  rate?: number;
+  income?: number;
+  taxAmount?: number;
+  amount?: number;
+}
 
 interface HmrcCalculationBody {
   metadata?: { calculationId?: string; calculationTimestamp?: string; calculationType?: string; requestedBy?: string };
@@ -65,13 +79,29 @@ interface HmrcCalculationBody {
         totalAllowancesAndDeductions?: number;
         totalTaxableIncome?: number;
         totalIncomeTaxDue?: number;
+        payPensionsProfit?: { taxBands?: HmrcBand[] };
+        savingsAndGains?: { taxBands?: HmrcBand[] };
+        dividends?: { taxBands?: HmrcBand[] };
       };
-      nics?: { class2Nics?: { amount?: number }; class4Nics?: { totalAmount?: number } };
+      nics?: { class2Nics?: { amount?: number }; class4Nics?: { totalAmount?: number; nic4Bands?: HmrcBand[] } };
       totalIncomeTaxAndNicsDue?: number;
     };
     endOfYearEstimate?: { incomeTaxNicAmount?: number };
   };
   messages?: { errors?: HmrcMessage[]; warnings?: HmrcMessage[]; info?: HmrcMessage[] };
+}
+
+/** The bands that taxed something, in pence. */
+function taxBands(kind: HmrcTaxBand['kind'], bands: HmrcBand[] | undefined): HmrcTaxBand[] {
+  return (bands ?? [])
+    .map((b) => ({
+      kind,
+      name: b.name ?? '',
+      ratePercent: b.rate ?? 0,
+      incomePence: pence(b.income) ?? 0,
+      taxPence: pence(b.taxAmount ?? b.amount) ?? 0,
+    }))
+    .filter((b) => b.incomePence > 0);
 }
 
 /** The parts of HMRC's (very large) calculation the app shows. */
@@ -96,6 +126,12 @@ export function summariseCalculation(body: HmrcCalculationBody, calculationId: s
             totalDuePence: pence(tax.totalIncomeTaxAndNicsDue) ?? 0,
           }
         : null,
+    bands: [
+      ...taxBands('income', incomeTax?.payPensionsProfit?.taxBands),
+      ...taxBands('savings', incomeTax?.savingsAndGains?.taxBands),
+      ...taxBands('dividends', incomeTax?.dividends?.taxBands),
+      ...taxBands('class4', tax?.nics?.class4Nics?.nic4Bands),
+    ],
     endOfYearTotalPence: pence(body.calculation?.endOfYearEstimate?.incomeTaxNicAmount),
     messages: {
       errors: body.messages?.errors ?? [],
@@ -273,6 +309,12 @@ export function hmrcRouter(ctx: AppContext): Router {
     const startYear = startYearFromLabel(taxYear.label)!;
     if (startYear < MTD_FIRST_SEND_YEAR) throw new HttpError(400, 'Quarterly updates can only be sent to HMRC from the 2025/26 tax year.');
     refuseUnlessMtd(taxYear);
+    if (getFinalDeclaration(ctx.db, taxYearId, environment())) {
+      throw new HttpError(
+        409,
+        `The final declaration for ${displayTaxYear(taxYear.label)} has been made, so HMRC won’t take quarterly updates for it. The app can’t amend a declared year yet.`,
+      );
+    }
     const nino = requireNino();
     const businessId = getHmrcConnection(ctx.db, environment())?.business_id;
     if (!businessId) throw new HttpError(400, 'Find your business in Settings → HMRC first.');
@@ -369,6 +411,80 @@ export function hmrcRouter(ctx: AppContext): Router {
       if (!notFound(err)) throw err;
       res.json({ state: 'pending', calculationId } satisfies HmrcCalculationResponse);
     }
+  });
+
+  /**
+   * An MTD year ready for its final declaration: ended, not declared yet, and
+   * with every quarterly update in (sent by the app or recorded by hand).
+   */
+  const declarationYear = (taxYearIdParam: string | string[] | undefined) => {
+    const { taxYear, nino } = calculationYear(taxYearIdParam);
+    const year = displayTaxYear(taxYear.label);
+    refuseUnlessMtd(taxYear);
+    if (getFinalDeclaration(ctx.db, taxYear.id, environment())) {
+      throw new HttpError(409, `The final declaration for ${year} has already been made.`);
+    }
+    if (todayIso() <= taxYear.endDate) {
+      const nextYearStart = `${startYearFromLabel(taxYear.label)! + 1}-04-06`;
+      throw new HttpError(400, `HMRC takes the final declaration for ${year} from ${formatDisplayDate(nextYearStart)}, once the tax year has ended.`);
+    }
+    const missing = quarterSummaries(ctx.db, taxYear, environment())
+      .filter((q) => !q.submission)
+      .map((q) => `Q${q.quarter}`);
+    if (missing.length) {
+      throw new HttpError(409, `Send the quarterly update${missing.length > 1 ? 's' : ''} for ${missing.join(', ')} first.`);
+    }
+    return { taxYear, nino };
+  };
+
+  // Tells HMRC the year's figures are complete: it checks them, more strictly
+  // than in-year, and works out the tax for the final declaration.
+  router.post('/final-declaration/:taxYearId/calculation', async (req, res) => {
+    const { taxYear, nino } = declarationYear(req.params.taxYearId);
+    const result = await callHmrc<{ calculationId?: string }>(ctx, req, {
+      method: 'POST',
+      path: `/individuals/calculations/${nino}/self-assessment/${taxYear.label}/trigger/intent-to-finalise`,
+      api: CALCULATIONS,
+    });
+    if (!result?.calculationId) throw new HttpError(502, 'HMRC didn’t say which calculation it started.');
+    res.status(202).json({ calculationId: result.calculationId });
+  });
+
+  // The final declaration: the person agrees to a calculation HMRC made for it.
+  // The calculation is read again first, so only one without errors, and with
+  // the total the person saw, is agreed to.
+  router.post('/final-declaration/:taxYearId', async (req, res) => {
+    const { taxYear, nino } = declarationYear(req.params.taxYearId);
+    const { calculationId, totalDuePence } = parseWith(declareSchema, req.body);
+    const base = `/individuals/calculations/${nino}/self-assessment/${taxYear.label}/${calculationId}`;
+
+    let body: HmrcCalculationBody;
+    try {
+      body = await callHmrc<HmrcCalculationBody>(ctx, req, { path: base, api: CALCULATIONS, testScenario: SANDBOX_CALCULATION_EXAMPLE });
+    } catch (err) {
+      if (err instanceof HttpError && err.status === 404) throw new HttpError(409, 'HMRC hasn’t finished that calculation. Try again in a moment.');
+      throw err;
+    }
+    const calculation = summariseCalculation(body, calculationId);
+    // The sandbox answers with its worked example, whatever kind of calculation was asked for.
+    if (environment() === 'production' && calculation.type !== 'intent-to-finalise') {
+      throw new HttpError(409, 'That calculation isn’t one for the final declaration. Ask HMRC for the final calculation again.');
+    }
+    if (!calculation.figures || calculation.messages.errors.length) {
+      throw new HttpError(409, 'HMRC’s calculation has errors, so it can’t be agreed to. Fix them and ask HMRC for the final calculation again.');
+    }
+    if (calculation.figures.totalDuePence !== totalDuePence) {
+      throw new HttpError(409, 'HMRC’s calculation has changed since you checked it. Check it again before declaring.');
+    }
+
+    const { correlationId } = await callHmrcWithReceipt(ctx, req, { method: 'POST', path: `${base}/final-declaration`, api: CALCULATIONS });
+    ctx.db
+      .prepare(
+        `INSERT INTO mtd_final_declarations (tax_year_id, environment, calculation_id, total_due_pence, declared_by, declared_at, correlation_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(taxYear.id, environment(), calculationId, totalDuePence, req.user!.name, new Date().toISOString(), correlationId);
+    res.json(getFinalDeclaration(ctx.db, taxYear.id, environment()));
   });
 
   router.get('/fraud-headers/check', async (req, res) => {

@@ -466,8 +466,9 @@ export function MtdQuarterly() {
   const { data: hmrc } = useHmrc();
   const checkWithHmrc = Boolean(hmrc?.connection && hmrc.business);
   const canEdit = useCanEdit();
-  // Cumulative updates can be sent from 2025/26.
-  const sendable = checkWithHmrc && !!taxYear && (startYearFromLabel(taxYear.label) ?? 0) >= MTD_FIRST_SEND_YEAR;
+  const declared = data?.finalDeclaration ?? null;
+  // Cumulative updates can be sent from 2025/26, until the year's final declaration.
+  const sendable = checkWithHmrc && !!taxYear && (startYearFromLabel(taxYear.label) ?? 0) >= MTD_FIRST_SEND_YEAR && !declared;
   const obligations = useHmrcObligations(taxYear?.id, checkWithHmrc);
   const [selected, setSelected] = useState<number | null>(null);
   const [view, setView] = useState<'cumulative' | 'period'>('cumulative');
@@ -521,7 +522,15 @@ export function MtdQuarterly() {
               <p>
                 Making Tax Digital quarterly updates are <span className="text-ink">cumulative</span>: each one reports the tax year so
                 far.{' '}
-                {sendable ? (
+                {declared ? (
+                  <>
+                    The{' '}
+                    <Link className="text-accent-soft hover:underline" to="/mtd/final-declaration">
+                      final declaration
+                    </Link>{' '}
+                    for this year was made on {formatDisplayDate(declared.at.slice(0, 10))}, so HMRC takes no more updates for it.
+                  </>
+                ) : sendable ? (
                   <>
                     Send each quarter’s year-to-date figures to HMRC from its submission panel below. A mistake is put right by your next
                     update.

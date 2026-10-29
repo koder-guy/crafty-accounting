@@ -1823,7 +1823,7 @@ describe('HMRC connection', () => {
         incomeSummaryTotals: { totalSelfEmploymentProfit: 4152 },
         taxCalculation: {
           incomeTax: { totalIncomeReceivedFromAllSources: 4152, totalAllowancesAndDeductions: 12570, totalTaxableIncome: 0, totalIncomeTaxDue: 0 },
-          nics: { class4Nics: { totalAmount: 0 } },
+          nics: { class4Nics: { totalAmount: 0, nic4Bands: [{ name: 'ZRT', rate: 0, income: 4152, amount: 0 }, { name: 'BRT', rate: 6, income: 0, amount: 0 }] } },
           totalIncomeTaxAndNicsDue: 0,
         },
         endOfYearEstimate: { incomeTaxNicAmount: 1234.56 },
@@ -1866,6 +1866,8 @@ describe('HMRC connection', () => {
             class4Pence: 0,
             totalDuePence: 0,
           },
+          // Bands with nothing in them are left out.
+          bands: [{ kind: 'class4', name: 'ZRT', ratePercent: 0, incomePence: 415200, taxPence: 0 }],
           endOfYearTotalPence: 123456,
           messages: { errors: [], warnings: [], info: [{ id: 'C22203', text: 'Class 2 National Insurance has not been charged.' }] },
         },
@@ -1907,6 +1909,118 @@ describe('HMRC connection', () => {
       await agent.get(`/api/hmrc/calculations/${taxYearId}`).query({ calculationId: 'nope' }).expect(400);
       const old = await createYear(2024);
       expect((await agent.get(`/api/hmrc/calculations/${old}`).expect(400)).body.error).toMatch(/2025\/26/);
+    });
+  });
+
+  describe('final declaration', () => {
+    const BASE = '/individuals/calculations/AB123456C/self-assessment/2025-26';
+    const CALC_ID = '5a2c7c1e-9f43-4f6a-a7f5-0d1e2f3a4b5c';
+    const finalCalculation = (total: number, errors: { id: string; text: string }[] = []) => ({
+      metadata: { calculationId: CALC_ID, calculationTimestamp: '2026-10-29T10:00:00.000Z', calculationType: 'intent-to-finalise' },
+      calculation: {
+        incomeSummaryTotals: { totalSelfEmploymentProfit: 20000 },
+        taxCalculation: {
+          incomeTax: {
+            totalIncomeReceivedFromAllSources: 20000,
+            totalAllowancesAndDeductions: 12570,
+            totalTaxableIncome: 7430,
+            totalIncomeTaxDue: 1486,
+            payPensionsProfit: { taxBands: [{ name: 'BRT', rate: 20, income: 7430, taxAmount: 1486 }] },
+          },
+          nics: { class4Nics: { totalAmount: 445.8, nic4Bands: [{ name: 'BRT', rate: 6, income: 7430, amount: 445.8 }] } },
+          totalIncomeTaxAndNicsDue: total,
+        },
+      },
+      messages: errors.length ? { errors } : undefined,
+    });
+
+    beforeEach(() => {
+      // 2025/26 has ended; HMRC takes its final declaration until 31 January 2027.
+      vi.useFakeTimers({ toFake: ['Date'] });
+      vi.setSystemTime(new Date('2026-10-29T12:00:00Z'));
+    });
+    afterEach(() => vi.useRealTimers());
+
+    /** A 2025/26 MTD year with every quarterly update recorded as submitted. */
+    async function yearWithUpdates(quarters = [1, 2, 3, 4]) {
+      const taxYearId = await createYear(2025, 'mtd');
+      const on = ['2025-08-01', '2025-11-01', '2026-02-01', '2026-05-01'];
+      for (const q of quarters) await agent.put(`/api/mtd/quarters/${taxYearId}/${q}/submission`).send({ submittedOn: on[q - 1] }).expect(200);
+      return taxYearId;
+    }
+
+    it('asks HMRC for the final calculation, then declares the one agreed to', async () => {
+      const taxYearId = await yearWithUpdates();
+      await connectWithBusiness();
+      apiReplies[`${BASE}/trigger/intent-to-finalise`] = { status: 202, body: { calculationId: CALC_ID } };
+      const triggered = await agent.post(`/api/hmrc/final-declaration/${taxYearId}/calculation`).set('X-Fraud-Prevention', BROWSER).expect(202);
+      expect(triggered.body).toEqual({ calculationId: CALC_ID });
+      expect(apiRequests.at(-1)).toMatchObject({ method: 'POST', headers: { Accept: 'application/vnd.hmrc.8.0+json' } });
+
+      apiReplies[`${BASE}/${CALC_ID}`] = { status: 200, body: finalCalculation(1931.8) };
+      const shown = (await agent.get(`/api/hmrc/calculations/${taxYearId}`).query({ calculationId: CALC_ID }).expect(200)).body;
+      expect(shown.calculation).toMatchObject({ type: 'intent-to-finalise', figures: { totalDuePence: 193180 } });
+      expect(shown.calculation.bands).toEqual([
+        { kind: 'income', name: 'BRT', ratePercent: 20, incomePence: 743000, taxPence: 148600 },
+        { kind: 'class4', name: 'BRT', ratePercent: 6, incomePence: 743000, taxPence: 44580 },
+      ]);
+
+      // HMRC's figures changed since they were shown: refuse.
+      const declare = (totalDuePence: number) =>
+        agent.post(`/api/hmrc/final-declaration/${taxYearId}`).set('X-Fraud-Prevention', BROWSER).send({ calculationId: CALC_ID, totalDuePence });
+      expect((await declare(100).expect(409)).body.error).toMatch(/changed/);
+
+      apiReplies[`${BASE}/${CALC_ID}/final-declaration`] = { status: 204, headers: { 'X-CorrelationId': 'fd-123' } };
+      const res = await declare(193180).expect(200);
+      expect(res.body).toEqual({
+        calculationId: CALC_ID,
+        totalDuePence: 193180,
+        by: NAME,
+        at: '2026-10-29T12:00:00.000Z',
+        environment: 'sandbox',
+        correlationId: 'fd-123',
+      });
+      expect(apiRequests.at(-1)).toMatchObject({ method: 'POST', url: expect.objectContaining({ pathname: `${BASE}/${CALC_ID}/final-declaration` }) });
+      expect((await agent.get('/api/mtd/quarters').query({ taxYearId }).expect(200)).body.finalDeclaration).toEqual(res.body);
+
+      // Once declared, there's no declaring again, and no more quarterly updates.
+      expect((await declare(193180).expect(409)).body.error).toMatch(/already been made/);
+      await agent.post(`/api/hmrc/final-declaration/${taxYearId}/calculation`).expect(409);
+      expect((await agent.post(`/api/hmrc/quarters/${taxYearId}/4/send`).send({ payload: {} }).expect(409)).body.error).toMatch(/final declaration/);
+
+      // It belongs to the HMRC service it was made to.
+      ctx.config.hmrc.environment = 'production';
+      expect((await agent.get('/api/mtd/quarters').query({ taxYearId }).expect(200)).body.finalDeclaration).toBeNull();
+    });
+
+    it('waits for the year to end and every quarterly update', async () => {
+      await connectWithBusiness();
+      const unfinished = await yearWithUpdates([1, 2]);
+      expect((await agent.post(`/api/hmrc/final-declaration/${unfinished}/calculation`).expect(409)).body.error).toBe(
+        'Send the quarterly updates for Q3, Q4 first.',
+      );
+      const current = await createYear(2026, 'mtd');
+      expect((await agent.post(`/api/hmrc/final-declaration/${current}/calculation`).expect(400)).body.error).toMatch(/from 6 Apr(il)? 2027/);
+      const selfAssessment = await createYear(2027);
+      await agent.post(`/api/hmrc/final-declaration/${selfAssessment}/calculation`).expect(409);
+      expect(apiRequests.filter((r) => r.url.pathname.startsWith('/individuals/calculations'))).toEqual([]);
+    });
+
+    it('won’t agree to a calculation with errors, and only editors can declare', async () => {
+      const taxYearId = await yearWithUpdates();
+      await connectWithBusiness();
+      apiReplies[`${BASE}/${CALC_ID}`] = { status: 200, body: finalCalculation(0, [{ id: 'C55001', text: 'Quarterly updates are missing.' }]) };
+      const declare = (as = agent) => as.post(`/api/hmrc/final-declaration/${taxYearId}`).send({ calculationId: CALC_ID, totalDuePence: 0 });
+      expect((await declare().expect(409)).body.error).toMatch(/errors/);
+
+      // Not ready yet: HMRC answers 404.
+      apiReplies[`${BASE}/${CALC_ID}`] = { status: 404, body: { code: 'MATCHING_RESOURCE_NOT_FOUND', message: 'Not found' } };
+      expect((await declare().expect(409)).body.error).toMatch(/hasn’t finished/);
+
+      const viewer = await addPerson('Viewer', 'viewer-password', 'viewer');
+      await declare(viewer).expect(403);
+      await agent.post(`/api/hmrc/final-declaration/${taxYearId}`).send({ calculationId: 'nope', totalDuePence: 0 }).expect(400);
+      expect(apiRequests.some((r) => r.url.pathname.endsWith('/final-declaration'))).toBe(false);
     });
   });
 
@@ -1954,11 +2068,9 @@ describe('HMRC connection', () => {
       expect.objectContaining({ submissionMethod: 'mtd', mtdUpdates: { recorded: 1, sent: 0 } }),
     ]);
     expect((await agent.get('/api/hmrc')).body.connection).toMatchObject({ connectedBy: NAME });
-    expect((await agent.get('/api/mtd/quarters').query({ taxYearId: 1 })).body.quarters[0].submission).toEqual({
-      submittedOn: '2025-08-01',
-      reference: 'ABC',
-      sent: null,
-    });
+    const quarters = (await agent.get('/api/mtd/quarters').query({ taxYearId: 1 })).body;
+    expect(quarters.quarters[0].submission).toEqual({ submittedOn: '2025-08-01', reference: 'ABC', sent: null });
+    expect(quarters.finalDeclaration).toBeNull();
   });
 });
 

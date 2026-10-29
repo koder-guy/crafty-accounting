@@ -21,6 +21,7 @@ import { Mileage } from './pages/claims/Mileage';
 import { UseOfHome } from './pages/claims/UseOfHome';
 import { MtdLayout } from './pages/mtd/MtdLayout';
 import { MtdQuarterly } from './pages/mtd/MtdQuarterly';
+import { FinalDeclaration } from './pages/mtd/FinalDeclaration';
 import { ReportsLayout } from './pages/reports/ReportsLayout';
 import { Breakdown } from './pages/reports/Breakdown';
 import { TaxEstimate } from './pages/reports/TaxEstimate';
@@ -97,6 +98,7 @@ function App() {
         <Route path="mtd" element={<MtdLayout />}>
           <Route index element={<Navigate to="quarterly" replace />} />
           <Route path="quarterly" element={<MtdQuarterly />} />
+          <Route path="final-declaration" element={<FinalDeclaration />} />
           <Route path="tax-estimate" element={<Navigate to="/reports/tax-estimate" replace />} />
         </Route>
         <Route path="self-assessment" element={<SelfAssessmentLayout />}>

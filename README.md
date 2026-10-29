@@ -11,6 +11,7 @@ Self-hosted bookkeeping for a UK sole trader, built for selling at craft fairs a
 - **Lists**: search, filter and sort, then export the filtered rows to CSV.
 - **Dashboard**: totals, a monthly chart, a breakdown by HMRC category, and key dates.
 - **Making Tax Digital → Quarterly updates**: the four standard update periods for each tax year, with deadlines and status. It shows each quarter's figures and the year-to-date figures per MTD field, can export the figures as a JSON file for MTD bridging software, and records when each quarter was submitted. Connected to HMRC, it sends each quarter's update itself (see [Sending quarterly updates](#sending-quarterly-updates)).
+- **Making Tax Digital → Final declaration**: after the tax year ends, asks HMRC for the year's final calculation and, once you agree to HMRC's declaration, confirms it. This takes the place of a Self Assessment return (see [Final declaration](#final-declaration)).
 - **Reports → Breakdown**: income and spending for any period (this month, last month, an MTD quarter, a tax year or custom dates, even across tax years). It's broken down by category, with custom categories grouped under their MTD category, and outgoing spending by payee. Click any row to list the transactions or line items behind it. Print or save as PDF.
 - **Self Assessment → Year-end summary**: the figures for each box of the Self Assessment self-employment (short) pages (SA103S), on the cash basis, with net profit or loss, a list of disallowable amounts left off the form, and a trading allowance comparison. Print it or save it as a PDF from the page.
   - **Note:** the dashboard's net profit and the Breakdown report's profit count business entertaining and depreciation as ordinary expenses, while the Year-end summary leaves them out because HMRC never allows them. They only differ if you record expenses in either of those categories; use the Year-end summary figure for your return.
@@ -250,6 +251,17 @@ Once connected with a business, each quarter's submission panel on the Quarterly
 ### HMRC's tax calculation
 
 **Making Tax Digital → Quarterly updates** shows HMRC's own calculation for the year below the quarters, next to the app's estimate, once connected (from 2025/26). It's kept apart from **Reports → Tax estimate**, the app's own estimate, which the card links to. **Ask HMRC to calculate** (editors) asks HMRC to work out the tax from the quarterly updates it has (an in-year calculation, Individual Calculations API 8.0); HMRC does it in the background, and the page checks every few seconds until it's ready. The card starts empty on each visit rather than showing an earlier calculation, which could be out of date, so the figures are always ones just asked for (viewers can't ask, so they see none). It shows HMRC's profit, allowances, Income Tax, Class 2 and Class 4 National Insurance and total due, HMRC's projection for the whole year, and any messages HMRC adds. In the sandbox HMRC answers with its worked example (`UK_SE_SAVINGS_EXAMPLE`), not your figures.
+
+### Final declaration
+
+**Making Tax Digital → Final declaration** finishes an MTD year, from 2025/26, in place of a Self Assessment return. It is due by 31 January after the tax year.
+
+- A checklist comes first. The app must be connected to HMRC, the tax year must have ended, and HMRC must have all four quarterly updates (sent by the app or recorded by hand). The checklist also reminds you to tell HMRC about any other income and reliefs in your HMRC online account first, because the app only reports this business. The server refuses while any of these is missing.
+- **Ask HMRC to calculate** (editors) tells HMRC the year is complete (an `intent-to-finalise` calculation). HMRC checks the figures more strictly than during the year. If it finds errors, it lists them and won't finalise.
+- The calculation shows HMRC's figures next to the app's estimate, and how HMRC worked out the Income Tax and Class 4 band by band, as an SA302 does.
+- To declare, tick HMRC's declaration statement and choose **Make the final declaration**. The server reads the calculation again first. It refuses if HMRC found errors or if the total has changed since you saw it, and otherwise sends HMRC's final declaration for that calculation.
+- The app records who declared, when, to which HMRC service, the calculation ID, the total agreed and HMRC's correlation ID. The record is part of backups.
+- After the declaration, HMRC takes no more quarterly updates for the year, so the Quarterly updates tab offers none. Changing a declared year (an amendment) isn't in the app yet.
 
 The connection lasts 18 months, after which you connect again. Like people, it belongs to the install rather than the books: the HMRC tokens never go into backups, and the connection is kept through a restore or a reset. **Disconnect** makes the app forget the tokens; to withdraw the authority at HMRC as well, do it in your HMRC online account.
 

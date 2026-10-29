@@ -236,6 +236,23 @@ ALTER TABLE tax_years ADD COLUMN submission_method TEXT NOT NULL DEFAULT 'self_a
 UPDATE tax_years SET submission_method = 'mtd' WHERE id IN (SELECT tax_year_id FROM mtd_submissions);
 `,
   },
+  // Final declarations the app made for an MTD year, one per HMRC service:
+  // who, when, the calculation agreed to and HMRC's correlation id.
+  {
+    version: 11,
+    sql: `
+CREATE TABLE mtd_final_declarations (
+  tax_year_id INTEGER NOT NULL REFERENCES tax_years(id) ON DELETE CASCADE,
+  environment TEXT NOT NULL CHECK (environment IN ('sandbox', 'production')),
+  calculation_id TEXT NOT NULL,
+  total_due_pence INTEGER NOT NULL,
+  declared_by TEXT NOT NULL,
+  declared_at TEXT NOT NULL,
+  correlation_id TEXT,
+  PRIMARY KEY (tax_year_id, environment)
+);
+`,
+  },
 ];
 
 export const CURRENT_SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;

@@ -10,6 +10,7 @@ import type {
   FlatRateKind,
   HmrcBusiness,
   HmrcCalculationResponse,
+  MtdFinalDeclaration,
   HmrcFraudHeaderCheck,
   HmrcObligation,
   HmrcStatus,
@@ -376,6 +377,28 @@ export function useHmrcCalculation(taxYearId: number | undefined, calculationId:
 export function useTriggerHmrcCalculation(taxYearId: number | undefined) {
   return useMutation({
     mutationFn: () => api.post<{ calculationId: string }>(`/hmrc/calculations/${taxYearId}`),
+  });
+}
+
+/** Tells HMRC the year is complete and asks for the calculation the final declaration agrees to. */
+export function useTriggerFinalCalculation(taxYearId: number | undefined) {
+  return useMutation({
+    mutationFn: () => api.post<{ calculationId: string }>(`/hmrc/final-declaration/${taxYearId}/calculation`),
+  });
+}
+
+/** Agrees to HMRC's final calculation, as shown: the server refuses (409) if HMRC's total has changed since. */
+export function useMakeFinalDeclaration(taxYearId: number | undefined) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (agreed: { calculationId: string; totalDuePence: number }) =>
+      api.post<MtdFinalDeclaration>(`/hmrc/final-declaration/${taxYearId}`, agreed),
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: ['mtd', taxYearId] });
+      qc.invalidateQueries({ queryKey: [HMRC_OBLIGATIONS] });
+      // HMRC may have refused the sign-in, which the server then forgets.
+      qc.invalidateQueries({ queryKey: ['hmrc'] });
+    },
   });
 }
 

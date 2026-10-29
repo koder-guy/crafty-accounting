@@ -12,6 +12,7 @@ import {
   mtdSubmissionSchema,
   startYearFromLabel,
   type HmrcEnvironment,
+  type MtdFinalDeclaration,
   type MtdQuartersResponse,
   type MtdQuarterSummary,
   type TaxYear,
@@ -71,6 +72,32 @@ export function mtdUpdateCounts(db: Db, taxYearId: number, environment: HmrcEnvi
   return { recorded: submissions.filter((s) => !s.sent).length, sent: submissions.filter((s) => s.sent).length };
 }
 
+interface FinalDeclarationRow {
+  calculation_id: string;
+  total_due_pence: number;
+  declared_by: string;
+  declared_at: string;
+  environment: HmrcEnvironment;
+  correlation_id: string | null;
+}
+
+/** The year's final declaration to this HMRC service, if the app has made it. */
+export function getFinalDeclaration(db: Db, taxYearId: number, environment: HmrcEnvironment): MtdFinalDeclaration | null {
+  const row = db
+    .prepare('SELECT * FROM mtd_final_declarations WHERE tax_year_id = ? AND environment = ?')
+    .get(taxYearId, environment) as FinalDeclarationRow | undefined;
+  return row
+    ? {
+        calculationId: row.calculation_id,
+        totalDuePence: row.total_due_pence,
+        by: row.declared_by,
+        at: row.declared_at,
+        environment: row.environment,
+        correlationId: row.correlation_id,
+      }
+    : null;
+}
+
 /** Quarterly updates belong to MTD years; a Self Assessment year has to be switched first. */
 export function refuseUnlessMtd(taxYear: TaxYear): void {
   if (taxYear.submissionMethod !== 'mtd') {
@@ -122,7 +149,12 @@ export function mtdRouter(ctx: AppContext): Router {
     const taxYear = getTaxYear(db, taxYearId);
     if (!taxYear) throw new HttpError(404, 'Tax year not found');
 
-    const response: MtdQuartersResponse = { taxYear, quarters: quarterSummaries(db, taxYear, ctx.config.hmrc.environment) };
+    const environment = ctx.config.hmrc.environment;
+    const response: MtdQuartersResponse = {
+      taxYear,
+      quarters: quarterSummaries(db, taxYear, environment),
+      finalDeclaration: getFinalDeclaration(db, taxYearId, environment),
+    };
     res.json(response);
   });
 
