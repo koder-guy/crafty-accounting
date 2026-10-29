@@ -145,8 +145,8 @@ export function HmrcCalculationCard({ data }: { data: TaxEstimateResponse }) {
         <p className="text-sm text-muted">
           HMRC works out your tax for the whole year from the quarterly updates it has, so it can lag behind your books. The app’s own
           estimate is in{' '}
-          <Link className="text-accent-soft hover:underline" to="/reports/tax-estimate">
-            Reports → Tax estimate
+          <Link className="text-accent-soft hover:underline" to="/self-assessment/tax-estimate">
+            Self Assessment → Tax estimate
           </Link>
           .
           {hmrc?.environment === 'sandbox' && ' This is HMRC’s sandbox, so the figures are its worked example, not yours.'}

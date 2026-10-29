@@ -3,6 +3,7 @@ import { NavLink, Outlet, useLocation } from 'react-router';
 import {
   ArrowDownRight,
   ArrowUpRight,
+  Calculator,
   CalendarDays,
   Car,
   FileSpreadsheet,
@@ -135,8 +136,9 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
         <NavItem to="/incoming" icon={ArrowDownRight} label="Incoming" count={active?.incomeCount} />
         <NavItem to="/outgoing" icon={ArrowUpRight} label="Outgoing" count={active?.expenseCount} />
         <NavItem to="/claims" icon={Car} label="Simplified Expenses" />
-        <NavItem to="/reports" icon={ChartPie} label="Reports" />
+        <NavItem to="/self-assessment" icon={Calculator} label="Self Assessment" />
         <NavItem to="/mtd" icon={FileSpreadsheet} label="MTD Quarterly" />
+        <NavItem to="/reports" icon={ChartPie} label="Reports" />
         <NavItem to="/settings" icon={Settings} label="Settings" />
       </nav>
       <div className="border-t border-line px-5 py-4 text-xs font-semibold text-ink/80">

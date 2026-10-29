@@ -345,7 +345,7 @@ export function Dashboard() {
                 sub={
                   <>
                     Income minus allowable outgoing.{' '}
-                    <Link to="/reports/tax-estimate" className="text-accent-soft hover:underline">
+                    <Link to="/self-assessment/tax-estimate" className="text-accent-soft hover:underline">
                       Estimated tax {formatGBP(data.taxEstimate.totalPence)}
                     </Link>
                   </>
