@@ -1,6 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { Link } from 'react-router';
 import { Landmark, LoaderCircle, RefreshCw } from 'lucide-react';
 import {
   displayTaxYear,
@@ -97,8 +96,8 @@ function Figures({ calculation, data }: { calculation: HmrcCalculation; data: Ta
 
 /**
  * HMRC's own calculation of the year's tax, from the quarterly updates it has,
- * next to the app's estimate. Lives on the Quarterly updates tab, apart from
- * the app's own Tax estimate. Shown once connected to HMRC.
+ * next to the app's estimate. Lives on the Quarterly updates page. Shown once
+ * connected to HMRC.
  */
 export function HmrcCalculationCard({ data }: { data: TaxEstimateResponse }) {
   const qc = useQueryClient();
@@ -143,12 +142,7 @@ export function HmrcCalculationCard({ data }: { data: TaxEstimateResponse }) {
       />
       <div className="space-y-4 px-5 pb-5 sm:px-6">
         <p className="text-sm text-muted">
-          HMRC works out your tax for the whole year from the quarterly updates it has, so it can lag behind your books. The app’s own
-          estimate is on the{' '}
-          <Link className="text-accent-soft hover:underline" to="/mtd/tax-estimate">
-            Tax estimate
-          </Link>{' '}
-          tab.
+          HMRC works out your tax for the whole year from the quarterly updates it has, so it can lag behind your books.
           {hmrc?.environment === 'sandbox' && ' This is HMRC’s sandbox, so the figures are its worked example, not yours.'}
         </p>
         {trigger.error && <Alert>{trigger.error.message}</Alert>}

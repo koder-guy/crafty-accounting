@@ -153,17 +153,10 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
 }
 
 
-/**
- * Where to go instead when a page is in the section for the other submission type: the same tab if
- * the section has one (Tax estimate), otherwise the section's first tab. Null when the page is fine.
- */
+/** The other submission type's section to go to when a page is in the wrong one, or null when it's fine. */
 function pathForMethod(path: string, method: SubmissionMethod): string | null {
-  if (method === 'mtd' && /^\/self-assessment(\/|$)/.test(path)) {
-    return path.startsWith('/self-assessment/tax-estimate') ? '/mtd/tax-estimate' : '/mtd';
-  }
-  if (method === 'self_assessment' && /^\/mtd(\/|$)/.test(path)) {
-    return path.startsWith('/mtd/tax-estimate') ? '/self-assessment/tax-estimate' : '/self-assessment';
-  }
+  if (method === 'mtd' && /^\/self-assessment(\/|$)/.test(path)) return '/mtd';
+  if (method === 'self_assessment' && /^\/mtd(\/|$)/.test(path)) return '/self-assessment';
   return null;
 }
 

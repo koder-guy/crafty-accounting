@@ -346,12 +346,14 @@ export function Dashboard() {
                 sub={
                   <>
                     Income minus allowable outgoing.{' '}
-                    <Link
-                      to={data.taxYear.submissionMethod === 'mtd' ? '/mtd/tax-estimate' : '/self-assessment/tax-estimate'}
-                      className="text-accent-soft hover:underline"
-                    >
-                      Estimated tax {formatGBP(data.taxEstimate.totalPence)}
-                    </Link>
+                    {/* The Tax estimate page is in Self Assessment only. */}
+                    {data.taxYear.submissionMethod === 'mtd' ? (
+                      <>Estimated tax {formatGBP(data.taxEstimate.totalPence)}</>
+                    ) : (
+                      <Link to="/self-assessment/tax-estimate" className="text-accent-soft hover:underline">
+                        Estimated tax {formatGBP(data.taxEstimate.totalPence)}
+                      </Link>
+                    )}
                   </>
                 }
                 valueClass={data.totals.netProfitPence < 0 ? 'text-out-soft' : 'text-accent-soft'}

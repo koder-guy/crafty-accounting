@@ -97,7 +97,7 @@ function App() {
         <Route path="mtd" element={<MtdLayout />}>
           <Route index element={<Navigate to="quarterly" replace />} />
           <Route path="quarterly" element={<MtdQuarterly />} />
-          <Route path="tax-estimate" element={<TaxEstimate />} />
+          <Route path="tax-estimate" element={<Navigate to="/mtd" replace />} />
         </Route>
         <Route path="self-assessment" element={<SelfAssessmentLayout />}>
           <Route index element={<Navigate to="tax-estimate" replace />} />
