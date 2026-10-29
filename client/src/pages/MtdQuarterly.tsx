@@ -338,27 +338,54 @@ function SendToHmrc({
   const tooEarly = todayIso() < earliest;
   const service = (environment: string) => (environment === 'sandbox' ? 'HMRC’s sandbox' : 'HMRC');
 
+  // One status first, then at most a couple of quieter lines.
+  const status: { tone: BadgeTone; label: string; detail: string } = sent
+    ? {
+        tone: 'ok',
+        label: 'Sent from here',
+        detail: `${formatDisplayDate(sent.at.slice(0, 10))} by ${sent.by}, to ${service(sent.environment)}`,
+      }
+    : receivedElsewhere
+      ? {
+          tone: 'ok',
+          label: 'HMRC has this update',
+          detail: `${receivedElsewhere.receivedDate ? `Received ${formatDisplayDate(receivedElsewhere.receivedDate)}` : 'Received'}, from other software`,
+        }
+      : laterHeld
+        ? {
+            tone: 'ok',
+            label: `Covered by Q${laterHeld.quarter}`,
+            detail: `HMRC has your figures for the year to ${formatDisplayDate(laterHeld.endDate)}`,
+          }
+        : q.submission && obligation === undefined
+          ? { tone: 'neutral', label: 'Recorded as submitted', detail: `${formatDisplayDate(q.submission.submittedOn)}, by hand` }
+          : { tone: 'warn', label: 'Not sent yet', detail: `Due by ${formatDisplayDate(q.deadline)}` };
+  const held = sent !== null || receivedElsewhere !== null || laterHeld !== null;
+  // Changed figures, or nothing at HMRC yet: worth sending, unless HMRC already has a later quarter.
+  const wantsSending = canSend && (!held || changed || (receivedElsewhere !== null && !laterHeld));
+  const handRecord = !sent && q.submission && status.label !== 'Recorded as submitted' ? q.submission : null;
+  // HMRC has this quarter and a later one: reassure rather than offer a button HMRC would refuse.
+  const coveredLater = laterHeld !== null && !changed && (sent !== null || receivedElsewhere !== null);
+
   return (
     <div className="space-y-4">
-      {sent ? (
-        <div className="space-y-1 text-sm">
-          <p className="text-ink">
-            Sent to {service(sent.environment)} by {sent.by} on <strong>{formatDisplayDate(sent.at.slice(0, 10))}</strong>.
-          </p>
-          {sent.correlationId && <p className="text-xs text-faint">HMRC correlation ID {sent.correlationId}</p>}
+      <div className="space-y-1 text-sm">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          <Badge tone={status.tone}>{status.label}</Badge>
+          <span className="text-ink">{status.detail}</span>
         </div>
-      ) : (
-        q.submission && (
-          <p className="text-sm text-muted">Recorded by hand as submitted on {formatDisplayDate(q.submission.submittedOn)}.</p>
-        )
-      )}
+        {sent?.correlationId && <p className="text-xs text-faint">HMRC correlation ID {sent.correlationId}</p>}
+      </div>
 
-      {receivedElsewhere && (
-        <p className="text-sm text-muted">
-          HMRC already has an update for Q{q.quarter}
-          {receivedElsewhere.receivedDate ? `, received ${formatDisplayDate(receivedElsewhere.receivedDate)}` : ''}, not sent from this
-          app.{!laterHeld && canSend && ' Sending replaces it.'}
-        </p>
+      {(handRecord || coveredLater) && (
+        <div className="space-y-1 text-sm text-muted">
+          {handRecord && <p>You recorded it as submitted on {formatDisplayDate(handRecord.submittedOn)}.</p>}
+          {coveredLater && (
+            <p>
+              Your Q{laterHeld!.quarter} update now covers this quarter too, so there’s nothing more to send for Q{q.quarter}.
+            </p>
+          )}
+        </div>
       )}
 
       {changed && (
@@ -368,23 +395,15 @@ function SendToHmrc({
         </Alert>
       )}
 
-      {canSend &&
-        (!sent || changed) &&
-        (laterHeld ? (
-          <p className="text-sm text-muted">
-            HMRC already has your Q{laterHeld.quarter} update, which covers the year to {formatDisplayDate(laterHeld.endDate)}, so it
-            won’t take {replacing ? 'a replacement for' : 'an update for'} Q{q.quarter} now. Any changes reach HMRC with your next
-            update.
-          </p>
-        ) : (
-          <div className="flex flex-wrap items-center gap-3">
-            <Button variant={replacing ? 'secondary' : 'primary'} onClick={() => setConfirming(true)} disabled={tooEarly}>
-              <Send className="size-4" aria-hidden />
-              {replacing ? `Send Q${q.quarter} again` : `Send Q${q.quarter} to HMRC`}
-            </Button>
-            {tooEarly && <span className="text-sm text-muted">HMRC takes this update from {formatDisplayDate(earliest)}.</span>}
-          </div>
-        ))}
+      {wantsSending && !laterHeld && (
+        <div className="flex flex-wrap items-center gap-3">
+          <Button variant={replacing ? 'secondary' : 'primary'} onClick={() => setConfirming(true)} disabled={tooEarly}>
+            <Send className="size-4" aria-hidden />
+            {replacing ? `Send Q${q.quarter} again` : `Send Q${q.quarter} to HMRC`}
+          </Button>
+          {tooEarly && <span className="text-sm text-muted">HMRC takes this update from {formatDisplayDate(earliest)}.</span>}
+        </div>
+      )}
       {send.error && !confirming && <Alert>{send.error.message}</Alert>}
 
       <ConfirmDialog
@@ -570,7 +589,6 @@ export function MtdQuarterly() {
             <Card>
               <CardHeader icon={<CalendarCheck className="size-5 text-accent-soft" />} title={`Q${q.quarter} submission`} />
               <div className="px-5 pb-6 sm:px-6">
-                <p className="mb-4 text-sm text-muted">Due by {formatDisplayDate(q.deadline)}.</p>
                 {sendable || q.submission?.sent ? (
                   <SendToHmrc
                     taxYear={taxYear}
@@ -582,7 +600,10 @@ export function MtdQuarterly() {
                     laterHeld={laterHeld(q)}
                   />
                 ) : (
-                  <SubmissionPanel taxYearId={taxYear.id} q={q} />
+                  <>
+                    <p className="mb-4 text-sm text-muted">Due by {formatDisplayDate(q.deadline)}.</p>
+                    <SubmissionPanel taxYearId={taxYear.id} q={q} />
+                  </>
                 )}
               </div>
             </Card>
