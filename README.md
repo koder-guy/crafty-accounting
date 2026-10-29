@@ -34,6 +34,8 @@ Paste this into a terminal. It asks for the token: paste it (it isn't shown) and
 
 The token is checked with GitHub before anything is downloaded, used only for the downloads from GitHub, and isn't saved or kept in your shell history. If `GITHUB_TOKEN` is already set, `install.sh` uses it; otherwise, run on its own, it asks.
 
+If the repository is made public, no token is needed: both install scripts (and `crafty update`) check whether GitHub serves the repository without one before asking. The install commands then become a plain `/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/koder-guy/crafty-accounting/main/install.sh)"` (or `install-docker.sh`).
+
 [`install.sh`](install.sh) works on macOS and on Linux distributions such as Ubuntu, Debian and Fedora (Intel/AMD or ARM), and needs only `curl` and `tar`. It doesn't install anything system wide or ask for an administrator password: everything goes in `~/crafty-accounting`, with its own copy of Node 22 from nodejs.org (checked against nodejs.org's checksums). It downloads and builds the app, starts it in the background, and prints the addresses to open (`http://localhost:3000`, and the computer's IP address for other devices at home) with the sign-in name, `Admin`, and a random password. Change the password in **Settings → People**.
 
 The app keeps running after the terminal is closed, but doesn't start by itself after the computer restarts. Start and stop it with:

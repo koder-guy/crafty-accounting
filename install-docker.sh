@@ -4,10 +4,11 @@
 #
 #   /bin/bash -c 'read -rsp "GitHub token: " GITHUB_TOKEN && echo && export GITHUB_TOKEN && /bin/bash -c "$(curl -fsSL -H "Authorization: Bearer $GITHUB_TOKEN" https://raw.githubusercontent.com/koder-guy/crafty-accounting/main/install-docker.sh)"'
 #
-# The repository is private, so it needs a GitHub token that can read it: a
+# While the repository is private, it needs a GitHub token that can read it: a
 # fine-grained personal access token for koder-guy/crafty-accounting with
 # Contents: Read-only. The command above asks for it once and passes it on; run
-# any other way, the script asks for it itself unless GITHUB_TOKEN is set. It's
+# any other way, the script asks for it itself unless GITHUB_TOKEN is set or the
+# repository can be read without one (if it's made public). The token is
 # only used for the download and isn't saved. To update, run
 # ~/crafty-accounting-docker/install-docker.sh again.
 #
@@ -27,6 +28,7 @@
 #   CRAFTY_BRANCH          branch or tag to install (default main)
 #   CRAFTY_TARBALL         URL of the app's source .tar.gz, instead of GitHub's for CRAFTY_BRANCH
 #   CRAFTY_PROJECT         Docker Compose project name (default crafty-accounting)
+#   CRAFTY_REPO            GitHub repository to install from (default koder-guy/crafty-accounting)
 #   GITHUB_TOKEN           token for downloading from the private repository (see above)
 
 set -euo pipefail
@@ -34,10 +36,11 @@ set -euo pipefail
 # Everything is in main, so bash has read the whole script before an update
 # replaces this file.
 main() {
+  local REPO="${CRAFTY_REPO:-koder-guy/crafty-accounting}"
   local BRANCH="${CRAFTY_BRANCH:-main}"
   # GitHub's API serves a private repository's source to a token (redirecting to a
   # short-lived download link); its public archive URLs don't take one.
-  local TARBALL="${CRAFTY_TARBALL:-https://api.github.com/repos/koder-guy/crafty-accounting/tarball/$BRANCH}"
+  local TARBALL="${CRAFTY_TARBALL:-https://api.github.com/repos/$REPO/tarball/$BRANCH}"
   # Run as an install's own install-docker.sh (to update it), that install is the default.
   local default_dir="$HOME/crafty-accounting-docker" here
   if [ -f "${BASH_SOURCE[0]:-}" ]; then
@@ -70,7 +73,7 @@ main() {
   [ -n "${GITHUB_TOKEN:-}" ] && auth=(-H "Authorization: Bearer $GITHUB_TOKEN")
   # The token goes only to GitHub's API: curl drops the header when following the redirect.
   curl -fsSL ${auth[@]+"${auth[@]}"} "$TARBALL" | tar -xz -C "$src" --strip-components=1 \
-    || { rm -rf "$src"; fail "couldn't download the app ($BRANCH). Check that GITHUB_TOKEN can read koder-guy/crafty-accounting and hasn't expired."; }
+    || { rm -rf "$src"; fail "couldn't download the app ($BRANCH). Check that GITHUB_TOKEN can read $REPO and hasn't expired."; }
   cp -R "$src/." "$DIR/"
   rm -rf "$src"
   chmod +x "$DIR/install-docker.sh"
@@ -215,28 +218,36 @@ env_value() { sed -n "s/^$1=//p" "$DIR/.env" | tail -n 1; }
 port_busy() { (exec 3<>"/dev/tcp/127.0.0.1/$1") 2>/dev/null; }
 compose() { $DOCKER_CMD compose "$@"; }
 
-# The HTTP status GitHub gives the token for the repository: 200 if it can read it.
-token_status() {
-  curl -sS -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $1" \
-    https://api.github.com/repos/koder-guy/crafty-accounting 2>/dev/null || true
+# The HTTP status GitHub gives for reading the repository, with the token if one
+# is given: 200 if it can.
+repo_status() {
+  local auth=()
+  [ -n "${1:-}" ] && auth=(-H "Authorization: Bearer $1")
+  curl -sS -o /dev/null -w '%{http_code}' ${auth[@]+"${auth[@]}"} "https://api.github.com/repos/$REPO" 2>/dev/null || true
 }
 
 get_token() {
   [ -z "${CRAFTY_TARBALL:-}" ] || return 0
   local status
   if [ -n "${GITHUB_TOKEN:-}" ]; then
-    status="$(token_status "$GITHUB_TOKEN")"
-    [ "$status" = 200 ] || fail "GitHub didn't accept GITHUB_TOKEN for koder-guy/crafty-accounting (HTTP $status). Check it can read the repository and hasn't expired."
+    status="$(repo_status "$GITHUB_TOKEN")"
+    if [ "$status" != 200 ]; then
+      [ "$(repo_status)" = 200 ] || fail "GitHub didn't accept GITHUB_TOKEN for $REPO (HTTP $status). Check it can read the repository and hasn't expired."
+      echo "GitHub didn't accept GITHUB_TOKEN, but $REPO is public, so carrying on without it."
+      GITHUB_TOKEN=""
+    fi
+  elif [ "$(repo_status)" = 200 ]; then
+    : # A public repository: no token needed.
   elif (: </dev/tty) 2>/dev/null; then
     echo "The app is in a private GitHub repository. Paste a GitHub token that can read"
-    echo "koder-guy/crafty-accounting (it won't be shown) and press Enter."
+    echo "$REPO (it won't be shown) and press Enter."
     local attempt
     for attempt in 1 2 3; do
       printf 'GitHub token: '
       read -rs GITHUB_TOKEN </dev/tty || true
       echo
       [ -n "$GITHUB_TOKEN" ] || continue
-      status="$(token_status "$GITHUB_TOKEN")"
+      status="$(repo_status "$GITHUB_TOKEN")"
       [ "$status" = 200 ] && break
       echo "GitHub didn't accept that token (HTTP $status). Check it can read the repository and hasn't expired."
       GITHUB_TOKEN=""
