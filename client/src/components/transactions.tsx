@@ -15,6 +15,7 @@ import {
   type TransactionFilters,
 } from '@crafty/shared';
 import { documentUrl } from '../lib/api';
+import { dismissWithoutClicking } from '../lib/menus';
 import { useCanEdit } from '../lib/queries';
 import { CategoryOptions } from './CategoryOptions';
 import { Button, IconButton, SOFT_DANGER } from './ui';
@@ -307,7 +308,7 @@ function DocumentMenu({ documents }: { documents: TransactionDocument[] }) {
     if (!anchor) return;
     const onPointer = (e: PointerEvent) => {
       const target = e.target as Node;
-      if (!menuRef.current?.contains(target) && !buttonRef.current?.contains(target)) close();
+      if (!menuRef.current?.contains(target) && !buttonRef.current?.contains(target)) dismissWithoutClicking(e, () => close());
     };
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') close(true);
@@ -319,12 +320,12 @@ function DocumentMenu({ documents }: { documents: TransactionDocument[] }) {
       }
     };
     const onMove = () => close();
-    document.addEventListener('pointerdown', onPointer);
+    document.addEventListener('pointerdown', onPointer, true);
     document.addEventListener('keydown', onKey);
     window.addEventListener('scroll', onMove, true);
     window.addEventListener('resize', onMove);
     return () => {
-      document.removeEventListener('pointerdown', onPointer);
+      document.removeEventListener('pointerdown', onPointer, true);
       document.removeEventListener('keydown', onKey);
       window.removeEventListener('scroll', onMove, true);
       window.removeEventListener('resize', onMove);

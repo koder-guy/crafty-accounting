@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router';
 import { ChevronDown, KeyRound, LogOut } from 'lucide-react';
 import { ROLE_LABELS } from '@crafty/shared';
+import { dismissWithoutClicking } from '../lib/menus';
 import { useLogout, useMe } from '../lib/queries';
 import { Badge } from './ui';
 
@@ -40,7 +41,7 @@ export function UserMenu({ compact = false }: { compact?: boolean }) {
   useEffect(() => {
     if (!open) return;
     const onPointer = (e: PointerEvent) => {
-      if (!rootRef.current?.contains(e.target as Node)) setOpen(false);
+      if (!rootRef.current?.contains(e.target as Node)) dismissWithoutClicking(e, () => setOpen(false));
     };
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
@@ -48,10 +49,10 @@ export function UserMenu({ compact = false }: { compact?: boolean }) {
         buttonRef.current?.focus();
       }
     };
-    document.addEventListener('pointerdown', onPointer);
+    document.addEventListener('pointerdown', onPointer, true);
     document.addEventListener('keydown', onKey);
     return () => {
-      document.removeEventListener('pointerdown', onPointer);
+      document.removeEventListener('pointerdown', onPointer, true);
       document.removeEventListener('keydown', onKey);
     };
   }, [open]);
