@@ -2,6 +2,7 @@
   "name": "crafty-accounting",
   "version": "1.4.0",
   "private": true,
+  "license": "MIT",
   "type": "module",
   "description": "Self-hosted bookkeeping for a UK sole trader, structured for HMRC Making Tax Digital",
   "workspaces": [

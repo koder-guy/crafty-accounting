@@ -304,3 +304,7 @@ The project has three parts:
 - `shared/`: tax-year and money helpers, categories, zod schemas, MTD aggregation and API types, used by both sides.
 - `server/`: Express API, SQLite (better-sqlite3), uploads, CSV export and backup/restore. Tests are in `server/src/app.test.ts`.
 - `client/`: React, Vite, Tailwind CSS, TanStack Query and Recharts.
+
+## Licence
+
+MIT; see [LICENSE](LICENSE). Crafty Accounting comes with no warranty: it helps you keep your books and send them to HMRC, but you remain responsible for what you submit.
