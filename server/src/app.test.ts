@@ -7,6 +7,7 @@ import Database from 'better-sqlite3';
 import type { Category } from '@crafty/shared';
 import { createApp } from './app';
 import { dumpSql } from './backup';
+import { NEXT_UPDATED_AT, nextTimestamp } from './repo';
 import { seedCategories } from './db';
 import { MIGRATIONS } from './db/migrations';
 import { isAutoBackupDue, nextAutoBackup, runAutoBackup } from './autoBackup';
@@ -389,6 +390,22 @@ describe('working together', () => {
     const bought = (await agent.post('/api/expenses').send(expense(yearId)).expect(201)).body;
     await jo.put(`/api/expenses/${bought.id}`).send(expense(yearId, { notes: 'Jo', expectedUpdatedAt: bought.updatedAt })).expect(200);
     await agent.put(`/api/expenses/${bought.id}`).send(expense(yearId, { notes: 'Me', expectedUpdatedAt: bought.updatedAt })).expect(409);
+  });
+
+  it('gives every save a new version, even two in the same millisecond', async () => {
+    const yearId = await createYear();
+    const saved = (await agent.post('/api/incomes').send(income(yearId)).expect(201)).body;
+    // Back-to-back writes straight to the database, faster than any clock tick.
+    const touch = ctx.db.prepare(`UPDATE incomes SET notes = 'x', updated_at = ${NEXT_UPDATED_AT} WHERE id = ?`);
+    const read = ctx.db.prepare('SELECT updated_at AS at FROM incomes WHERE id = ?');
+    const seen = [saved.updatedAt];
+    for (let n = 0; n < 5; n++) {
+      touch.run(saved.id);
+      seen.push((read.get(saved.id) as { at: string }).at);
+    }
+    expect(new Set(seen).size).toBe(seen.length);
+    expect([...seen].sort()).toEqual(seen);
+    expect(nextTimestamp('2999-01-01T00:00:00.000Z')).toBe('2999-01-01T00:00:00.002Z');
   });
 
   it('tells other open browsers about changes, but not the one that made them', async () => {

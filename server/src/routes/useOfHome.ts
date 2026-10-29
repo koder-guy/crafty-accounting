@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { useOfHomeInputSchema } from '@crafty/shared';
 import type { AppContext } from '../context';
 import { HttpError, parseWith } from '../http';
-import { getTaxYear, getUseOfHome } from '../repo';
+import { getTaxYear, getUseOfHome, nextTimestamp } from '../repo';
 
 const querySchema = z.object({ taxYearId: z.coerce.number().int().positive() });
 
@@ -32,8 +32,11 @@ export function useOfHomeRouter(ctx: AppContext): Router {
     }
     ctx.db.transaction(() => {
       ctx.db.prepare('DELETE FROM home_working_months WHERE tax_year_id = ?').run(taxYear.id);
-      const insert = ctx.db.prepare('INSERT INTO home_working_months (tax_year_id, month_index, hours, updated_by) VALUES (?, ?, ?, ?)');
-      for (const m of input.months) if (m.hours > 0) insert.run(taxYear.id, m.index, m.hours, req.user!.name);
+      const insert = ctx.db.prepare(
+        'INSERT INTO home_working_months (tax_year_id, month_index, hours, updated_by, updated_at) VALUES (?, ?, ?, ?, ?)',
+      );
+      const savedAt = nextTimestamp(current.updatedAt);
+      for (const m of input.months) if (m.hours > 0) insert.run(taxYear.id, m.index, m.hours, req.user!.name, savedAt);
     })();
     res.json(getUseOfHome(ctx.db, taxYear));
   });

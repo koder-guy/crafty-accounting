@@ -28,6 +28,17 @@ export type { Db };
 
 type Row = Record<string, any>;
 
+/**
+ * SQL for a record's new updated_at when it's saved: now, but always at least
+ * 2ms after the previous value. Edits are checked against updated_at (see
+ * checkUnchanged), so two saves in the same millisecond must not share one.
+ */
+export const NEXT_UPDATED_AT = "strftime('%Y-%m-%dT%H:%M:%fZ', max(julianday('now'), julianday(updated_at) + 0.002 / 86400.0))";
+
+/** The same rule for a timestamp worked out in JavaScript (ISO strings sort in time order). */
+export const nextTimestamp = (previous: string | null) =>
+  new Date(Math.max(Date.now(), previous ? Date.parse(previous) + 2 : 0)).toISOString();
+
 // ---- Tax years ----
 
 const TAX_YEAR_SELECT = `

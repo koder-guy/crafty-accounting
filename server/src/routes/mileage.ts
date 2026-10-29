@@ -11,7 +11,7 @@ import {
 import type { AppContext } from '../context';
 import { toCsv } from '../csv';
 import { HttpError, parseId, parseWith } from '../http';
-import { getMileageTrip, getTaxYear, listMileage, mileageCheck } from '../repo';
+import { getMileageTrip, getTaxYear, listMileage, mileageCheck, NEXT_UPDATED_AT } from '../repo';
 import { checkTaxYearAndDate, checkUnchanged } from './transactions';
 
 const querySchema = z.object({ taxYearId: z.coerce.number().int().positive() });
@@ -72,7 +72,7 @@ export function mileageRouter(ctx: AppContext): Router {
     ctx.db
       .prepare(
         `UPDATE mileage_trips SET date = ?, description = ?, vehicle = ?, distance_tenths = ?, notes = ?, updated_by = ?,
-           updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+           updated_at = ${NEXT_UPDATED_AT}
          WHERE id = ?`,
       )
       .run(input.date, input.description, input.vehicle, input.distanceTenths, input.notes, req.user!.name, id);

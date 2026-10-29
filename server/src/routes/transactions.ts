@@ -18,7 +18,7 @@ import type { AppContext } from '../context';
 import { toCsv } from '../csv';
 import { createUploader, removeDocumentFile, saveWithDocuments, uploadedFiles } from '../documents';
 import { HttpError, parseId, parseWith, readPayload } from '../http';
-import { getCategory, getExpense, getIncome, getTaxYear, listExpenses, listIncomes } from '../repo';
+import { getCategory, getExpense, getIncome, getTaxYear, listExpenses, listIncomes, NEXT_UPDATED_AT } from '../repo';
 
 export function checkTaxYearAndDate(ctx: AppContext, taxYearId: number, date: string): TaxYear {
   const year = getTaxYear(ctx.db, taxYearId);
@@ -181,7 +181,7 @@ export function incomesRouter(ctx: AppContext): Router {
           .prepare(
             `UPDATE incomes SET date = ?, description = ?, source = ?, reference = ?, payment_method = ?,
                amount_pence = ?, category_id = ?, notes = ?, updated_by = ?,
-               updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+               updated_at = ${NEXT_UPDATED_AT}
              WHERE id = ?`,
           )
           .run(
@@ -324,7 +324,7 @@ export function expensesRouter(ctx: AppContext): Router {
           .prepare(
             `UPDATE expenses SET date = ?, payee = ?, invoice_number = ?, order_number = ?, description = ?,
                payment_method = ?, total_pence = ?, notes = ?, updated_by = ?,
-               updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+               updated_at = ${NEXT_UPDATED_AT}
              WHERE id = ?`,
           )
           .run(
