@@ -22,19 +22,27 @@ Self-hosted bookkeeping for a UK sole trader, built for selling at craft fairs a
 - **HMRC** (Settings): your National Insurance number, the connection to HMRC for Making Tax Digital and your self-employment business there. Editors connect by signing in to HMRC, which gives the app authority for 18 months. Once connected, the Quarterly updates tab shows which updates HMRC expects and which it has received. Uses HMRC's sandbox (test service) for now; see [Connecting to HMRC](#connecting-to-hmrc).
 - **Working together**: when someone saves a change, every other open browser shows it within a second or so, without reloading. If two people edit the same transaction at once, the second save is refused rather than overwriting the first, and the form offers to load the other person's version. What you've typed in a form is never replaced while you're typing.
 
-## Install on a Mac
+## Quick install (macOS and Linux)
 
-Paste this into Terminal:
+Paste this into a terminal:
 
 ```bash
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/koder-guy/crafty-accounting/main/install.sh)"
 ```
 
-[`install.sh`](install.sh) installs Homebrew (if needed, which asks for your Mac password), Node 22 and git, downloads the app to `~/crafty-accounting`, builds it and starts it in the background with launchd, so it also starts when you sign in to the Mac. It finishes by printing the addresses to open (`http://localhost:3000` on the Mac, and its `.local` name and IP address for other devices at home) and the sign-in name, `Admin`, with a random password. Change the password in **Settings → People**.
+[`install.sh`](install.sh) works on macOS and on Linux distributions such as Ubuntu, Debian and Fedora (Intel/AMD or ARM), and needs only `curl` and `tar`. It doesn't install anything system wide or ask for an administrator password: everything goes in `~/crafty-accounting`, with its own copy of Node 22 from nodejs.org (checked against nodejs.org's checksums). It downloads and builds the app, starts it in the background, and prints the addresses to open (`http://localhost:3000`, and the computer's IP address for other devices at home) with the sign-in name, `Admin`, and a random password. Change the password in **Settings → People**.
 
-Running the same command again updates the app and keeps your books and settings. Settings are in `~/crafty-accounting/.env`, the books in `~/crafty-accounting/data`. To choose things on a new install, put any of these before `/bin/bash`: `CRAFTY_DIR`, `CRAFTY_PORT`, `CRAFTY_ADMIN_NAME`, `CRAFTY_ADMIN_PASSWORD`.
+The app keeps running after the terminal is closed, but doesn't start by itself after the computer restarts. Start and stop it with:
 
-This runs over plain HTTP, fine on a home network. For HTTPS, or on a Linux server, use Docker Compose below.
+```bash
+~/crafty-accounting/crafty start
+```
+
+`crafty` also takes `stop`, `restart`, `status` and `log`.
+
+Running the install command again updates the app and keeps your books and settings; if the update fails, the running copy is left as it was. Settings are in `~/crafty-accounting/.env` (restart after changing them), the books in `~/crafty-accounting/data`. To choose things on a new install, put any of these before `/bin/bash`: `CRAFTY_DIR`, `CRAFTY_PORT`, `CRAFTY_ADMIN_NAME`, `CRAFTY_ADMIN_PASSWORD`.
+
+This serves plain HTTP, fine on a home network. For HTTPS, use Docker Compose below. Alpine Linux and other musl-based systems aren't covered (nodejs.org has no Node build for them); use Docker Compose there too.
 
 ## Run with Docker Compose
 

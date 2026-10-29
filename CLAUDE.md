@@ -23,7 +23,7 @@ export PATH="/opt/homebrew/opt/node@22/bin:$PATH"
 - `npm run typecheck`: shared, server and client.
 - `npx vitest run`: all tests. Run both before every commit.
 - `npm run build`, `npm run seed`, `docker compose up -d --build`.
-- `install.sh`: one-command Mac install or update (Homebrew, Node 22, build, launchd agent `local.crafty-accounting`), fetched with curl from `main`; see the README.
+- `install.sh`: one-command install or update for macOS and Linux (glibc), fetched with curl from `main`. Everything goes in `~/crafty-accounting`: its own Node 22 from nodejs.org, the app built in `app.new` then swapped for `app`, `.env`, `data/`, and the `crafty` start/stop script (nohup and a pid file; deliberately no launchd/systemd autostart). Uses `npm ci --ignore-scripts` so better-sqlite3's bundled prebuilds are used instead of compiling.
 
 ## Rules
 
