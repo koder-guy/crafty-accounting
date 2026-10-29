@@ -34,7 +34,7 @@ export const SUBMISSION_METHODS = ['self_assessment', 'mtd'] as const;
 export type SubmissionMethod = (typeof SUBMISSION_METHODS)[number];
 
 export const SUBMISSION_METHOD_LABELS: Record<SubmissionMethod, string> = {
-  self_assessment: 'Self Assessment return',
+  self_assessment: 'Self Assessment',
   mtd: 'Making Tax Digital',
 };
 

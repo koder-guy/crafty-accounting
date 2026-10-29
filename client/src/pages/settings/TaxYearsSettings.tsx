@@ -89,7 +89,7 @@ export function TaxYearsSettings() {
                 </div>
                 <div>
                   <label htmlFor="submission-method" className="mb-1.5 block text-sm font-medium">
-                    Sent to HMRC by
+                    Submission type
                   </label>
                   <select
                     id="submission-method"
@@ -230,13 +230,13 @@ function YearMethod({
   const locked = year.submissionMethod === 'mtd' && recorded + sent > 0;
   const id = `method-${year.id}`;
   return (
-    <div className="mt-3 flex flex-col gap-1.5 text-sm sm:flex-row sm:items-center sm:gap-3">
+    <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-sm">
       {canEdit && !locked ? (
         <label htmlFor={id} className="whitespace-nowrap text-muted">
-          Sent to HMRC by
+          Submission type
         </label>
       ) : (
-        <span className="whitespace-nowrap text-muted">Sent to HMRC by</span>
+        <span className="whitespace-nowrap text-muted">Submission type</span>
       )}
       {canEdit && !locked ? (
         <select
@@ -253,7 +253,7 @@ function YearMethod({
           {SUBMISSION_METHOD_LABELS[year.submissionMethod]}
         </span>
       )}
-      {locked && <span className="text-xs text-faint">It has quarterly updates, so it stays Making Tax Digital.</span>}
+      {locked && <p className="w-full text-xs text-faint">It has quarterly updates, so it stays Making Tax Digital.</p>}
     </div>
   );
 }
