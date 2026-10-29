@@ -8,19 +8,17 @@ import {
   FileSpreadsheet,
   House,
   ChartPie,
-  LogOut,
   Menu,
   Settings,
   TrendingUp,
-  UserRound,
   Wallet,
   X,
   type LucideIcon,
 } from 'lucide-react';
 import { APP_NAME, APP_VERSION, displayTaxYear, taxYearStartYearForDate, todayIso } from '@crafty/shared';
 import { useLiveUpdates } from '../lib/liveUpdates';
-import { useCanEdit, useLogout, useMe, useTaxYearMutations, useTaxYears } from '../lib/queries';
-import { Badge } from './ui';
+import { UserMenu } from './UserMenu';
+import { useCanEdit, useTaxYearMutations, useTaxYears } from '../lib/queries';
 
 function Brand() {
   return (
@@ -122,7 +120,6 @@ function NavItem({
 
 function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const { data } = useTaxYears();
-  const { data: me } = useMe();
   const active = data?.taxYears.find((y) => y.id === data.activeTaxYearId);
 
   return (
@@ -144,41 +141,13 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
         <NavItem to="/mtd" icon={FileSpreadsheet} label="MTD Quarterly" />
         <NavItem to="/settings" icon={Settings} label="Settings" />
       </nav>
-      <div className="space-y-1 border-t border-line px-5 py-4 text-xs">
-        {me?.user && (
-          <div className="flex items-center gap-1.5 text-muted">
-            <UserRound className="size-3.5" aria-hidden />
-            Signed in as <span className="font-semibold text-ink">{me.user.name}</span>
-            {me.user.role === 'viewer' && <Badge tone="warn">Read-only</Badge>}
-          </div>
-        )}
-        <div className="font-semibold text-ink/80">
-          {APP_NAME} v{APP_VERSION}
-        </div>
+      <div className="border-t border-line px-5 py-4 text-xs font-semibold text-ink/80">
+        {APP_NAME} v{APP_VERSION}
       </div>
     </div>
   );
 }
 
-/** Sign out: top right of the page header on desktop, in the top bar on phones. */
-export function SignOutButton({ compact = false }: { compact?: boolean }) {
-  const logout = useLogout();
-  return (
-    <button
-      type="button"
-      onClick={() => logout.mutate()}
-      disabled={logout.isPending}
-      aria-label="Sign out"
-      title="Sign out"
-      className={`inline-flex items-center gap-2 rounded-lg text-sm text-muted transition-colors hover:bg-surface hover:text-ink ${
-        compact ? 'p-2' : 'border border-line-strong px-3.5 py-2'
-      }`}
-    >
-      <LogOut className={compact ? 'size-5' : 'size-4'} aria-hidden />
-      {!compact && 'Sign out'}
-    </button>
-  );
-}
 
 export function Layout() {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -192,7 +161,7 @@ export function Layout() {
       <div className="sticky top-0 z-30 flex items-center justify-between border-b border-line bg-sidebar/95 px-4 py-3 backdrop-blur lg:hidden print:hidden">
         <Brand />
         <div className="flex items-center gap-1">
-          <SignOutButton compact />
+          <UserMenu compact />
           <button
             type="button"
             onClick={() => setMenuOpen((v) => !v)}
