@@ -1341,6 +1341,10 @@ describe('sample data', () => {
       )
       .all() as { name: string }[];
     expect(docs).toHaveLength(result.documents);
+    const withSeveral = ctx.db
+      .prepare('SELECT COUNT(*) AS n FROM (SELECT 1 FROM documents GROUP BY income_id, expense_id HAVING COUNT(*) > 1)')
+      .get() as { n: number };
+    expect(withSeveral.n).toBeGreaterThan(3);
     for (const { name } of docs) expect(fs.existsSync(path.join(uploads(), name))).toBe(true);
 
     const customs = (await agent.get('/api/categories')).body.filter((c: { isCustom: boolean }) => c.isCustom);

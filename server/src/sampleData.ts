@@ -233,17 +233,18 @@ export function generateSampleData(db: Db, uploadsDir: string, today = todayIso(
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   );
   const documentRow = db.prepare('INSERT INTO documents (filename, income_id, expense_id) VALUES (?, ?, ?)');
-  // The last argument is an attached document's filename, if any.
+  // The last argument lists the attached documents' filenames (nulls are skipped).
   type Value = string | number | null | undefined;
-  const insertIncome = (...values: [...Value[], string | null]) => {
-    const doc = values.pop() as string | null;
+  type Docs = (string | null)[];
+  const insertIncome = (...values: [...Value[], Docs]) => {
+    const docs = values.pop() as Docs;
     const { lastInsertRowid } = incomeRow.run(...values);
-    if (doc) documentRow.run(doc, lastInsertRowid, null);
+    for (const doc of docs) if (doc) documentRow.run(doc, lastInsertRowid, null);
   };
-  const insertExpense = (...values: [...Value[], string | null]) => {
-    const doc = values.pop() as string | null;
+  const insertExpense = (...values: [...Value[], Docs]) => {
+    const docs = values.pop() as Docs;
     const result = expenseRow.run(...values);
-    if (doc) documentRow.run(doc, null, result.lastInsertRowid);
+    for (const doc of docs) if (doc) documentRow.run(doc, null, result.lastInsertRowid);
     return result;
   };
   const insertLine = db.prepare(
@@ -271,8 +272,15 @@ export function generateSampleData(db: Db, uploadsDir: string, today = todayIso(
     const total = amounts.reduce((a, b) => a + b, 0);
     const invoice = rnd.chance(0.7) ? `INV-${rnd.int(10000, 99999)}` : null;
     const order = purchase.orderNumber ? `ORD-${rnd.int(100000, 999999)}` : null;
-    const doc =
-      invoice && rnd.chance(0.35) ? attach(`${date} ${purchase.payee} ${invoice}.pdf`, `${purchase.payee} invoice ${invoice}`) : null;
+    // An invoice for some purchases; online orders sometimes come with a delivery note and a payment receipt too.
+    const docs: Docs = [];
+    if (invoice && rnd.chance(0.35)) {
+      docs.push(attach(`${date} ${purchase.payee} ${invoice}.pdf`, `${purchase.payee} invoice ${invoice}`));
+      if (order && rnd.chance(0.75)) {
+        docs.push(attach(`${date} ${purchase.payee} ${order} delivery note.pdf`, `${purchase.payee} delivery note ${order}`));
+      }
+      if (rnd.chance(0.45)) docs.push(attach(`${date} ${purchase.payee} payment receipt.pdf`, `${purchase.payee} payment receipt ${date}`));
+    }
     const { lastInsertRowid } = insertExpense(
       yearId,
       date,
@@ -283,7 +291,7 @@ export function generateSampleData(db: Db, uploadsDir: string, today = todayIso(
       purchase.payment ?? 'card',
       total,
       null,
-      doc,
+      docs,
     );
     lines.forEach((l, i) => insertLine.run(lastInsertRowid, l.description, amounts[i], lineCategory(l), l.disallowable ? 1 : 0, i));
     result.expenses++;
@@ -311,9 +319,13 @@ export function generateSampleData(db: Db, uploadsDir: string, today = todayIso(
         const fair = rnd.pick(FAIRS);
         const busy = /Christmas/.test(fair) || date.slice(5, 7) === '12' ? 1.8 : 1;
         const card = Math.round(rnd.int(6000, 42000) * busy);
-        const doc = rnd.chance(0.3) ? attach(`${date} ${fair} Square payout.pdf`, `Square payout ${fair} ${date}`) : null;
-        insertIncome(yearId, date, `${fair} – card sales`, `SQ-${rnd.int(100000, 999999)}`, 'card', card, category.get('turnover'), null, doc);
-        insertIncome(yearId, date, `${fair} – cash sales`, null, 'cash', Math.round(rnd.int(2500, 16000) * busy), category.get('turnover'), null, null);
+        const docs: Docs = [];
+        if (rnd.chance(0.3)) {
+          docs.push(attach(`${date} ${fair} Square payout.pdf`, `Square payout ${fair} ${date}`));
+          if (rnd.chance(0.4)) docs.push(attach(`${date} ${fair} Square sales report.pdf`, `Square sales report ${fair} ${date}`));
+        }
+        insertIncome(yearId, date, `${fair} – card sales`, `SQ-${rnd.int(100000, 999999)}`, 'card', card, category.get('turnover'), null, docs);
+        insertIncome(yearId, date, `${fair} – cash sales`, null, 'cash', Math.round(rnd.int(2500, 16000) * busy), category.get('turnover'), null, []);
         result.incomes += 2;
         const feeDate = addDays(date, -rnd.int(7, 30));
         addExpense(yearId, feeDate < year.startDate ? date : feeDate, {
@@ -332,8 +344,12 @@ export function generateSampleData(db: Db, uploadsDir: string, today = todayIso(
         if (monthStart > end) break;
         const payoutDate = addDays(monthStart, rnd.int(0, 27));
         if (payoutDate <= end) {
-          const doc = rnd.chance(0.5) ? attach(`${payoutDate} Etsy payout.pdf`, `Etsy payout ${payoutDate}`) : null;
-          insertIncome(yearId, payoutDate, 'Etsy payout', `ETSY-${rnd.int(1000000, 9999999)}`, 'bank_transfer', rnd.int(3500, 19000), custom.get('Etsy sales'), null, doc);
+          const docs: Docs = [];
+          if (rnd.chance(0.5)) {
+            docs.push(attach(`${payoutDate} Etsy payout.pdf`, `Etsy payout ${payoutDate}`));
+            if (rnd.chance(0.5)) docs.push(attach(`${payoutDate} Etsy monthly statement.pdf`, `Etsy statement ${payoutDate}`));
+          }
+          insertIncome(yearId, payoutDate, 'Etsy payout', `ETSY-${rnd.int(1000000, 9999999)}`, 'bank_transfer', rnd.int(3500, 19000), custom.get('Etsy sales'), null, docs);
           result.incomes++;
         }
         for (let i = rnd.int(1, 3); i > 0; i--) {
@@ -346,7 +362,7 @@ export function generateSampleData(db: Db, uploadsDir: string, today = todayIso(
       for (const offset of [95, 250]) {
         const date = addDays(year.startDate, offset);
         if (date <= end) {
-          insertIncome(yearId, date, 'Beading workshop – teaching fee', null, 'bank_transfer', rnd.int(6000, 15000), category.get('other'), 'Taught at the village hall', null);
+          insertIncome(yearId, date, 'Beading workshop – teaching fee', null, 'bank_transfer', rnd.int(6000, 15000), category.get('other'), 'Taught at the village hall', []);
           result.incomes++;
         }
       }
