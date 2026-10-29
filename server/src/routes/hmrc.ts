@@ -209,7 +209,7 @@ export function hmrcRouter(ctx: AppContext): Router {
     const businessId = getHmrcConnection(ctx.db, environment())?.business_id;
     if (!businessId) throw new HttpError(400, 'Find your business in Settings → HMRC first.');
 
-    const q = quarterSummaries(ctx.db, taxYear).find((x) => x.quarter === quarter)!;
+    const q = quarterSummaries(ctx.db, taxYear, environment()).find((x) => x.quarter === quarter)!;
     if (todayIso() < mtdEarliestSendDate(q)) {
       throw new HttpError(400, `HMRC won’t take this update until ${mtdEarliestSendDate(q)}, 10 days before the quarter ends.`);
     }
@@ -243,7 +243,7 @@ export function hmrcRouter(ctx: AppContext): Router {
         correlationId,
         payload: JSON.stringify(payload),
       });
-    res.json(getSubmissions(ctx.db, taxYearId).get(quarter));
+    res.json(getSubmissions(ctx.db, taxYearId, environment()).get(quarter)!.submission);
   });
 
   router.get('/fraud-headers/check', async (req, res) => {

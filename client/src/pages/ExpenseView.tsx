@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router';
 import { Copy, ListOrdered, Pencil, Trash2 } from 'lucide-react';
 import { displayTaxYear, formatDisplayDate, formatGBP } from '@crafty/shared';
 import { ConfirmDialog } from '../components/ConfirmDialog';
+import { SentQuarterNotice } from '../components/SentQuarterNotice';
 import { BackLink, recordedBy } from '../components/FormShell';
 import { attachedDocuments, DocumentLinks } from '../components/transactions';
 import { PageBody, PageHeader } from '../components/PageHeader';
@@ -138,6 +139,7 @@ export function ExpenseView() {
           {expense?.documents.length ? ` and ${attachedDocuments(expense.documents.length)}` : ''}.
           This can't be undone.
         </p>
+        <SentQuarterNotice taxYearId={expense?.taxYearId} dates={[expense?.date]} />
       </ConfirmDialog>
     </>
   );

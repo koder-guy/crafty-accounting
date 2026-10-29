@@ -169,6 +169,8 @@ export interface MtdQuarterSummary extends MtdQuarter {
   /** Figures from the start of the tax year to the end of this quarter (what MTD submits). */
   cumulative: MtdPeriodSummary;
   submission: MtdQuarterSubmission | null;
+  /** An update the app sent to the other HMRC service (such as the sandbox), which doesn't count here. */
+  otherServiceSend: { environment: HmrcEnvironment; at: string; by: string } | null;
 }
 
 export interface MtdQuartersResponse {

@@ -9,7 +9,6 @@ import {
   mtdSubmissionSchema,
   startYearFromLabel,
   type HmrcEnvironment,
-  type MtdQuarterSubmission,
   type MtdQuartersResponse,
   type MtdQuarterSummary,
   type TaxYear,
@@ -30,48 +29,61 @@ interface SubmissionRow {
   sent_payload: string | null;
 }
 
-export function getSubmissions(db: Db, taxYearId: number): Map<number, MtdQuarterSubmission> {
+type QuarterSubmission = Pick<MtdQuarterSummary, 'submission' | 'otherServiceSend'>;
+
+/**
+ * Each quarter's submission. An update the app sent to the other HMRC service
+ * (the sandbox, once the app uses the live one) doesn't count as submitted:
+ * it's reported separately, as a note.
+ */
+export function getSubmissions(
+  db: Db,
+  taxYearId: number,
+  environment: HmrcEnvironment,
+): Map<number, QuarterSubmission> {
   const rows = db.prepare('SELECT * FROM mtd_submissions WHERE tax_year_id = ?').all(taxYearId) as SubmissionRow[];
   return new Map(
-    rows.map((row): [number, MtdQuarterSubmission] => [
-      row.quarter,
-      {
-        submittedOn: row.submitted_on,
-        reference: row.reference,
-        sent:
-          row.sent_at && row.sent_by && row.sent_environment && row.sent_payload
-            ? {
-                by: row.sent_by,
-                at: row.sent_at,
-                environment: row.sent_environment,
-                correlationId: row.correlation_id,
-                payload: JSON.parse(row.sent_payload),
-              }
-            : null,
-      },
-    ]),
+    rows.map((row): [number, QuarterSubmission] => {
+      const sent =
+        row.sent_at && row.sent_by && row.sent_environment && row.sent_payload
+          ? {
+              by: row.sent_by,
+              at: row.sent_at,
+              environment: row.sent_environment,
+              correlationId: row.correlation_id,
+              payload: JSON.parse(row.sent_payload),
+            }
+          : null;
+      if (sent && sent.environment !== environment) {
+        return [row.quarter, { submission: null, otherServiceSend: { environment: sent.environment, at: sent.at, by: sent.by } }];
+      }
+      return [row.quarter, { submission: { submittedOn: row.submitted_on, reference: row.reference, sent }, otherServiceSend: null }];
+    }),
   );
 }
 
 /** Each quarter's figures, on its own and for the tax year to date, with any submission. */
-export function quarterSummaries(db: Db, taxYear: TaxYear): MtdQuarterSummary[] {
+export function quarterSummaries(db: Db, taxYear: TaxYear, environment: HmrcEnvironment): MtdQuarterSummary[] {
   const { incomes, lines } = yearEntries(db, taxYear.id);
-  const submissions = getSubmissions(db, taxYear.id);
+  const submissions = getSubmissions(db, taxYear.id, environment);
   const inRange = (from: string, to: string) => (entry: { date: string }) => entry.date >= from && entry.date <= to;
   return mtdQuarters(startYearFromLabel(taxYear.label)!).map((q) => ({
     ...q,
     period: buildMtdPeriodSummary(incomes.filter(inRange(q.startDate, q.endDate)), lines.filter(inRange(q.startDate, q.endDate))),
     cumulative: buildMtdPeriodSummary(incomes.filter(inRange(taxYear.startDate, q.endDate)), lines.filter(inRange(taxYear.startDate, q.endDate))),
-    submission: submissions.get(q.quarter) ?? null,
+    submission: submissions.get(q.quarter)?.submission ?? null,
+    otherServiceSend: submissions.get(q.quarter)?.otherServiceSend ?? null,
   }));
 }
 
 /** A record of an update the app sent to HMRC is a fact, so it can't be changed or removed by hand. */
-function refuseIfSent(db: Db, taxYearId: number, quarter: number) {
-  const row = db.prepare('SELECT sent_at FROM mtd_submissions WHERE tax_year_id = ? AND quarter = ?').get(taxYearId, quarter) as
-    | { sent_at: string | null }
+function refuseIfSent(db: Db, taxYearId: number, quarter: number, environment: HmrcEnvironment) {
+  const row = db.prepare('SELECT sent_environment FROM mtd_submissions WHERE tax_year_id = ? AND quarter = ?').get(taxYearId, quarter) as
+    | { sent_environment: string | null }
     | undefined;
-  if (row?.sent_at) throw new HttpError(409, 'This quarter was sent to HMRC by the app, so its record can’t be changed by hand.');
+  if (row?.sent_environment === environment) {
+    throw new HttpError(409, 'This quarter was sent to HMRC by the app, so its record can’t be changed by hand.');
+  }
 }
 
 const querySchema = z.object({ taxYearId: z.coerce.number().int().positive() });
@@ -91,7 +103,7 @@ export function mtdRouter(ctx: AppContext): Router {
     const taxYear = getTaxYear(db, taxYearId);
     if (!taxYear) throw new HttpError(404, 'Tax year not found');
 
-    const response: MtdQuartersResponse = { taxYear, quarters: quarterSummaries(db, taxYear) };
+    const response: MtdQuartersResponse = { taxYear, quarters: quarterSummaries(db, taxYear, ctx.config.hmrc.environment) };
     res.json(response);
   });
 
@@ -99,21 +111,22 @@ export function mtdRouter(ctx: AppContext): Router {
     const taxYearId = parseId(req.params.taxYearId);
     const quarter = parseQuarter(req.params.quarter);
     if (!getTaxYear(ctx.db, taxYearId)) throw new HttpError(404, 'Tax year not found');
-    refuseIfSent(ctx.db, taxYearId, quarter);
+    refuseIfSent(ctx.db, taxYearId, quarter, ctx.config.hmrc.environment);
     const input = parseWith(mtdSubmissionSchema, req.body);
     ctx.db
       .prepare(
         `INSERT INTO mtd_submissions (tax_year_id, quarter, submitted_on, reference) VALUES (?, ?, ?, ?)
-         ON CONFLICT (tax_year_id, quarter) DO UPDATE SET submitted_on = excluded.submitted_on, reference = excluded.reference`,
+         ON CONFLICT (tax_year_id, quarter) DO UPDATE SET submitted_on = excluded.submitted_on, reference = excluded.reference,
+           sent_by = NULL, sent_at = NULL, sent_environment = NULL, correlation_id = NULL, sent_payload = NULL`,
       )
       .run(taxYearId, quarter, input.submittedOn, input.reference);
-    res.json(getSubmissions(ctx.db, taxYearId).get(quarter));
+    res.json(getSubmissions(ctx.db, taxYearId, ctx.config.hmrc.environment).get(quarter)!.submission);
   });
 
   router.delete('/quarters/:taxYearId/:quarter/submission', (req, res) => {
     const taxYearId = parseId(req.params.taxYearId);
     const quarter = parseQuarter(req.params.quarter);
-    refuseIfSent(ctx.db, taxYearId, quarter);
+    refuseIfSent(ctx.db, taxYearId, quarter, ctx.config.hmrc.environment);
     ctx.db.prepare('DELETE FROM mtd_submissions WHERE tax_year_id = ? AND quarter = ?').run(taxYearId, quarter);
     res.status(204).end();
   });

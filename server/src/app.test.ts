@@ -1740,6 +1740,28 @@ describe('HMRC connection', () => {
       expect((await agent.get('/api/mtd/quarters').query({ taxYearId })).body.quarters[1].submission).toBeNull();
     });
 
+    it('treats an update sent to the sandbox as a test once the app uses the live service', async () => {
+      const taxYearId = await createYear(2026);
+      await connectWithBusiness();
+      apiReplies[SEND_PATH] = { status: 204, headers: { 'X-CorrelationId': 'sandbox-1' } };
+      const payload = await preview(taxYearId, 2);
+      await agent.post(`/api/hmrc/quarters/${taxYearId}/2/send`).send({ payload }).expect(200);
+
+      ctx.config.hmrc.environment = 'production';
+      const q2 = (await agent.get('/api/mtd/quarters').query({ taxYearId })).body.quarters[1];
+      expect(q2.submission).toBeNull();
+      expect(q2.otherServiceSend).toMatchObject({ environment: 'sandbox', by: NAME });
+
+      // Not a live record, so it can be replaced by hand.
+      const res = await agent.put(`/api/mtd/quarters/${taxYearId}/2/submission`).send({ submittedOn: '2026-11-01' }).expect(200);
+      expect(res.body).toEqual({ submittedOn: '2026-11-01', reference: null, sent: null });
+      const after = (await agent.get('/api/mtd/quarters').query({ taxYearId })).body.quarters[1];
+      expect(after.otherServiceSend).toBeNull();
+
+      ctx.config.hmrc.environment = 'sandbox';
+      expect((await agent.get('/api/mtd/quarters').query({ taxYearId })).body.quarters[1].submission.sent).toBeNull();
+    });
+
     it('sends again to replace what HMRC has', async () => {
       const taxYearId = await createYear(2026);
       await connectWithBusiness();

@@ -195,7 +195,8 @@ Once connected with a business, each quarter's submission panel on the MTD Quart
 - HMRC takes an update from 10 days before its quarter ends.
 - HMRC gives no reference for an update, so the app records who sent it, when, to which HMRC service, HMRC's correlation ID and exactly what was sent. That record can't be changed or removed by hand, and it's part of backups.
 - If the figures change after sending, the panel says so. Updates are cumulative, so the next quarter's update puts HMRC right; the latest quarter HMRC has can also be sent again. HMRC refuses to replace an earlier quarter once it has a later one, so the panel offers no button then and says why.
-- The panel also uses HMRC's obligations: when HMRC has received a quarter the app didn't send (from other software, say), it says so, and sending replaces it. Forms for incoming, outgoing and mileage warn when a change is dated on or before the end of the latest quarter sent.
+- The panel also uses HMRC's obligations: when HMRC has received a quarter the app didn't send (from other software, say), it says so, and sending replaces it. Forms for incoming, outgoing and mileage, their delete confirmations and Use of Home warn when a change is dated on or before the end of the latest quarter sent.
+- Updates sent to the sandbox are tests: once the app uses HMRC's live service (`HMRC_ENV=production`) they no longer count as submitted, the panel just mentions them, and the quarter can be sent for real.
 
 The connection lasts 18 months, after which you connect again. Like people, it belongs to the install rather than the books: the HMRC tokens never go into backups, and the connection is kept through a restore or a reset. **Disconnect** makes the app forget the tokens; to withdraw the authority at HMRC as well, do it in your HMRC online account.
 

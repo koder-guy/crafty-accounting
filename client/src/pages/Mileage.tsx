@@ -355,6 +355,7 @@ export function Mileage() {
             This can't be undone.
           </p>
         )}
+        <SentQuarterNotice taxYearId={toDelete?.taxYearId} dates={[toDelete?.date]} />
       </ConfirmDialog>
     </>
   );

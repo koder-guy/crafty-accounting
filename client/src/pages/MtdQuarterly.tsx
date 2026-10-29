@@ -375,10 +375,17 @@ function SendToHmrc({
           <span className="text-ink">{status.detail}</span>
         </div>
 
-        {(sent?.correlationId || handRecord || coveredLater) && (
+        {(sent?.correlationId || handRecord || coveredLater || q.otherServiceSend) && (
           <div className="space-y-1 text-sm text-muted">
             {sent?.correlationId && <p className="break-all">HMRC correlation ID {sent.correlationId}</p>}
             {handRecord && <p>You recorded it as submitted on {formatDisplayDate(handRecord.submittedOn)}.</p>}
+            {q.otherServiceSend && (
+              <p>
+                {q.otherServiceSend.environment === 'sandbox'
+                  ? `A test update went to HMRC’s sandbox on ${formatDisplayDate(q.otherServiceSend.at.slice(0, 10))}; HMRC’s live service doesn’t have it.`
+                  : `An update went to HMRC’s live service on ${formatDisplayDate(q.otherServiceSend.at.slice(0, 10))}, while the app was using it.`}
+              </p>
+            )}
             {coveredLater && (
               <p>
                 Your Q{laterHeld!.quarter} update now covers this quarter too, so there’s nothing more to send for Q{q.quarter}.

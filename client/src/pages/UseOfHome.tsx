@@ -12,6 +12,7 @@ import {
 import { ChangedElsewhere, recordedBy } from '../components/FormShell';
 import { NoTaxYear } from '../components/NoTaxYear';
 import { PageBody, PageHeader } from '../components/PageHeader';
+import { SentQuarterNotice } from '../components/SentQuarterNotice';
 import { Alert, Button, Card, CardHeader, Spinner } from '../components/ui';
 import { useActiveTaxYear, useCanEdit, useSaveUseOfHome, useUseOfHome } from '../lib/queries';
 
@@ -43,6 +44,8 @@ function HoursForm({ taxYearId, data }: { taxYearId: number; data: UseOfHomeResp
   const [fields, setFields] = useState(() => fieldsFrom(data));
   const parsed = fields.map(parseHours);
   const dirty = parsed.some((hours, i) => (hours ?? -1) !== base.months[i].hours);
+  // Each month's claim is dated its last day.
+  const changedDates = base.months.filter((m, i) => (parsed[i] ?? -1) !== m.hours).map((m) => m.endDate);
   const changedElsewhere = data.updatedAt !== base.updatedAt;
 
   // Someone else saved: take their hours straight away if nothing has been typed, otherwise ask.
@@ -162,6 +165,7 @@ function HoursForm({ taxYearId, data }: { taxYearId: number; data: UseOfHomeResp
               </Button>
             </div>
           )}
+          <SentQuarterNotice className="px-5 pb-5 sm:px-6" taxYearId={taxYearId} dates={changedDates} />
           {save.error && (
             <div className="px-5 pb-5 sm:px-6">
               <Alert>{save.error.message}</Alert>

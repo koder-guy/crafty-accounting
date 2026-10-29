@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router';
 import { Copy, Pencil, Trash2 } from 'lucide-react';
 import { displayTaxYear, formatDisplayDate, formatGBP } from '@crafty/shared';
 import { ConfirmDialog } from '../components/ConfirmDialog';
+import { SentQuarterNotice } from '../components/SentQuarterNotice';
 import { BackLink, recordedBy } from '../components/FormShell';
 import { attachedDocuments, DocumentLinks } from '../components/transactions';
 import { PageBody, PageHeader } from '../components/PageHeader';
@@ -93,6 +94,7 @@ export function IncomeView() {
           This permanently deletes the transaction{income?.documents.length ? ` and ${attachedDocuments(income.documents.length)}` : ''}. This
           can't be undone.
         </p>
+        <SentQuarterNotice taxYearId={income?.taxYearId} dates={[income?.date]} />
       </ConfirmDialog>
     </>
   );
