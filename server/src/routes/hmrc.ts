@@ -161,6 +161,8 @@ export function hmrcRouter(ctx: AppContext): Router {
         path: `/obligations/details/${nino}/income-and-expenditure`,
         version: OBLIGATIONS_VERSION,
         query: { typeOfBusiness: 'self-employment', businessId, fromDate: taxYear.startDate, toDate: taxYear.endDate },
+        // The sandbox's default answer is fixed 2018-19 test data; DYNAMIC answers for the dates asked.
+        testScenario: 'DYNAMIC',
       });
     } catch (err) {
       // HMRC answers 404 when there are no obligations in the range.

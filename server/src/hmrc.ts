@@ -220,6 +220,8 @@ export interface HmrcCall {
   version: string;
   query?: Record<string, string>;
   body?: unknown;
+  /** Sandbox only: which of HMRC's test scenarios to answer with (Gov-Test-Scenario). */
+  testScenario?: string;
 }
 
 /**
@@ -239,6 +241,7 @@ export async function callHmrc<T>(ctx: AppContext, req: Request, call: HmrcCall)
     Authorization: `Bearer ${token}`,
   };
   if (call.body !== undefined) headers['Content-Type'] = 'application/json';
+  if (call.testScenario && environment === 'sandbox') headers['Gov-Test-Scenario'] = call.testScenario;
 
   let res: Response;
   try {

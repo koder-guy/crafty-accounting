@@ -267,10 +267,15 @@ export function MtdQuarterly() {
   useEffect(() => setSelected(null), [taxYear?.id]);
 
   const quarters = data?.quarters ?? [];
+  // HMRC is asked about this tax year only, but its sandbox can answer with test data for others.
+  const inYear = (obligations.data ?? []).filter(
+    (o) => taxYear && o.periodEndDate >= taxYear.startDate && o.periodEndDate <= taxYear.endDate,
+  );
+  const otherYears = (obligations.data?.length ?? 0) - inYear.length;
   // Cumulative updates all start on 6 April, so match HMRC's obligations to quarters by their end date.
   const obligationFor = (endDate: string) =>
-    obligations.data ? (obligations.data.find((o) => o.periodEndDate === endDate) ?? null) : undefined;
-  const unmatched = (obligations.data ?? []).filter((o) => !quarters.some((x) => x.endDate === o.periodEndDate));
+    obligations.data ? (inYear.find((o) => o.periodEndDate === endDate) ?? null) : undefined;
+  const unmatched = inYear.filter((o) => !quarters.some((x) => x.endDate === o.periodEndDate));
   const current = quarters.length ? (selected ?? defaultQuarter(quarters, today)) : null;
   const q = quarters.find((x) => x.quarter === current);
   const summary = q ? q[view] : null;
@@ -315,6 +320,7 @@ export function MtdQuarterly() {
                   <span>
                     Checked with HMRC for {hmrc!.business!.tradingName ?? hmrc!.business!.businessId}
                     {hmrc!.environment === 'sandbox' && ' (sandbox, so these are HMRC’s test figures)'}.
+                    {otherYears > 0 && ` HMRC also answered with ${otherYears} ${otherYears === 1 ? 'update' : 'updates'} for other tax years, not shown here.`}
                     {unmatched.length > 0 &&
                       ` HMRC also expects updates for periods that don’t match these quarters: ${unmatched
                         .map((o) => `${formatDisplayDate(o.periodStartDate)} to ${formatDisplayDate(o.periodEndDate)}`)

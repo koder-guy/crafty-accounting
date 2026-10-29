@@ -1608,6 +1608,7 @@ describe('HMRC connection', () => {
     ]);
     const call = apiRequests.at(-1)!;
     expect(call.headers.Accept).toBe('application/vnd.hmrc.3.0+json');
+    expect(call.headers['Gov-Test-Scenario']).toBe('DYNAMIC');
     expect(Object.fromEntries(call.url.searchParams)).toEqual({
       typeOfBusiness: 'self-employment',
       businessId: 'XAIS12345678910',
@@ -1634,6 +1635,20 @@ describe('HMRC connection', () => {
     apiReplies[OBLIGATIONS_PATH] = { status: 401, body: { code: 'INVALID_CREDENTIALS', message: 'Invalid Authentication information provided' } };
     expect((await agent.get('/api/hmrc/obligations').query({ taxYearId }).expect(400)).body.error).toMatch(/Connect to HMRC again/);
     expect((await agent.get('/api/hmrc').expect(200)).body.connection).toBeNull();
+  });
+
+  it('never sends test scenarios to the live service', async () => {
+    const taxYearId = await createYear(2026);
+    await connectWithBusiness();
+    ctx.config.hmrc.environment = 'production';
+    ctx.db.prepare("UPDATE hmrc_connections SET environment = 'production'").run();
+    ctx.fetch = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+      apiRequests.push({ url: new URL(String(url)), headers: init?.headers as Record<string, string> });
+      return new Response(JSON.stringify({ obligations: [] }), { status: 200 });
+    }) as typeof fetch;
+    await agent.get('/api/hmrc/obligations').query({ taxYearId }).expect(200);
+    expect(apiRequests.at(-1)!.url.origin).toBe('https://api.service.hmrc.gov.uk');
+    expect(apiRequests.at(-1)!.headers).not.toHaveProperty('Gov-Test-Scenario');
   });
 
   it('checks the fraud prevention headers with HMRC’s sandbox test API', async () => {
