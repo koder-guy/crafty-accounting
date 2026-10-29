@@ -1983,10 +1983,10 @@ describe('HMRC connection', () => {
       expect(apiRequests.at(-1)).toMatchObject({ method: 'POST', url: expect.objectContaining({ pathname: `${BASE}/${CALC_ID}/final-declaration` }) });
       expect((await agent.get('/api/mtd/quarters').query({ taxYearId }).expect(200)).body.finalDeclaration).toEqual(res.body);
 
-      // Once declared, there's no declaring again, and no more quarterly updates.
+      // Once declared, there's no declaring again, and only the whole year's figures (Q4) can be sent, to amend it.
       expect((await declare(193180).expect(409)).body.error).toMatch(/already been made/);
       await agent.post(`/api/hmrc/final-declaration/${taxYearId}/calculation`).expect(409);
-      expect((await agent.post(`/api/hmrc/quarters/${taxYearId}/4/send`).send({ payload: {} }).expect(409)).body.error).toMatch(/final declaration/);
+      expect((await agent.post(`/api/hmrc/quarters/${taxYearId}/2/send`).send({ payload: {} }).expect(409)).body.error).toMatch(/Q4/);
 
       // It belongs to the HMRC service it was made to.
       ctx.config.hmrc.environment = 'production';
@@ -2004,6 +2004,60 @@ describe('HMRC connection', () => {
       const selfAssessment = await createYear(2027);
       await agent.post(`/api/hmrc/final-declaration/${selfAssessment}/calculation`).expect(409);
       expect(apiRequests.filter((r) => r.url.pathname.startsWith('/individuals/calculations'))).toEqual([]);
+    });
+
+    it('amends a declared year: corrected figures, then HMRC’s amended calculation', async () => {
+      const taxYearId = await yearWithUpdates();
+      await connectWithBusiness();
+      const amend = (totalDuePence: number) =>
+        agent.post(`/api/hmrc/final-declaration/${taxYearId}/amendment`).set('X-Fraud-Prevention', BROWSER).send({ calculationId: CALC_ID, totalDuePence });
+      expect((await agent.post(`/api/hmrc/final-declaration/${taxYearId}/amendment/calculation`).expect(409)).body.error).toMatch(
+        /Make the final declaration/,
+      );
+      ctx.db
+        .prepare(
+          `INSERT INTO mtd_final_declarations (tax_year_id, environment, calculation_id, total_due_pence, declared_by, declared_at)
+           VALUES (?, 'sandbox', '00000000-0000-0000-0000-000000000001', 150000, ?, '2026-06-01T09:00:00.000Z')`,
+        )
+        .run(taxYearId, NAME);
+
+      // The corrected figures go as the whole year's update.
+      await agent.post('/api/incomes').send(income(taxYearId, { date: '2026-03-14', amountPence: 38000 })).expect(201);
+      const { quarters, taxYear } = (await agent.get('/api/mtd/quarters').query({ taxYearId }).expect(200)).body;
+      const payload = mtdPayload(quarters[3].cumulative, taxYear.startDate, quarters[3].endDate);
+      const sendPath = '/individuals/business/self-employment/AB123456C/XAIS12345678910/cumulative/2025-26';
+      apiReplies[sendPath] = { status: 204, headers: { 'X-CorrelationId': 'c-q4' } };
+      await agent.post(`/api/hmrc/quarters/${taxYearId}/4/send`).set('X-Fraud-Prevention', BROWSER).send({ payload }).expect(200);
+      expect(apiRequests.at(-1)).toMatchObject({ method: 'PUT', url: expect.objectContaining({ pathname: sendPath }) });
+
+      apiReplies[`${BASE}/trigger/intent-to-amend`] = { status: 202, body: { calculationId: CALC_ID } };
+      expect((await agent.post(`/api/hmrc/final-declaration/${taxYearId}/amendment/calculation`).expect(202)).body).toEqual({
+        calculationId: CALC_ID,
+      });
+      apiReplies[`${BASE}/${CALC_ID}`] = { status: 200, body: finalCalculation(1931.8) };
+      expect((await amend(100).expect(409)).body.error).toMatch(/changed/);
+      apiReplies[`${BASE}/${CALC_ID}/confirm-amendment`] = { status: 204, headers: { 'X-CorrelationId': 'am-1' } };
+      const res = await amend(193180).expect(200);
+      expect(res.body).toEqual({
+        calculationId: CALC_ID,
+        totalDuePence: 193180,
+        by: NAME,
+        at: '2026-10-29T12:00:00.000Z',
+        environment: 'sandbox',
+        correlationId: 'am-1',
+      });
+      expect(apiRequests.at(-1)).toMatchObject({ method: 'POST', url: expect.objectContaining({ pathname: `${BASE}/${CALC_ID}/confirm-amendment` }) });
+      const after = (await agent.get('/api/mtd/quarters').query({ taxYearId }).expect(200)).body;
+      expect(after.amendments).toEqual([res.body]);
+      expect(after.finalDeclaration.totalDuePence).toBe(150000);
+
+      // HMRC takes amendments for 12 months after the 31 January deadline.
+      vi.setSystemTime(new Date('2028-02-01T12:00:00Z'));
+      await agent.post('/api/auth/login').send({ name: NAME, password: PASSWORD }).expect(200); // the session expired meanwhile
+      expect((await agent.post(`/api/hmrc/final-declaration/${taxYearId}/amendment/calculation`).expect(409)).body.error).toMatch(
+        /until 31 Jan(uary)? 2028/,
+      );
+      await agent.post(`/api/hmrc/quarters/${taxYearId}/4/send`).send({ payload }).expect(409);
     });
 
     it('won’t agree to a calculation with errors, and only editors can declare', async () => {
@@ -2071,6 +2125,7 @@ describe('HMRC connection', () => {
     const quarters = (await agent.get('/api/mtd/quarters').query({ taxYearId: 1 })).body;
     expect(quarters.quarters[0].submission).toEqual({ submittedOn: '2025-08-01', reference: 'ABC', sent: null });
     expect(quarters.finalDeclaration).toBeNull();
+    expect(quarters.amendments).toEqual([]);
   });
 });
 

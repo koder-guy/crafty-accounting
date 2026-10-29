@@ -93,6 +93,15 @@ export function selfAssessmentDeadline(startYear: number): string {
   return `${startYear + 2}-01-31`;
 }
 
+/**
+ * The last day to amend a tax year after its final declaration through MTD:
+ * 12 months after the filing deadline. (HMRC allows longer when the notice to
+ * file came late; it says so if a change is refused.)
+ */
+export function mtdAmendmentDeadline(startYear: number): string {
+  return `${startYear + 3}-01-31`;
+}
+
 /** Today's date as an ISO string in local time. */
 export function todayIso(now: Date = new Date()): string {
   return `${now.getFullYear()}-${pad2(now.getMonth() + 1)}-${pad2(now.getDate())}`;

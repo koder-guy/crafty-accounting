@@ -380,19 +380,25 @@ export function useTriggerHmrcCalculation(taxYearId: number | undefined) {
   });
 }
 
-/** Tells HMRC the year is complete and asks for the calculation the final declaration agrees to. */
-export function useTriggerFinalCalculation(taxYearId: number | undefined) {
+/** What's agreed to at HMRC after the tax year: the final declaration, then any amendments to it. */
+export type HmrcAgreement = 'declaration' | 'amendment';
+
+const agreementPath = (taxYearId: number | undefined, kind: HmrcAgreement) =>
+  `/hmrc/final-declaration/${taxYearId}${kind === 'amendment' ? '/amendment' : ''}`;
+
+/** Asks HMRC for the calculation a final declaration (or an amendment) agrees to. */
+export function useTriggerAgreementCalculation(taxYearId: number | undefined, kind: HmrcAgreement) {
   return useMutation({
-    mutationFn: () => api.post<{ calculationId: string }>(`/hmrc/final-declaration/${taxYearId}/calculation`),
+    mutationFn: () => api.post<{ calculationId: string }>(`${agreementPath(taxYearId, kind)}/calculation`),
   });
 }
 
-/** Agrees to HMRC's final calculation, as shown: the server refuses (409) if HMRC's total has changed since. */
-export function useMakeFinalDeclaration(taxYearId: number | undefined) {
+/** Agrees to HMRC's calculation, as shown: the server refuses (409) if HMRC's total has changed since. */
+export function useAgreeToCalculation(taxYearId: number | undefined, kind: HmrcAgreement) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (agreed: { calculationId: string; totalDuePence: number }) =>
-      api.post<MtdFinalDeclaration>(`/hmrc/final-declaration/${taxYearId}`, agreed),
+      api.post<MtdFinalDeclaration>(agreementPath(taxYearId, kind), agreed),
     onSettled: () => {
       qc.invalidateQueries({ queryKey: ['mtd', taxYearId] });
       qc.invalidateQueries({ queryKey: [HMRC_OBLIGATIONS] });

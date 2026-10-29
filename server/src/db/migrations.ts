@@ -253,6 +253,22 @@ CREATE TABLE mtd_final_declarations (
 );
 `,
   },
+  // Amendments confirmed after a final declaration, as many as are made.
+  {
+    version: 12,
+    sql: `
+CREATE TABLE mtd_amendments (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  tax_year_id INTEGER NOT NULL REFERENCES tax_years(id) ON DELETE CASCADE,
+  environment TEXT NOT NULL CHECK (environment IN ('sandbox', 'production')),
+  calculation_id TEXT NOT NULL,
+  total_due_pence INTEGER NOT NULL,
+  amended_by TEXT NOT NULL,
+  amended_at TEXT NOT NULL,
+  correlation_id TEXT
+);
+`,
+  },
 ];
 
 export const CURRENT_SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;

@@ -8,6 +8,7 @@ import {
   MTD_FIRST_SEND_YEAR,
   displayTaxYear,
   formatDisplayDate,
+  mtdAmendmentDeadline,
   mtdEarliestSendDate,
   mtdPayload,
   startYearFromLabel,
@@ -22,6 +23,7 @@ import {
   type HmrcObligation,
   type HmrcStatus,
   type HmrcTaxBand,
+  type TaxYear,
 } from '@crafty/shared';
 import type { AppContext } from '../context';
 import { HttpError, parseId, parseWith } from '../http';
@@ -39,7 +41,7 @@ import {
   type PendingHmrcAuth,
 } from '../hmrc';
 import { getTaxYear } from '../repo';
-import { getFinalDeclaration, getSubmissions, parseQuarter, quarterSummaries, refuseUnlessMtd } from './mtd';
+import { getAmendments, getFinalDeclaration, getSubmissions, parseQuarter, quarterSummaries, refuseUnlessMtd } from './mtd';
 
 // The README's setup steps list these, for subscribing the application to them.
 const BUSINESS_DETAILS: HmrcApi = { name: 'Business Details (MTD)', version: '2.0' };
@@ -227,6 +229,17 @@ export function hmrcRouter(ctx: AppContext): Router {
     back({ connected: '1' });
   });
 
+  /** HMRC takes amendments for 12 months after the filing deadline. */
+  const refuseOutsideAmendmentWindow = (taxYear: TaxYear) => {
+    const deadline = mtdAmendmentDeadline(startYearFromLabel(taxYear.label)!);
+    if (todayIso() > deadline) {
+      throw new HttpError(
+        409,
+        `${displayTaxYear(taxYear.label)} could be amended until ${formatDisplayDate(deadline)}. Contact HMRC to change it now.`,
+      );
+    }
+  };
+
   /** The National Insurance number, or a clear error if it isn't set yet. */
   const requireNino = () => {
     const nino = getHmrcConnection(ctx.db, environment())?.nino;
@@ -309,11 +322,15 @@ export function hmrcRouter(ctx: AppContext): Router {
     const startYear = startYearFromLabel(taxYear.label)!;
     if (startYear < MTD_FIRST_SEND_YEAR) throw new HttpError(400, 'Quarterly updates can only be sent to HMRC from the 2025/26 tax year.');
     refuseUnlessMtd(taxYear);
+    // After the final declaration, a correction goes as the whole year's figures (Q4), as part of an amendment.
     if (getFinalDeclaration(ctx.db, taxYearId, environment())) {
-      throw new HttpError(
-        409,
-        `The final declaration for ${displayTaxYear(taxYear.label)} has been made, so HMRC won’t take quarterly updates for it. The app can’t amend a declared year yet.`,
-      );
+      if (quarter !== 4) {
+        throw new HttpError(
+          409,
+          `The final declaration for ${displayTaxYear(taxYear.label)} has been made, so corrections go as the whole year’s figures (Q4).`,
+        );
+      }
+      refuseOutsideAmendmentWindow(taxYear);
     }
     const nino = requireNino();
     const businessId = getHmrcConnection(ctx.db, environment())?.business_id;
@@ -437,24 +454,39 @@ export function hmrcRouter(ctx: AppContext): Router {
     return { taxYear, nino };
   };
 
-  // Tells HMRC the year's figures are complete: it checks them, more strictly
-  // than in-year, and works out the tax for the final declaration.
-  router.post('/final-declaration/:taxYearId/calculation', async (req, res) => {
-    const { taxYear, nino } = declarationYear(req.params.taxYearId);
+  /** A declared MTD year that can still be amended. */
+  const amendmentYear = (taxYearIdParam: string | string[] | undefined) => {
+    const { taxYear, nino } = calculationYear(taxYearIdParam);
+    refuseUnlessMtd(taxYear);
+    if (!getFinalDeclaration(ctx.db, taxYear.id, environment())) {
+      throw new HttpError(409, `Make the final declaration for ${displayTaxYear(taxYear.label)} before amending it.`);
+    }
+    refuseOutsideAmendmentWindow(taxYear);
+    return { taxYear, nino };
+  };
+
+  /** Asks HMRC for the calculation a final declaration or an amendment agrees to. */
+  const triggerCalculation = async (req: Request, taxYear: TaxYear, nino: string, type: 'intent-to-finalise' | 'intent-to-amend') => {
     const result = await callHmrc<{ calculationId?: string }>(ctx, req, {
       method: 'POST',
-      path: `/individuals/calculations/${nino}/self-assessment/${taxYear.label}/trigger/intent-to-finalise`,
+      path: `/individuals/calculations/${nino}/self-assessment/${taxYear.label}/trigger/${type}`,
       api: CALCULATIONS,
     });
     if (!result?.calculationId) throw new HttpError(502, 'HMRC didn’t say which calculation it started.');
-    res.status(202).json({ calculationId: result.calculationId });
-  });
+    return result.calculationId;
+  };
 
-  // The final declaration: the person agrees to a calculation HMRC made for it.
-  // The calculation is read again first, so only one without errors, and with
-  // the total the person saw, is agreed to.
-  router.post('/final-declaration/:taxYearId', async (req, res) => {
-    const { taxYear, nino } = declarationYear(req.params.taxYearId);
+  /**
+   * Agrees to a calculation HMRC made for a final declaration or an amendment.
+   * The calculation is read again first, so only one of the right kind, without
+   * errors and with the total the person saw, is agreed to.
+   */
+  const agreeTo = async (
+    req: Request,
+    taxYear: TaxYear,
+    nino: string,
+    type: 'intent-to-finalise' | 'intent-to-amend',
+  ): Promise<{ calculationId: string; totalDuePence: number; correlationId: string | null }> => {
     const { calculationId, totalDuePence } = parseWith(declareSchema, req.body);
     const base = `/individuals/calculations/${nino}/self-assessment/${taxYear.label}/${calculationId}`;
 
@@ -467,24 +499,58 @@ export function hmrcRouter(ctx: AppContext): Router {
     }
     const calculation = summariseCalculation(body, calculationId);
     // The sandbox answers with its worked example, whatever kind of calculation was asked for.
-    if (environment() === 'production' && calculation.type !== 'intent-to-finalise') {
-      throw new HttpError(409, 'That calculation isn’t one for the final declaration. Ask HMRC for the final calculation again.');
+    if (environment() === 'production' && calculation.type !== type) {
+      throw new HttpError(409, 'That isn’t the right kind of calculation to agree to. Ask HMRC to calculate again.');
     }
     if (!calculation.figures || calculation.messages.errors.length) {
-      throw new HttpError(409, 'HMRC’s calculation has errors, so it can’t be agreed to. Fix them and ask HMRC for the final calculation again.');
+      throw new HttpError(409, 'HMRC’s calculation has errors, so it can’t be agreed to. Fix them and ask HMRC to calculate again.');
     }
     if (calculation.figures.totalDuePence !== totalDuePence) {
-      throw new HttpError(409, 'HMRC’s calculation has changed since you checked it. Check it again before declaring.');
+      throw new HttpError(409, 'HMRC’s calculation has changed since you checked it. Check it again before agreeing to it.');
     }
 
-    const { correlationId } = await callHmrcWithReceipt(ctx, req, { method: 'POST', path: `${base}/final-declaration`, api: CALCULATIONS });
+    const confirm = type === 'intent-to-finalise' ? 'final-declaration' : 'confirm-amendment';
+    const { correlationId } = await callHmrcWithReceipt(ctx, req, { method: 'POST', path: `${base}/${confirm}`, api: CALCULATIONS });
+    return { calculationId, totalDuePence, correlationId };
+  };
+
+  // Tells HMRC the year's figures are complete: it checks them, more strictly
+  // than in-year, and works out the tax for the final declaration.
+  router.post('/final-declaration/:taxYearId/calculation', async (req, res) => {
+    const { taxYear, nino } = declarationYear(req.params.taxYearId);
+    res.status(202).json({ calculationId: await triggerCalculation(req, taxYear, nino, 'intent-to-finalise') });
+  });
+
+  // The final declaration: the person agrees to a calculation HMRC made for it.
+  router.post('/final-declaration/:taxYearId', async (req, res) => {
+    const { taxYear, nino } = declarationYear(req.params.taxYearId);
+    const agreed = await agreeTo(req, taxYear, nino, 'intent-to-finalise');
     ctx.db
       .prepare(
         `INSERT INTO mtd_final_declarations (tax_year_id, environment, calculation_id, total_due_pence, declared_by, declared_at, correlation_id)
          VALUES (?, ?, ?, ?, ?, ?, ?)`,
       )
-      .run(taxYear.id, environment(), calculationId, totalDuePence, req.user!.name, new Date().toISOString(), correlationId);
+      .run(taxYear.id, environment(), agreed.calculationId, agreed.totalDuePence, req.user!.name, new Date().toISOString(), agreed.correlationId);
     res.json(getFinalDeclaration(ctx.db, taxYear.id, environment()));
+  });
+
+  // After the declaration, corrected figures (a Q4 update) are sent first;
+  // HMRC then works out the amended tax, which the person agrees to.
+  router.post('/final-declaration/:taxYearId/amendment/calculation', async (req, res) => {
+    const { taxYear, nino } = amendmentYear(req.params.taxYearId);
+    res.status(202).json({ calculationId: await triggerCalculation(req, taxYear, nino, 'intent-to-amend') });
+  });
+
+  router.post('/final-declaration/:taxYearId/amendment', async (req, res) => {
+    const { taxYear, nino } = amendmentYear(req.params.taxYearId);
+    const agreed = await agreeTo(req, taxYear, nino, 'intent-to-amend');
+    ctx.db
+      .prepare(
+        `INSERT INTO mtd_amendments (tax_year_id, environment, calculation_id, total_due_pence, amended_by, amended_at, correlation_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(taxYear.id, environment(), agreed.calculationId, agreed.totalDuePence, req.user!.name, new Date().toISOString(), agreed.correlationId);
+    res.json(getAmendments(ctx.db, taxYear.id, environment()).at(-1));
   });
 
   router.get('/fraud-headers/check', async (req, res) => {

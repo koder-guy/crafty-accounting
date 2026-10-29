@@ -292,10 +292,10 @@ function SubmissionPanel({ taxYearId, q }: { taxYearId: number; q: MtdQuarterSum
   );
 }
 
-const sameFigures = (a: MtdPayload, b: MtdPayload) => JSON.stringify(a) === JSON.stringify(b);
+export const sameFigures = (a: MtdPayload, b: MtdPayload) => JSON.stringify(a) === JSON.stringify(b);
 
 /** The fields being sent, listed for checking before they go: everything that isn't zero. */
-function PayloadSummary({ payload, categories }: { payload: MtdPayload; categories: Category[] }) {
+export function PayloadSummary({ payload, categories }: { payload: MtdPayload; categories: Category[] }) {
   const names = new Map(categories.filter((c) => !c.isCustom).map((c) => [c.hmrcCode, c.name]));
   const rows = [
     ...Object.entries(payload.periodIncome).map(([code, pounds]) => ({ code, label: names.get(code) ?? code, pounds })),
@@ -528,7 +528,8 @@ export function MtdQuarterly() {
                     <Link className="text-accent-soft hover:underline" to="/mtd/final-declaration">
                       final declaration
                     </Link>{' '}
-                    for this year was made on {formatDisplayDate(declared.at.slice(0, 10))}, so HMRC takes no more updates for it.
+                    for this year was made on {formatDisplayDate(declared.at.slice(0, 10))}, so HMRC takes no more quarterly updates. To
+                    correct the year, amend it from the final declaration tab.
                   </>
                 ) : sendable ? (
                   <>

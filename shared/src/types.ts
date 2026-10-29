@@ -183,7 +183,7 @@ export interface MtdQuarterSummary extends MtdQuarter {
   otherServiceSend: { environment: HmrcEnvironment; at: string; by: string } | null;
 }
 
-/** The year's final declaration, made through the app to this HMRC service. */
+/** The year's final declaration, or an amendment to it, made through the app to this HMRC service. */
 export interface MtdFinalDeclaration {
   calculationId: string;
   /** The total in the calculation that was agreed to. */
@@ -198,6 +198,8 @@ export interface MtdQuartersResponse {
   taxYear: TaxYear;
   quarters: MtdQuarterSummary[];
   finalDeclaration: MtdFinalDeclaration | null;
+  /** Amendments confirmed after the final declaration, oldest first. */
+  amendments: MtdFinalDeclaration[];
 }
 
 export interface YearEndSummaryResponse {

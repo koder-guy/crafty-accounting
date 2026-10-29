@@ -81,21 +81,32 @@ interface FinalDeclarationRow {
   correlation_id: string | null;
 }
 
+const toDeclaration = (row: FinalDeclarationRow): MtdFinalDeclaration => ({
+  calculationId: row.calculation_id,
+  totalDuePence: row.total_due_pence,
+  by: row.declared_by,
+  at: row.declared_at,
+  environment: row.environment,
+  correlationId: row.correlation_id,
+});
+
 /** The year's final declaration to this HMRC service, if the app has made it. */
 export function getFinalDeclaration(db: Db, taxYearId: number, environment: HmrcEnvironment): MtdFinalDeclaration | null {
   const row = db
     .prepare('SELECT * FROM mtd_final_declarations WHERE tax_year_id = ? AND environment = ?')
     .get(taxYearId, environment) as FinalDeclarationRow | undefined;
-  return row
-    ? {
-        calculationId: row.calculation_id,
-        totalDuePence: row.total_due_pence,
-        by: row.declared_by,
-        at: row.declared_at,
-        environment: row.environment,
-        correlationId: row.correlation_id,
-      }
-    : null;
+  return row ? toDeclaration(row) : null;
+}
+
+/** Amendments the app confirmed to this HMRC service after the final declaration, oldest first. */
+export function getAmendments(db: Db, taxYearId: number, environment: HmrcEnvironment): MtdFinalDeclaration[] {
+  const rows = db
+    .prepare(
+      `SELECT calculation_id, total_due_pence, amended_by AS declared_by, amended_at AS declared_at, environment, correlation_id
+       FROM mtd_amendments WHERE tax_year_id = ? AND environment = ? ORDER BY id`,
+    )
+    .all(taxYearId, environment) as FinalDeclarationRow[];
+  return rows.map(toDeclaration);
 }
 
 /** Quarterly updates belong to MTD years; a Self Assessment year has to be switched first. */
@@ -154,6 +165,7 @@ export function mtdRouter(ctx: AppContext): Router {
       taxYear,
       quarters: quarterSummaries(db, taxYear, environment),
       finalDeclaration: getFinalDeclaration(db, taxYearId, environment),
+      amendments: getAmendments(db, taxYearId, environment),
     };
     res.json(response);
   });
