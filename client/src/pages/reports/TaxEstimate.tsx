@@ -92,7 +92,7 @@ export function TaxEstimate() {
     <div className="space-y-6">
       <SectionHeading
         title="Tax estimate"
-        description="The app’s own guide to the Income Tax and Class 4 National Insurance on your profit, paid through Self Assessment, so you know how much to put aside."
+        description="The app’s own guide to the Income Tax and Class 4 National Insurance on your profit, so you know how much to put aside."
         actions={
           data && (
             <Button onClick={printPage}>
@@ -159,7 +159,9 @@ function EstimateBody({ data, today }: { data: TaxEstimateResponse; today: strin
               ? `A loss of ${formatGBP(data.netLossPence)}, so no tax`
               : data.usesTradingAllowance
                 ? `Using the ${whole(TRADING_ALLOWANCE_PENCE)} trading allowance, which beats your expenses`
-                : 'From the Year-end summary'}
+                : data.taxYear.submissionMethod === 'mtd'
+                  ? 'Income less allowable expenses'
+                  : 'From the Year-end summary'}
           </div>
         </Card>
       </div>

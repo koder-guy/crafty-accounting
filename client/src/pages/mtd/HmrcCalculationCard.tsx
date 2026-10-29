@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
+import { Link } from 'react-router';
 import { Landmark, LoaderCircle, RefreshCw } from 'lucide-react';
 import {
   displayTaxYear,
@@ -142,7 +143,12 @@ export function HmrcCalculationCard({ data }: { data: TaxEstimateResponse }) {
       />
       <div className="space-y-4 px-5 pb-5 sm:px-6">
         <p className="text-sm text-muted">
-          HMRC works out your tax for the whole year from the quarterly updates it has, so it can lag behind your books.
+          HMRC works out your tax for the whole year from the quarterly updates it has, so it can lag behind your books. The app’s own
+          estimate is in{' '}
+          <Link className="text-accent-soft hover:underline" to="/reports/tax-estimate">
+            Reports → Tax estimate
+          </Link>
+          .
           {hmrc?.environment === 'sandbox' && ' This is HMRC’s sandbox, so the figures are its worked example, not yours.'}
         </p>
         {trigger.error && <Alert>{trigger.error.message}</Alert>}

@@ -23,7 +23,7 @@ import { MtdLayout } from './pages/mtd/MtdLayout';
 import { MtdQuarterly } from './pages/mtd/MtdQuarterly';
 import { ReportsLayout } from './pages/reports/ReportsLayout';
 import { Breakdown } from './pages/reports/Breakdown';
-import { TaxEstimate } from './pages/selfAssessment/TaxEstimate';
+import { TaxEstimate } from './pages/reports/TaxEstimate';
 import { SelfAssessmentLayout } from './pages/selfAssessment/SelfAssessmentLayout';
 import { YearEndSummary } from './pages/selfAssessment/YearEndSummary';
 import { SettingsLayout } from './pages/settings/SettingsLayout';
@@ -97,17 +97,17 @@ function App() {
         <Route path="mtd" element={<MtdLayout />}>
           <Route index element={<Navigate to="quarterly" replace />} />
           <Route path="quarterly" element={<MtdQuarterly />} />
-          <Route path="tax-estimate" element={<Navigate to="/mtd" replace />} />
+          <Route path="tax-estimate" element={<Navigate to="/reports/tax-estimate" replace />} />
         </Route>
         <Route path="self-assessment" element={<SelfAssessmentLayout />}>
-          <Route index element={<Navigate to="tax-estimate" replace />} />
-          <Route path="tax-estimate" element={<TaxEstimate />} />
+          <Route index element={<Navigate to="year-end" replace />} />
           <Route path="year-end" element={<YearEndSummary />} />
+          <Route path="tax-estimate" element={<Navigate to="/reports/tax-estimate" replace />} />
         </Route>
         <Route path="reports" element={<ReportsLayout />}>
-          <Route index element={<Navigate to="breakdown" replace />} />
+          <Route index element={<Navigate to="tax-estimate" replace />} />
+          <Route path="tax-estimate" element={<TaxEstimate />} />
           <Route path="breakdown" element={<Breakdown />} />
-          <Route path="tax-estimate" element={<Navigate to="/self-assessment/tax-estimate" replace />} />
           <Route path="year-end" element={<Navigate to="/self-assessment/year-end" replace />} />
         </Route>
         <Route path="year-end" element={<Navigate to="/self-assessment/year-end" replace />} />

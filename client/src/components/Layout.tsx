@@ -153,10 +153,13 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
 }
 
 
-/** The other submission type's section to go to when a page is in the wrong one, or null when it's fine. */
+/**
+ * The other submission type's section to go to when a page is in the wrong one, or null when it's
+ * fine. Only the sections' own pages count, not old addresses that redirect elsewhere.
+ */
 function pathForMethod(path: string, method: SubmissionMethod): string | null {
-  if (method === 'mtd' && /^\/self-assessment(\/|$)/.test(path)) return '/mtd';
-  if (method === 'self_assessment' && /^\/mtd(\/|$)/.test(path)) return '/self-assessment';
+  if (method === 'mtd' && /^\/self-assessment(\/year-end)?\/?$/.test(path)) return '/mtd';
+  if (method === 'self_assessment' && /^\/mtd(\/quarterly)?\/?$/.test(path)) return '/self-assessment';
   return null;
 }
 

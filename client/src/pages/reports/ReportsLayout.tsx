@@ -1,8 +1,19 @@
-import { ChartPie } from 'lucide-react';
+import { Calculator, ChartPie } from 'lucide-react';
 import { SectionLayout } from '../../components/SectionLayout';
 
-const SECTIONS = [{ to: '/reports/breakdown', label: 'Breakdown', icon: ChartPie }];
+// For every year, however it goes to HMRC.
+const SECTIONS = [
+  { to: '/reports/tax-estimate', label: 'Tax estimate', icon: Calculator },
+  { to: '/reports/breakdown', label: 'Breakdown', icon: ChartPie },
+];
 
 export function ReportsLayout() {
-  return <SectionLayout title="Reports" subtitle="Break down your income and spending for any period." sections={SECTIONS} variant="tabs" />;
+  return (
+    <SectionLayout
+      title="Reports"
+      subtitle="Estimate your tax and break down your income and spending."
+      sections={SECTIONS}
+      variant="tabs"
+    />
+  );
 }
