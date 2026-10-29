@@ -124,7 +124,7 @@ function TripForm({
             id="trip-description"
             className="field"
             maxLength={300}
-            placeholder="Home to Thame Craft Show and back"
+            placeholder="Home to a client in Oxford and back"
             value={description}
             onChange={(e) => setDescription(e.target.value)}
           />
@@ -267,8 +267,8 @@ export function Mileage() {
                 <CardHeader icon={<Route className="size-5 text-accent-soft" />} title="Trips" />
                 {data.trips.length === 0 ? (
                   <EmptyState icon={<Car className="size-8" />} title="No trips yet">
-                    Add the journeys you make for the business, such as driving to craft fairs or to buy supplies. Commuting to a regular
-                    workplace doesn't count.
+                    Add the journeys you make for the business, such as visiting customers or clients, or driving to buy supplies.
+                    Commuting to a regular workplace doesn't count.
                   </EmptyState>
                 ) : (
                   <div className="overflow-x-auto">

@@ -296,7 +296,7 @@ export function ExpenseForm() {
                 <input
                   id="payee"
                   className="field"
-                  placeholder="Bead World Ltd"
+                  placeholder="Acme Supplies Ltd"
                   {...register('payee', { required: 'Payee is required', maxLength: 200 })}
                 />
               </Field>
