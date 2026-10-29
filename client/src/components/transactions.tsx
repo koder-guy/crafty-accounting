@@ -269,7 +269,7 @@ const paperclipBox =
   '-my-2 inline-flex h-8 min-w-8 shrink-0 items-center justify-center gap-0.5 rounded-md px-1 text-accent-soft transition-colors hover:bg-accent-bg hover:text-accent-soft';
 
 /**
- * A paperclip with a count that opens a menu of the transaction's documents,
+ * A paperclip (with a count if there are several) that opens a menu of the transaction's documents,
  * each one a download. The menu is drawn over the page (so the table's
  * scrolling can't clip it) and closes on a click elsewhere, Esc, or scrolling.
  */
@@ -338,13 +338,13 @@ function DocumentMenu({ documents }: { documents: TransactionDocument[] }) {
         type="button"
         aria-haspopup="menu"
         aria-expanded={anchor !== null}
-        aria-label={`${documents.length} documents`}
-        title={`${documents.length} documents`}
+        aria-label={documents.length === 1 ? '1 document' : `${documents.length} documents`}
+        title={documents.length === 1 ? documents[0].filename : `${documents.length} documents`}
         className={`${paperclipBox} ${anchor ? 'bg-accent-bg' : ''}`}
         onClick={() => (anchor ? close() : setAnchor(buttonRef.current!.getBoundingClientRect()))}
       >
         <Paperclip className="size-4" aria-hidden />
-        <span className="tabular text-xs">{documents.length}</span>
+        {documents.length > 1 && <span className="tabular text-xs">{documents.length}</span>}
       </button>
       {anchor &&
         createPortal(
@@ -378,22 +378,10 @@ function DocumentMenu({ documents }: { documents: TransactionDocument[] }) {
   );
 }
 
-/** The paperclip in a list row: downloads the document if there's one, or offers a menu of them if there are several. */
+/** The paperclip in a list row: a menu of the transaction's documents to download. */
 export function DocDownloadLink({ documents }: { documents: TransactionDocument[] }) {
   if (documents.length === 0) return null;
-  if (documents.length > 1) return <DocumentMenu documents={documents} />;
-  const { filename } = documents[0];
-  return (
-    <a
-      href={documentUrl(filename, true)}
-      download={filename}
-      title={`Download ${filename}`}
-      aria-label={`Download ${filename}`}
-      className={paperclipBox}
-    >
-      <Paperclip className="size-4" aria-hidden />
-    </a>
-  );
+  return <DocumentMenu documents={documents} />;
 }
 
 // ---- Payment method picker ----
