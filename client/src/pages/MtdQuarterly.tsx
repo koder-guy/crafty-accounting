@@ -542,6 +542,28 @@ export function MtdQuarterly() {
             </div>
 
             <Card>
+              <CardHeader icon={<CalendarCheck className="size-5 text-accent-soft" />} title={`Q${q.quarter} submission`} />
+              <div className="px-5 pb-6 sm:px-6">
+                {sendable || q.submission?.sent ? (
+                  <SendToHmrc
+                    taxYear={taxYear}
+                    q={q}
+                    hmrc={hmrc}
+                    categories={categories}
+                    canSend={sendable && canEdit}
+                    obligation={obligationFor(q.endDate)}
+                    laterHeld={laterHeld(q)}
+                  />
+                ) : (
+                  <>
+                    <p className="mb-4 text-sm text-muted">Due by {formatDisplayDate(q.deadline)}.</p>
+                    <SubmissionPanel taxYearId={taxYear.id} q={q} />
+                  </>
+                )}
+              </div>
+            </Card>
+
+            <Card>
               <CardHeader
                 icon={<FileSpreadsheet className="size-5 text-accent-soft" />}
                 title={
@@ -585,28 +607,6 @@ export function MtdQuarterly() {
                 </div>
               </div>
               <FiguresTable summary={summary} categories={categories} />
-            </Card>
-
-            <Card>
-              <CardHeader icon={<CalendarCheck className="size-5 text-accent-soft" />} title={`Q${q.quarter} submission`} />
-              <div className="px-5 pb-6 sm:px-6">
-                {sendable || q.submission?.sent ? (
-                  <SendToHmrc
-                    taxYear={taxYear}
-                    q={q}
-                    hmrc={hmrc}
-                    categories={categories}
-                    canSend={sendable && canEdit}
-                    obligation={obligationFor(q.endDate)}
-                    laterHeld={laterHeld(q)}
-                  />
-                ) : (
-                  <>
-                    <p className="mb-4 text-sm text-muted">Due by {formatDisplayDate(q.deadline)}.</p>
-                    <SubmissionPanel taxYearId={taxYear.id} q={q} />
-                  </>
-                )}
-              </div>
             </Card>
           </>
         )}
