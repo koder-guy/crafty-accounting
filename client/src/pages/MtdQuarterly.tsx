@@ -33,7 +33,9 @@ import {
   useMtdQuarters,
   useMtdSubmission,
   useSendToHmrc,
+  useTaxEstimate,
 } from '../lib/queries';
+import { HmrcCalculationCard, useHmrcCalculationAvailable } from './HmrcCalculationCard';
 
 const STATUS: Record<MtdQuarterStatus, { label: string; tone: BadgeTone }> = {
   upcoming: { label: 'Upcoming', tone: 'neutral' },
@@ -637,9 +639,18 @@ export function MtdQuarterly() {
               </div>
               <FiguresTable summary={summary} categories={categories} />
             </Card>
+
+            <YearCalculation taxYear={taxYear} />
           </>
         )}
       </PageBody>
     </>
   );
+}
+
+/** HMRC's calculation for the whole year, below the quarters it's worked out from. */
+function YearCalculation({ taxYear }: { taxYear: TaxYear }) {
+  const available = useHmrcCalculationAvailable(taxYear.label);
+  const { data } = useTaxEstimate(available ? taxYear.id : undefined);
+  return data ? <HmrcCalculationCard data={data} /> : null;
 }

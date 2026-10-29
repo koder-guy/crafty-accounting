@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
+import { Link } from 'react-router';
 import { Landmark, LoaderCircle, RefreshCw } from 'lucide-react';
 import {
   MTD_FIRST_SEND_YEAR,
@@ -10,8 +11,8 @@ import {
   type HmrcMessage,
   type TaxEstimateResponse,
 } from '@crafty/shared';
-import { Alert, Button, Card, CardHeader, Spinner } from '../../components/ui';
-import { HMRC_CALCULATION, useCanEdit, useHmrc, useHmrcCalculation, useTriggerHmrcCalculation } from '../../lib/queries';
+import { Alert, Button, Card, CardHeader, Spinner } from '../components/ui';
+import { HMRC_CALCULATION, useCanEdit, useHmrc, useHmrcCalculation, useTriggerHmrcCalculation } from '../lib/queries';
 
 /** Give up checking for a calculation HMRC is still working on after this long. */
 const WAIT_MS = 2 * 60 * 1000;
@@ -71,7 +72,7 @@ function Figures({ calculation, data }: { calculation: HmrcCalculation; data: Ta
           <tr className="border-y border-line">
             <th scope="col" className="py-2.5 pr-3 pl-5 text-left font-medium sm:pl-6" />
             <th scope="col" className="px-3 py-2.5 text-right font-medium">HMRC</th>
-            <th scope="col" className="py-2.5 pr-5 pl-3 text-right font-medium sm:pr-6">This app</th>
+            <th scope="col" className="py-2.5 pr-5 pl-3 text-right font-medium sm:pr-6">App’s estimate</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-line">
@@ -89,16 +90,23 @@ function Figures({ calculation, data }: { calculation: HmrcCalculation; data: Ta
   );
 }
 
+/** Whether HMRC can calculate the tax for a year: connected, with a NINO, from 2025/26. */
+export function useHmrcCalculationAvailable(taxYearLabel: string | undefined): boolean {
+  const { data: hmrc } = useHmrc();
+  return Boolean(hmrc?.connection && hmrc.nino) && (startYearFromLabel(taxYearLabel ?? '') ?? 0) >= MTD_FIRST_SEND_YEAR;
+}
+
 /**
  * HMRC's own calculation of the year's tax, from the quarterly updates it has,
- * next to the app's estimate. Shown once connected to HMRC.
+ * next to the app's estimate. Lives on the MTD page, apart from the app's
+ * Self Assessment estimate in Reports. Shown once connected to HMRC.
  */
 export function HmrcCalculationCard({ data }: { data: TaxEstimateResponse }) {
   const qc = useQueryClient();
   const canEdit = useCanEdit();
   const { data: hmrc } = useHmrc();
   const taxYearId = data.taxYear.id;
-  const available = Boolean(hmrc?.connection && hmrc.nino) && (startYearFromLabel(data.taxYear.label) ?? 0) >= MTD_FIRST_SEND_YEAR;
+  const available = useHmrcCalculationAvailable(data.taxYear.label);
   // The calculation just asked for, until HMRC has worked it out.
   const [awaiting, setAwaiting] = useState<{ id: string; since: number } | null>(null);
   useEffect(() => setAwaiting(null), [taxYearId]);
@@ -119,7 +127,7 @@ export function HmrcCalculationCard({ data }: { data: TaxEstimateResponse }) {
     <Card className="print:break-inside-avoid">
       <CardHeader
         icon={<Landmark className="size-5 text-accent-soft" />}
-        title="HMRC’s calculation"
+        title={`HMRC’s tax calculation for ${displayTaxYear(data.taxYear.label)}`}
         action={
           canEdit && (
             <Button
@@ -136,7 +144,12 @@ export function HmrcCalculationCard({ data }: { data: TaxEstimateResponse }) {
       />
       <div className="space-y-4 px-5 pb-5 sm:px-6">
         <p className="text-sm text-muted">
-          HMRC works out your tax from the quarterly updates it has, so it can lag behind your books.
+          HMRC works out your tax for the whole year from the quarterly updates it has, so it can lag behind your books. The app’s own
+          estimate is in{' '}
+          <Link className="text-accent-soft hover:underline" to="/reports/tax-estimate">
+            Reports → Tax estimate
+          </Link>
+          .
           {hmrc?.environment === 'sandbox' && ' This is HMRC’s sandbox, so the figures are its worked example, not yours.'}
         </p>
         {trigger.error && <Alert>{trigger.error.message}</Alert>}

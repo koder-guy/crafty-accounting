@@ -1,5 +1,6 @@
 import { useState, type FormEvent, type ReactNode } from 'react';
-import { CalendarClock, Calculator, Printer, TrendingUp, Wallet } from 'lucide-react';
+import { Link } from 'react-router';
+import { CalendarClock, Calculator, Landmark, Printer, TrendingUp, Wallet } from 'lucide-react';
 import {
   APP_NAME,
   daysBetween,
@@ -22,7 +23,7 @@ import { SectionHeading } from '../../components/SectionLayout';
 import { Alert, Button, Card, CardHeader, Field, Spinner } from '../../components/ui';
 import { useActiveTaxYear, useCanEdit, useTaxEstimate, useTaxSettings } from '../../lib/queries';
 import { printPage } from '../../lib/liveUpdates';
-import { HmrcCalculationCard } from './HmrcCalculationCard';
+import { useHmrcCalculationAvailable } from '../HmrcCalculationCard';
 
 const whole = (pence: number) => formatGBP(pence).replace(/\.00$/, '');
 const percent = (rate: number) => `${Math.round(rate * 1000) / 10}%`;
@@ -93,7 +94,7 @@ export function TaxEstimate() {
     <div className="space-y-6">
       <SectionHeading
         title="Tax estimate"
-        description="A guide to the Income Tax and Class 4 National Insurance on your profit, so you know how much to put aside."
+        description="The app’s own guide to the Income Tax and Class 4 National Insurance on your profit, paid through Self Assessment, so you know how much to put aside."
         actions={
           data && (
             <Button onClick={printPage}>
@@ -206,8 +207,6 @@ function EstimateBody({ data, today }: { data: TaxEstimateResponse; today: strin
         {canEdit && <OtherIncomeForm key={`${data.taxYear.id}-${data.taxYear.otherIncomePence}`} data={data} />}
       </Card>
 
-      <HmrcCalculationCard data={data} />
-
       <Card className="print:break-inside-avoid">
         <CardHeader icon={<CalendarClock className="size-5 text-accent-soft" />} title="When it's due" />
         <div className="overflow-x-auto">
@@ -240,6 +239,8 @@ function EstimateBody({ data, today }: { data: TaxEstimateResponse; today: strin
             : `The bill is ${whole(PAYMENTS_ON_ACCOUNT_THRESHOLD_PENCE)} or less, so you won't need to make payments on account towards next year.`}
         </p>
       </Card>
+
+      <HmrcCalculationPointer label={data.taxYear.label} />
 
       <p className="flex items-start gap-2 text-xs text-faint">
         <Wallet className="mt-0.5 size-3.5 shrink-0" aria-hidden />
@@ -279,5 +280,22 @@ function FullYearProjection({ data, today }: { data: TaxEstimateResponse; today:
         </p>
       </div>
     </Card>
+  );
+}
+
+/** HMRC's own calculation comes from the MTD quarterly updates, so it's on the MTD page rather than here. */
+function HmrcCalculationPointer({ label }: { label: string }) {
+  if (!useHmrcCalculationAvailable(label)) return null;
+  return (
+    <p className="flex items-start gap-2 text-sm text-muted print:hidden">
+      <Landmark className="mt-0.5 size-4 shrink-0 text-accent-soft" aria-hidden />
+      <span>
+        HMRC can also work out the tax from the quarterly updates you’ve sent. See{' '}
+        <Link className="text-accent-soft hover:underline" to="/mtd">
+          MTD Quarterly
+        </Link>
+        .
+      </span>
+    </p>
   );
 }
