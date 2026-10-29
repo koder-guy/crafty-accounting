@@ -20,6 +20,7 @@ import { SectionHeading } from '../../components/SectionLayout';
 import { Alert, Button, Card, CardHeader, Field, Spinner } from '../../components/ui';
 import { useActiveTaxYear, useCanEdit, useTaxEstimate, useTaxSettings } from '../../lib/queries';
 import { printPage } from '../../lib/liveUpdates';
+import { HmrcCalculationCard } from './HmrcCalculationCard';
 
 const whole = (pence: number) => formatGBP(pence).replace(/\.00$/, '');
 const percent = (rate: number) => `${Math.round(rate * 1000) / 10}%`;
@@ -200,6 +201,8 @@ function EstimateBody({ data, today }: { data: TaxEstimateResponse; today: strin
         </div>
         {canEdit && <OtherIncomeForm key={`${data.taxYear.id}-${data.taxYear.otherIncomePence}`} data={data} />}
       </Card>
+
+      <HmrcCalculationCard data={data} />
 
       <Card className="print:break-inside-avoid">
         <CardHeader icon={<CalendarClock className="size-5 text-accent-soft" />} title="When it's due" />

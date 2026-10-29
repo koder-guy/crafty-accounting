@@ -198,6 +198,10 @@ Once connected with a business, each quarter's submission panel on the MTD Quart
 - The panel also uses HMRC's obligations: when HMRC has received a quarter the app didn't send (from other software, say), it says so, and sending replaces it. Forms for incoming, outgoing and mileage, their delete confirmations and Use of Home warn when a change is dated on or before the end of the latest quarter sent.
 - Updates sent to the sandbox are tests: once the app uses HMRC's live service (`HMRC_ENV=production`) they no longer count as submitted, the panel just mentions them, and the quarter can be sent for real.
 
+### HMRC's tax calculation
+
+**Reports → Tax estimate** shows HMRC's own calculation for the year next to the app's estimate, once connected (from 2025/26). **Ask HMRC to calculate** (editors) asks HMRC to work out the tax from the quarterly updates it has (an in-year calculation, Individual Calculations API 8.0); HMRC does it in the background, and the page checks every few seconds until it's ready. It shows HMRC's profit, allowances, Income Tax, Class 2 and Class 4 National Insurance and total due, HMRC's projection for the whole year, and any messages HMRC adds. In the sandbox HMRC answers with its worked example (`UK_SE_SAVINGS_EXAMPLE`), not your figures.
+
 The connection lasts 18 months, after which you connect again. Like people, it belongs to the install rather than the books: the HMRC tokens never go into backups, and the connection is kept through a restore or a reset. **Disconnect** makes the app forget the tokens; to withdraw the authority at HMRC as well, do it in your HMRC online account.
 
 ## Development

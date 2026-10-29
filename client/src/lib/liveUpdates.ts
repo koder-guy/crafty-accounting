@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { CLIENT_ID } from './api';
-import { HMRC_OBLIGATIONS } from './queries';
+import { HMRC_CALCULATION, HMRC_OBLIGATIONS } from './queries';
 
 // The open stream, so printPage can pause it.
 let stream: { pause: () => void; resume: () => void } | null = null;
@@ -17,11 +17,12 @@ export function useLiveUpdates() {
     let source: EventSource | null = null;
     // Set when the connection drops (or is paused), so we catch up on anything missed when it reopens.
     let missed = false;
-    // HMRC's obligations are fetched from HMRC, so only an HMRC change (or a reconnect) refetches them.
+    // Obligations and calculations are fetched from HMRC, so only an HMRC change (or a reconnect) refetches them.
+    const fromHmrc = (key: unknown) => key === HMRC_OBLIGATIONS || key === HMRC_CALCULATION;
     const refetch = (area?: string) =>
       qc.invalidateQueries({
         predicate: (q) =>
-          q.queryKey[0] === 'me' ? area === 'users' : q.queryKey[0] === HMRC_OBLIGATIONS ? area === 'hmrc' || area === undefined : true,
+          q.queryKey[0] === 'me' ? area === 'users' : fromHmrc(q.queryKey[0]) ? area === 'hmrc' || area === undefined : true,
       });
 
     const connect = () => {

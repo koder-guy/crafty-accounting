@@ -384,3 +384,37 @@ export interface HmrcFraudHeaderCheck {
   errors: { code: string; message: string; headers: string[] }[];
   warnings: { code: string; message: string; headers: string[] }[];
 }
+
+export interface HmrcMessage {
+  id: string;
+  text: string;
+}
+
+/** HMRC's own tax calculation for a tax year (Individual Calculations API), in pence. */
+export interface HmrcCalculation {
+  calculationId: string;
+  calculatedAt: string | null;
+  /** in-year, intent-to-finalise, final-declaration… */
+  type: string;
+  requestedBy: string | null;
+  /** Missing when HMRC couldn't calculate (see messages.errors). */
+  figures: {
+    selfEmploymentProfitPence: number | null;
+    totalIncomePence: number;
+    allowancesPence: number;
+    taxableIncomePence: number;
+    incomeTaxPence: number;
+    class2Pence: number;
+    class4Pence: number;
+    totalDuePence: number;
+  } | null;
+  /** HMRC's projection of the whole year's Income Tax and National Insurance, for an in-year calculation. */
+  endOfYearTotalPence: number | null;
+  messages: { errors: HmrcMessage[]; warnings: HmrcMessage[]; info: HmrcMessage[] };
+}
+
+export type HmrcCalculationResponse =
+  | { state: 'none' }
+  /** Asked for, but HMRC hasn't finished working it out. */
+  | { state: 'pending'; calculationId: string }
+  | { state: 'ready'; calculation: HmrcCalculation };

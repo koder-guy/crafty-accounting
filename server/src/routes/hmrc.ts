@@ -13,6 +13,9 @@ import {
   hmrcBusinessSchema,
   hmrcNinoInputSchema,
   type HmrcBusiness,
+  type HmrcCalculation,
+  type HmrcCalculationResponse,
+  type HmrcMessage,
   type HmrcFraudHeaderCheck,
   type HmrcObligation,
   type HmrcStatus,
@@ -37,6 +40,68 @@ import { getSubmissions, parseQuarter, quarterSummaries } from './mtd';
 const BUSINESS_DETAILS_VERSION = '2.0';
 const OBLIGATIONS_VERSION = '3.0';
 const SELF_EMPLOYMENT_VERSION = '5.0';
+// 9.0 is test only in HMRC's sandbox; 8.0 is the version for real use.
+const CALCULATIONS_VERSION = '8.0';
+/**
+ * The sandbox fills calculations with placeholder values unless asked for
+ * one of its worked examples; this one is a UK self-employment business.
+ */
+const SANDBOX_CALCULATION_EXAMPLE = 'UK_SE_SAVINGS_EXAMPLE';
+
+const calculationQuerySchema = z.object({ calculationId: z.string().regex(/^[0-9a-f-]{36}$/i).optional() });
+
+/** Pounds from HMRC to pence; absent values are null. */
+const pence = (pounds: unknown): number | null => (typeof pounds === 'number' ? Math.round(pounds * 100) : null);
+
+interface HmrcCalculationBody {
+  metadata?: { calculationId?: string; calculationTimestamp?: string; calculationType?: string; requestedBy?: string };
+  calculation?: {
+    incomeSummaryTotals?: { totalSelfEmploymentProfit?: number };
+    taxCalculation?: {
+      incomeTax?: {
+        totalIncomeReceivedFromAllSources?: number;
+        totalAllowancesAndDeductions?: number;
+        totalTaxableIncome?: number;
+        totalIncomeTaxDue?: number;
+      };
+      nics?: { class2Nics?: { amount?: number }; class4Nics?: { totalAmount?: number } };
+      totalIncomeTaxAndNicsDue?: number;
+    };
+    endOfYearEstimate?: { incomeTaxNicAmount?: number };
+  };
+  messages?: { errors?: HmrcMessage[]; warnings?: HmrcMessage[]; info?: HmrcMessage[] };
+}
+
+/** The parts of HMRC's (very large) calculation the app shows. */
+export function summariseCalculation(body: HmrcCalculationBody, calculationId: string): HmrcCalculation {
+  const tax = body.calculation?.taxCalculation;
+  const incomeTax = tax?.incomeTax;
+  return {
+    calculationId: body.metadata?.calculationId ?? calculationId,
+    calculatedAt: body.metadata?.calculationTimestamp ?? null,
+    type: body.metadata?.calculationType ?? 'in-year',
+    requestedBy: body.metadata?.requestedBy ?? null,
+    figures:
+      tax && incomeTax
+        ? {
+            selfEmploymentProfitPence: pence(body.calculation?.incomeSummaryTotals?.totalSelfEmploymentProfit),
+            totalIncomePence: pence(incomeTax.totalIncomeReceivedFromAllSources) ?? 0,
+            allowancesPence: pence(incomeTax.totalAllowancesAndDeductions) ?? 0,
+            taxableIncomePence: pence(incomeTax.totalTaxableIncome) ?? 0,
+            incomeTaxPence: pence(incomeTax.totalIncomeTaxDue) ?? 0,
+            class2Pence: pence(tax.nics?.class2Nics?.amount) ?? 0,
+            class4Pence: pence(tax.nics?.class4Nics?.totalAmount) ?? 0,
+            totalDuePence: pence(tax.totalIncomeTaxAndNicsDue) ?? 0,
+          }
+        : null,
+    endOfYearTotalPence: pence(body.calculation?.endOfYearEstimate?.incomeTaxNicAmount),
+    messages: {
+      errors: body.messages?.errors ?? [],
+      warnings: body.messages?.warnings ?? [],
+      info: body.messages?.info ?? [],
+    },
+  };
+}
 
 /** The update as the person saw it before confirming, so it's only sent if the figures haven't changed since. */
 const sendSchema = z.object({ payload: z.unknown() });
@@ -244,6 +309,63 @@ export function hmrcRouter(ctx: AppContext): Router {
         payload: JSON.stringify(payload),
       });
     res.json(getSubmissions(ctx.db, taxYearId, environment()).get(quarter)!.submission);
+  });
+
+  /** A tax year HMRC holds MTD figures for, with the National Insurance number to ask about. */
+  const calculationYear = (taxYearIdParam: string | string[] | undefined) => {
+    const taxYear = getTaxYear(ctx.db, parseId(taxYearIdParam));
+    if (!taxYear) throw new HttpError(404, 'Tax year not found');
+    if (startYearFromLabel(taxYear.label)! < MTD_FIRST_SEND_YEAR) {
+      throw new HttpError(400, 'HMRC only calculates tax from your MTD updates from the 2025/26 tax year.');
+    }
+    return { taxYear, nino: requireNino() };
+  };
+
+  // Asks HMRC to work out the tax from the updates it has. It's done in the
+  // background, so the result is fetched afterwards (HMRC suggests waiting 5 seconds).
+  router.post('/calculations/:taxYearId', async (req, res) => {
+    const { taxYear, nino } = calculationYear(req.params.taxYearId);
+    const result = await callHmrc<{ calculationId?: string }>(ctx, req, {
+      method: 'POST',
+      path: `/individuals/calculations/${nino}/self-assessment/${taxYear.label}/trigger/in-year`,
+      version: CALCULATIONS_VERSION,
+    });
+    if (!result?.calculationId) throw new HttpError(502, 'HMRC didn’t say which calculation it started.');
+    res.status(202).json({ calculationId: result.calculationId });
+  });
+
+  // The latest calculation for the year, or a particular one just asked for.
+  router.get('/calculations/:taxYearId', async (req, res) => {
+    const { taxYear, nino } = calculationYear(req.params.taxYearId);
+    let { calculationId } = parseWith(calculationQuerySchema, req.query);
+    const base = `/individuals/calculations/${nino}/self-assessment/${taxYear.label}`;
+    const notFound = (err: unknown) => err instanceof HttpError && err.status === 404;
+
+    if (!calculationId) {
+      let list: { calculations?: { calculationId: string; calculationTimestamp?: string }[] };
+      try {
+        list = await callHmrc(ctx, req, { path: base, version: CALCULATIONS_VERSION, testScenario: 'DYNAMIC' });
+      } catch (err) {
+        if (!notFound(err)) throw err;
+        list = {};
+      }
+      const latest = [...(list.calculations ?? [])].sort((a, b) => (b.calculationTimestamp ?? '').localeCompare(a.calculationTimestamp ?? ''))[0];
+      if (!latest) return res.json({ state: 'none' } satisfies HmrcCalculationResponse);
+      calculationId = latest.calculationId;
+    }
+
+    try {
+      const body = await callHmrc<HmrcCalculationBody>(ctx, req, {
+        path: `${base}/${calculationId}`,
+        version: CALCULATIONS_VERSION,
+        testScenario: SANDBOX_CALCULATION_EXAMPLE,
+      });
+      res.json({ state: 'ready', calculation: summariseCalculation(body, calculationId) } satisfies HmrcCalculationResponse);
+    } catch (err) {
+      // HMRC answers 404 until a calculation it's working on is ready.
+      if (!notFound(err)) throw err;
+      res.json({ state: 'pending', calculationId } satisfies HmrcCalculationResponse);
+    }
   });
 
   router.get('/fraud-headers/check', async (req, res) => {

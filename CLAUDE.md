@@ -60,4 +60,4 @@ export PATH="/opt/homebrew/opt/node@22/bin:$PATH"
 
 ## Open ideas
 
-MTD stage 2 (submitting to HMRC; sandbox connection, fraud prevention headers, business details, obligations and sending quarterly updates are built; next are HMRC's tax calculation and the final declaration), locking submitted quarters, change history, recurring transactions, bank statement CSV/OFX import with matching, card reader and marketplace imports (SumUp, Square, Etsy), profit per craft fair, phone camera capture for receipts, VAT threshold warning, deadline reminders, Scottish tax rates, code splitting.
+MTD stage 2 (submitting to HMRC; sandbox connection, fraud prevention headers, business details, obligations and sending quarterly updates and HMRC's tax calculation are built; next is the final declaration), locking submitted quarters, change history, recurring transactions, bank statement CSV/OFX import with matching, card reader and marketplace imports (SumUp, Square, Etsy), profit per craft fair, phone camera capture for receipts, VAT threshold warning, deadline reminders, Scottish tax rates, code splitting.

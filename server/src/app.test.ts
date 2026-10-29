@@ -1777,6 +1777,96 @@ describe('HMRC connection', () => {
     });
   });
 
+  describe('HMRC’s tax calculation', () => {
+    const BASE = '/individuals/calculations/AB123456C/self-assessment/2026-27';
+    const CALC_ID = 'f2fb30e5-4ab6-4a29-b3c1-c7264259ff1c';
+    const calculationBody = {
+      metadata: { calculationId: CALC_ID, calculationTimestamp: '2026-10-29T10:00:00.000Z', calculationType: 'in-year', requestedBy: 'customer' },
+      calculation: {
+        incomeSummaryTotals: { totalSelfEmploymentProfit: 4152 },
+        taxCalculation: {
+          incomeTax: { totalIncomeReceivedFromAllSources: 4152, totalAllowancesAndDeductions: 12570, totalTaxableIncome: 0, totalIncomeTaxDue: 0 },
+          nics: { class4Nics: { totalAmount: 0 } },
+          totalIncomeTaxAndNicsDue: 0,
+        },
+        endOfYearEstimate: { incomeTaxNicAmount: 1234.56 },
+      },
+      messages: { info: [{ id: 'C22203', text: 'Class 2 National Insurance has not been charged.' }] },
+    };
+
+    it('asks HMRC to calculate, then reads the result once it’s ready', async () => {
+      const taxYearId = await createYear(2026);
+      await agent.post(`/api/hmrc/calculations/${taxYearId}`).expect(400); // no NINO
+      await connectWithBusiness();
+      apiReplies[`${BASE}/trigger/in-year`] = { status: 202, body: { calculationId: CALC_ID } };
+      const triggered = await agent.post(`/api/hmrc/calculations/${taxYearId}`).set('X-Fraud-Prevention', BROWSER).expect(202);
+      expect(triggered.body).toEqual({ calculationId: CALC_ID });
+      expect(apiRequests.at(-1)).toMatchObject({ method: 'POST', headers: { Accept: 'application/vnd.hmrc.8.0+json' } });
+
+      // Not ready yet: HMRC answers 404.
+      apiReplies[`${BASE}/${CALC_ID}`] = { status: 404, body: { code: 'MATCHING_RESOURCE_NOT_FOUND', message: 'Not found' } };
+      expect((await agent.get(`/api/hmrc/calculations/${taxYearId}`).query({ calculationId: CALC_ID }).expect(200)).body).toEqual({
+        state: 'pending',
+        calculationId: CALC_ID,
+      });
+
+      apiReplies[`${BASE}/${CALC_ID}`] = { status: 200, body: calculationBody };
+      const ready = (await agent.get(`/api/hmrc/calculations/${taxYearId}`).query({ calculationId: CALC_ID }).expect(200)).body;
+      expect(ready).toEqual({
+        state: 'ready',
+        calculation: {
+          calculationId: CALC_ID,
+          calculatedAt: '2026-10-29T10:00:00.000Z',
+          type: 'in-year',
+          requestedBy: 'customer',
+          figures: {
+            selfEmploymentProfitPence: 415200,
+            totalIncomePence: 415200,
+            allowancesPence: 1257000,
+            taxableIncomePence: 0,
+            incomeTaxPence: 0,
+            class2Pence: 0,
+            class4Pence: 0,
+            totalDuePence: 0,
+          },
+          endOfYearTotalPence: 123456,
+          messages: { errors: [], warnings: [], info: [{ id: 'C22203', text: 'Class 2 National Insurance has not been charged.' }] },
+        },
+      });
+      // The sandbox is asked for a worked example rather than placeholder values.
+      expect(apiRequests.at(-1)!.headers['Gov-Test-Scenario']).toBe('UK_SE_SAVINGS_EXAMPLE');
+    });
+
+    it('finds the latest calculation for the year', async () => {
+      const taxYearId = await createYear(2026);
+      await connectWithBusiness();
+      apiReplies[BASE] = { status: 404, body: { code: 'MATCHING_RESOURCE_NOT_FOUND', message: 'Not found' } };
+      expect((await agent.get(`/api/hmrc/calculations/${taxYearId}`).expect(200)).body).toEqual({ state: 'none' });
+
+      apiReplies[BASE] = {
+        status: 200,
+        body: {
+          calculations: [
+            { calculationId: '00000000-0000-0000-0000-000000000001', calculationTimestamp: '2026-08-01T10:00:00.000Z' },
+            { calculationId: CALC_ID, calculationTimestamp: '2026-10-29T10:00:00.000Z' },
+          ],
+        },
+      };
+      apiReplies[`${BASE}/${CALC_ID}`] = { status: 200, body: { ...calculationBody, calculation: undefined, messages: { errors: [{ id: 'C1', text: 'No updates' }] } } };
+      const res = (await agent.get(`/api/hmrc/calculations/${taxYearId}`).expect(200)).body;
+      expect(res.calculation).toMatchObject({ calculationId: CALC_ID, figures: null, messages: { errors: [{ id: 'C1', text: 'No updates' }] } });
+
+      // Read-only people can look, but not ask HMRC to calculate.
+      const viewer = await addPerson('Viewer', 'viewer-password', 'viewer');
+      await viewer.get(`/api/hmrc/calculations/${taxYearId}`).expect(200);
+      await viewer.post(`/api/hmrc/calculations/${taxYearId}`).expect(403);
+
+      await agent.get(`/api/hmrc/calculations/${taxYearId}`).query({ calculationId: 'nope' }).expect(400);
+      const old = await createYear(2024);
+      expect((await agent.get(`/api/hmrc/calculations/${old}`).expect(400)).body.error).toMatch(/2025\/26/);
+    });
+  });
+
   it('checks the fraud prevention headers with HMRC’s sandbox test API', async () => {
     apiReplies['/test/fraud-prevention-headers/validate'] = {
       status: 200,
