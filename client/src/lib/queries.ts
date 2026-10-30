@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import type {
+  MtdExpenses,
   SubmissionMethod,
   AutoBackupStatus,
   BreakdownItem,
@@ -137,6 +138,11 @@ export function useTaxYearMutations() {
     setSubmissionMethod: useMutation({
       mutationFn: ({ id, submissionMethod }: { id: number; submissionMethod: SubmissionMethod }) =>
         api.put<TaxYearsResponse>(`/tax-years/${id}/submission-method`, { submissionMethod }),
+      onSuccess,
+    }),
+    setMtdExpenses: useMutation({
+      mutationFn: ({ id, mtdExpenses }: { id: number; mtdExpenses: MtdExpenses }) =>
+        api.put<TaxYearsResponse>(`/tax-years/${id}/mtd-expenses`, { mtdExpenses }),
       onSuccess,
     }),
     setActive: useMutation({

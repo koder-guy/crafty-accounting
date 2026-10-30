@@ -3,6 +3,7 @@ import {
   createTaxYearSchema,
   displayTaxYear,
   setActiveTaxYearSchema,
+  mtdExpensesSchema,
   submissionMethodSchema,
   taxSettingsSchema,
   taxYearFromStartYear,
@@ -82,6 +83,15 @@ export function taxYearsRouter(ctx: AppContext): Router {
       }
     }
     ctx.db.prepare('UPDATE tax_years SET submission_method = ? WHERE id = ?').run(submissionMethod, id);
+    res.json(respond(req));
+  });
+
+  /** A year already sent can change too: its next update replaces what HMRC has, as updates are cumulative. */
+  router.put('/:id/mtd-expenses', (req, res) => {
+    const id = parseId(req.params.id);
+    if (!getTaxYear(ctx.db, id)) throw new HttpError(404, 'Tax year not found');
+    const { mtdExpenses } = parseWith(mtdExpensesSchema, req.body);
+    ctx.db.prepare('UPDATE tax_years SET mtd_expenses = ? WHERE id = ?').run(mtdExpenses, id);
     res.json(respond(req));
   });
 

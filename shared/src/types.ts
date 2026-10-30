@@ -1,6 +1,6 @@
 // Shapes returned by the API.
 import type { CategoryType } from './categories';
-import type { PaymentMethod, SubmissionMethod } from './schemas';
+import type { MtdExpenses, PaymentMethod, SubmissionMethod } from './schemas';
 import type { MtdPayload, MtdPeriodSummary, MtdQuarter } from './mtd';
 import type { SelfAssessmentSummary } from './selfAssessment';
 import type { Vehicle } from './mileage';
@@ -19,6 +19,7 @@ export interface TaxYear {
   /** Other taxable income for the year (salary, pension…), used by the tax estimate. */
   otherIncomePence: number;
   submissionMethod: SubmissionMethod;
+  mtdExpenses: MtdExpenses;
 }
 
 /** A tax year as Settings lists it, with what stops it leaving MTD. */

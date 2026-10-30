@@ -340,7 +340,7 @@ export function hmrcRouter(ctx: AppContext): Router {
     if (todayIso() < mtdEarliestSendDate(q)) {
       throw new HttpError(400, `HMRC won’t take this update until ${mtdEarliestSendDate(q)}, 10 days before the quarter ends.`);
     }
-    const payload = mtdPayload(q.cumulative, taxYear.startDate, q.endDate);
+    const payload = mtdPayload(q.cumulative, taxYear.startDate, q.endDate, taxYear.mtdExpenses);
     if (!isDeepStrictEqual(parseWith(sendSchema, req.body).payload, payload)) {
       throw new HttpError(409, 'The figures have changed since you checked them. Check them again before sending.');
     }

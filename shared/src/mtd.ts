@@ -1,4 +1,6 @@
 import { EXPENSE_CATEGORIES, INCOME_CATEGORIES, type CategorySeed } from './categories';
+import type { MtdExpenses } from './schemas';
+import { SA103S_NOT_ALLOWABLE } from './selfAssessment';
 
 // Aggregates transactions into the shape of an MTD Self-Employment period
 // summary. Amounts stay in pence here; convert with penceToMtdAmount when
@@ -75,6 +77,20 @@ export function penceToMtdAmount(pence: number): number {
   return Math.round(pence) / 100;
 }
 
+/** One total can be sent for expenses while annual turnover is below this, the VAT registration threshold. */
+export const VAT_REGISTRATION_THRESHOLD_PENCE = 9_000_000;
+
+/**
+ * Expenses as one total: HMRC wants allowable expenses only. Entertainment and
+ * depreciation are left out even when not marked disallowable, as on the SA103S.
+ */
+export function mtdConsolidatedExpensesPence(summary: MtdPeriodSummary): number {
+  return Object.keys(SA103S_NOT_ALLOWABLE).reduce(
+    (total, code) => total - (summary.periodExpenses[code] ?? 0) + (summary.periodDisallowableExpenses[`${code}Disallowable`] ?? 0),
+    summary.totals.allowableExpensesPence,
+  );
+}
+
 export interface MtdPayload {
   periodDates: { periodStartDate: string; periodEndDate: string };
   periodIncome: Record<string, number>;
@@ -85,9 +101,10 @@ export interface MtdPayload {
 /**
  * MTD-shaped figures in pounds: the body of HMRC's cumulative period summary
  * request. HMRC wants every income and expense field even when it's zero;
- * disallowable amounts are only listed when there are some.
+ * disallowable amounts are only listed when there are some. With one total for
+ * expenses, HMRC refuses any other expense field or disallowable amount.
  */
-export function mtdPayload(summary: MtdPeriodSummary, periodStartDate: string, periodEndDate: string): MtdPayload {
+export function mtdPayload(summary: MtdPeriodSummary, periodStartDate: string, periodEndDate: string, expenses: MtdExpenses): MtdPayload {
   const every = (categories: CategorySeed[], values: Record<string, number>) =>
     Object.fromEntries(categories.map((c) => [c.hmrcCode, penceToMtdAmount(values[c.hmrcCode] ?? 0)]));
   const disallowable = Object.fromEntries(
@@ -95,9 +112,14 @@ export function mtdPayload(summary: MtdPeriodSummary, periodStartDate: string, p
       .filter((key) => summary.periodDisallowableExpenses[key])
       .map((key) => [key, penceToMtdAmount(summary.periodDisallowableExpenses[key])]),
   );
+  const periodDates = { periodStartDate, periodEndDate };
+  const periodIncome = every(INCOME_CATEGORIES, summary.periodIncome);
+  if (expenses === 'consolidated') {
+    return { periodDates, periodIncome, periodExpenses: { consolidatedExpenses: penceToMtdAmount(mtdConsolidatedExpensesPence(summary)) } };
+  }
   return {
-    periodDates: { periodStartDate, periodEndDate },
-    periodIncome: every(INCOME_CATEGORIES, summary.periodIncome),
+    periodDates,
+    periodIncome,
     periodExpenses: every(EXPENSE_CATEGORIES, summary.periodExpenses),
     ...(Object.keys(disallowable).length ? { periodDisallowableExpenses: disallowable } : {}),
   };

@@ -277,6 +277,14 @@ CREATE TABLE mtd_amendments (
 ALTER TABLE users ADD COLUMN must_change_password INTEGER NOT NULL DEFAULT 0;
 `,
   },
+  // How an MTD year's expenses go to HMRC: by category, or as one total.
+  {
+    version: 14,
+    sql: `
+ALTER TABLE tax_years ADD COLUMN mtd_expenses TEXT NOT NULL DEFAULT 'itemised'
+  CHECK (mtd_expenses IN ('itemised', 'consolidated'));
+`,
+  },
 ];
 
 export const CURRENT_SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;

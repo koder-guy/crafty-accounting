@@ -3,11 +3,16 @@ import { CalendarPlus, CircleCheck, Layers, Trash2 } from 'lucide-react';
 import {
   displayTaxYear,
   formatDisplayDate,
+  formatGBP,
+  MTD_EXPENSES,
+  MTD_EXPENSES_LABELS,
   SUBMISSION_METHOD_LABELS,
   SUBMISSION_METHODS,
   taxYearFromStartYear,
   taxYearStartYearForDate,
   todayIso,
+  VAT_REGISTRATION_THRESHOLD_PENCE,
+  type MtdExpenses,
   type SubmissionMethod,
   type TaxYear,
   type TaxYearListItem,
@@ -20,7 +25,7 @@ import { SettingsHeading } from './SettingsLayout';
 export function TaxYearsSettings() {
   const { data, isLoading } = useTaxYears();
   const canEdit = useCanEdit();
-  const { create, setActive, setSubmissionMethod, remove } = useTaxYearMutations();
+  const { create, setActive, setSubmissionMethod, setMtdExpenses, remove } = useTaxYearMutations();
   const currentStart = taxYearStartYearForDate(todayIso());
   const [toDelete, setToDelete] = useState<TaxYear | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -155,6 +160,19 @@ export function TaxYearsSettings() {
                           <Alert>{setSubmissionMethod.error.message}</Alert>
                         </div>
                       )}
+                      {year.submissionMethod === 'mtd' && (
+                        <YearMtdExpenses
+                          year={year}
+                          canEdit={canEdit}
+                          busy={setMtdExpenses.isPending && setMtdExpenses.variables?.id === year.id}
+                          onChange={(mtdExpenses) => setMtdExpenses.mutate({ id: year.id, mtdExpenses })}
+                        />
+                      )}
+                      {setMtdExpenses.error && setMtdExpenses.variables?.id === year.id && (
+                        <div className="mt-2">
+                          <Alert>{setMtdExpenses.error.message}</Alert>
+                        </div>
+                      )}
                     </div>
                     <div className="flex gap-2">
                       {!isActive && (
@@ -254,6 +272,54 @@ function YearMethod({
         </span>
       )}
       {locked && <p className="w-full text-xs text-faint">It has quarterly updates, so it stays Making Tax Digital.</p>}
+    </div>
+  );
+}
+
+/** How an MTD year's expenses go to HMRC: a choice for editors. */
+function YearMtdExpenses({
+  year,
+  canEdit,
+  busy,
+  onChange,
+}: {
+  year: TaxYearListItem;
+  canEdit: boolean;
+  busy: boolean;
+  onChange: (mtdExpenses: MtdExpenses) => void;
+}) {
+  const id = `mtd-expenses-${year.id}`;
+  return (
+    <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-sm">
+      {canEdit ? (
+        <>
+          <label htmlFor={id} className="whitespace-nowrap text-muted">
+            Expenses sent as
+          </label>
+          <select
+            id={id}
+            className="field sm:w-60"
+            value={year.mtdExpenses}
+            disabled={busy}
+            onChange={(e) => onChange(e.target.value as MtdExpenses)}
+          >
+            {MTD_EXPENSES.map((m) => (
+              <option key={m} value={m}>
+                {MTD_EXPENSES_LABELS[m]}
+              </option>
+            ))}
+          </select>
+        </>
+      ) : (
+        <>
+          <span className="whitespace-nowrap text-muted">Expenses sent as</span>
+          <span className="font-medium whitespace-nowrap text-ink">{MTD_EXPENSES_LABELS[year.mtdExpenses]}</span>
+        </>
+      )}
+      <p className="w-full text-xs text-faint">
+        One total is for annual turnover below the VAT registration threshold ({formatGBP(VAT_REGISTRATION_THRESHOLD_PENCE).replace(/\.00$/, '')}). It’s
+        allowable expenses only, with no categories or disallowable amounts.
+      </p>
     </div>
   );
 }

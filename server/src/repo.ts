@@ -63,6 +63,7 @@ const mapTaxYear = (row: Row): TaxYear => ({
   mileageCount: row.mileage_count,
   otherIncomePence: row.other_income_pence,
   submissionMethod: row.submission_method,
+  mtdExpenses: row.mtd_expenses,
 });
 
 export function listTaxYears(db: Db): TaxYear[] {

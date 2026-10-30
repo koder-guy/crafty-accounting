@@ -1027,6 +1027,19 @@ describe('MTD quarters', () => {
     await agent.get(`/api/mtd/quarters/${yearId}/5/export.csv`).query({ basis: 'period' }).expect(404);
   });
 
+  it('exports just the income and one expenses total when the year sends one total', async () => {
+    const yearId = await createYear(2025, 'mtd');
+    await agent.post('/api/incomes').send(income(yearId, { date: '2025-06-14', amountPence: 38000 })).expect(201);
+    await agent.post('/api/expenses').send(expense(yearId, { date: '2025-06-20' })).expect(201);
+    await agent.put(`/api/tax-years/${yearId}/mtd-expenses`).send({ mtdExpenses: 'consolidated' }).expect(200);
+
+    const { text } = await agent.get(`/api/mtd/quarters/${yearId}/1/export.csv`).query({ basis: 'cumulative' }).expect(200);
+    expect(text.trim().split('\r\n')).toEqual([
+      'periodStartDate,periodEndDate,turnover,other,consolidatedExpenses',
+      '2025-04-06,2025-07-05,380.00,0.00,35.50',
+    ]);
+  });
+
   it('records, updates and clears a submission, and deletes it with the tax year', async () => {
     const yearId = await createYear(2025, 'mtd');
     await agent.put(`/api/mtd/quarters/${yearId}/1/submission`).send({ submittedOn: '2025-08-01', reference: 'ABC123' }).expect(200);
@@ -1760,7 +1773,7 @@ describe('HMRC connection', () => {
     async function preview(taxYearId: number, quarter: number) {
       const { quarters, taxYear } = (await agent.get('/api/mtd/quarters').query({ taxYearId }).expect(200)).body;
       const q = quarters.find((x: { quarter: number }) => x.quarter === quarter);
-      return mtdPayload(q.cumulative, taxYear.startDate, q.endDate);
+      return mtdPayload(q.cumulative, taxYear.startDate, q.endDate, taxYear.mtdExpenses);
     }
 
     it('sends the year-to-date figures and keeps HMRC’s receipt', async () => {
@@ -1796,6 +1809,36 @@ describe('HMRC connection', () => {
 
       // It goes into backups with the books.
       expect((await agent.get('/api/backup.sql').expect(200)).text).toMatch(/c-123/);
+    });
+
+    it('sends expenses as one total when the year is set to', async () => {
+      const taxYearId = await createYear(2026, 'mtd');
+      await agent.post('/api/incomes').send(income(taxYearId, { date: '2026-06-14', amountPence: 38000 })).expect(201);
+      await agent.post('/api/expenses').send(expense(taxYearId, { date: '2026-08-02' })).expect(201);
+      await connectWithBusiness();
+      apiReplies[SEND_PATH] = { status: 204, headers: { 'X-CorrelationId': 'c-123' } };
+
+      await agent.put(`/api/tax-years/${taxYearId}/mtd-expenses`).send({ mtdExpenses: 'sometimes' }).expect(400);
+      const { body } = await agent.put(`/api/tax-years/${taxYearId}/mtd-expenses`).send({ mtdExpenses: 'consolidated' }).expect(200);
+      expect(body.taxYears[0].mtdExpenses).toBe('consolidated');
+
+      // Figures from before the change no longer match what would go.
+      const itemised = mtdPayload(
+        (await agent.get('/api/mtd/quarters').query({ taxYearId })).body.quarters[1].cumulative,
+        '2026-04-06',
+        '2026-10-05',
+        'itemised',
+      );
+      await agent.post(`/api/hmrc/quarters/${taxYearId}/2/send`).set('X-Fraud-Prevention', BROWSER).send({ payload: itemised }).expect(409);
+
+      const payload = await preview(taxYearId, 2);
+      await agent.post(`/api/hmrc/quarters/${taxYearId}/2/send`).set('X-Fraud-Prevention', BROWSER).send({ payload }).expect(200);
+      expect(apiRequests.at(-1)!.body).toEqual({
+        periodDates: { periodStartDate: '2026-04-06', periodEndDate: '2026-10-05' },
+        periodIncome: { turnover: 380, other: 0 },
+        // Allowable only: the disallowable £10 isn't in it, and HMRC refuses disallowable amounts alongside it.
+        periodExpenses: { consolidatedExpenses: 35.5 },
+      });
     });
 
     it('only sends figures the person has seen, at the right time, to the right place', async () => {
@@ -2083,7 +2126,7 @@ describe('HMRC connection', () => {
       // The corrected figures go as the whole year's update.
       await agent.post('/api/incomes').send(income(taxYearId, { date: '2026-03-14', amountPence: 38000 })).expect(201);
       const { quarters, taxYear } = (await agent.get('/api/mtd/quarters').query({ taxYearId }).expect(200)).body;
-      const payload = mtdPayload(quarters[3].cumulative, taxYear.startDate, quarters[3].endDate);
+      const payload = mtdPayload(quarters[3].cumulative, taxYear.startDate, quarters[3].endDate, taxYear.mtdExpenses);
       const sendPath = '/individuals/business/self-employment/AB123456C/XAIS12345678910/cumulative/2025-26';
       apiReplies[sendPath] = { status: 204, headers: { 'X-CorrelationId': 'c-q4' } };
       await agent.post(`/api/hmrc/quarters/${taxYearId}/4/send`).set('X-Fraud-Prevention', BROWSER).send({ payload }).expect(200);
@@ -2178,7 +2221,7 @@ describe('HMRC connection', () => {
 
     await agent.post('/api/restore').attach('file', Buffer.from(dump), 'backup.sql').expect(200);
     expect((await agent.get('/api/tax-years')).body.taxYears).toEqual([
-      expect.objectContaining({ submissionMethod: 'mtd', mtdUpdates: { recorded: 1, sent: 0 } }),
+      expect.objectContaining({ submissionMethod: 'mtd', mtdExpenses: 'itemised', mtdUpdates: { recorded: 1, sent: 0 } }),
     ]);
     expect((await agent.get('/api/hmrc')).body.connection).toMatchObject({ connectedBy: NAME });
     const quarters = (await agent.get('/api/mtd/quarters').query({ taxYearId: 1 })).body;

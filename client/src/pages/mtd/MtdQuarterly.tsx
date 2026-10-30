@@ -3,9 +3,11 @@ import { Link } from 'react-router';
 import { CalendarCheck, FileSpreadsheet, Info, Landmark, Send } from 'lucide-react';
 import {
   MTD_FIRST_SEND_YEAR,
+  VAT_REGISTRATION_THRESHOLD_PENCE,
   daysBetween,
   formatDisplayDate,
   formatGBP,
+  mtdConsolidatedExpensesPence,
   mtdEarliestSendDate,
   mtdPayload,
   startYearFromLabel,
@@ -136,7 +138,7 @@ function QuarterCard({
   );
 }
 
-function FiguresTable({ summary, categories }: { summary: MtdPeriodSummary; categories: Category[] }) {
+function FiguresTable({ summary, categories, oneTotal }: { summary: MtdPeriodSummary; categories: Category[]; oneTotal: boolean }) {
   const row = (c: Category, amount: number, disallowable?: number) => (
     <tr key={c.id} className={amount === 0 ? 'text-faint' : ''}>
       <td className="px-4 py-2.5 sm:pl-6">{c.name}</td>
@@ -189,6 +191,15 @@ function FiguresTable({ summary, categories }: { summary: MtdPeriodSummary; cate
           {totalRow('Less disallowable expenses', t.disallowablePence)}
           {totalRow('Allowable expenses', t.allowableExpensesPence)}
           {totalRow('Net profit', t.netProfitPence, true)}
+          {oneTotal && section('Sent to HMRC as one total')}
+          {oneTotal && (
+            <tr className="text-ink">
+              <td className="px-4 py-2.5 sm:pl-6">Allowable expenses, leaving out entertainment and depreciation</td>
+              <td className="px-4 py-2.5 font-mono text-xs text-faint">consolidatedExpenses</td>
+              <td className="tabular px-4 py-2.5 text-right">{formatGBP(mtdConsolidatedExpensesPence(summary))}</td>
+              <td className="sm:pr-6" />
+            </tr>
+          )}
         </tbody>
       </table>
     </div>
@@ -286,6 +297,7 @@ export const sameFigures = (a: MtdPayload, b: MtdPayload) => JSON.stringify(a) =
 /** The fields being sent, listed for checking before they go: everything that isn't zero. */
 export function PayloadSummary({ payload, categories }: { payload: MtdPayload; categories: Category[] }) {
   const names = new Map(categories.filter((c) => !c.isCustom).map((c) => [c.hmrcCode, c.name]));
+  names.set('consolidatedExpenses', 'Allowable expenses, as one total');
   const rows = [
     ...Object.entries(payload.periodIncome).map(([code, pounds]) => ({ code, label: names.get(code) ?? code, pounds })),
     ...Object.entries(payload.periodExpenses).map(([code, pounds]) => ({ code, label: names.get(code) ?? code, pounds })),
@@ -311,7 +323,13 @@ export function PayloadSummary({ payload, categories }: { payload: MtdPayload; c
           ))}
         </tbody>
       </table>
-      <p className="text-xs text-faint">{rows.length ? 'Every other field is sent as zero.' : 'Every field is zero.'}</p>
+      <p className="text-xs text-faint">
+        {'consolidatedExpenses' in payload.periodExpenses
+          ? 'Expenses go as one total, with no categories or disallowable amounts.'
+          : rows.length
+            ? 'Every other field is sent as zero.'
+            : 'Every field is zero.'}
+      </p>
     </div>
   );
 }
@@ -342,7 +360,7 @@ function SendToHmrc({
   const resetSend = send.reset;
   // An error belongs to the quarter it happened on.
   useEffect(() => resetSend(), [q.quarter, resetSend]);
-  const payload = mtdPayload(q.cumulative, taxYear.startDate, q.endDate);
+  const payload = mtdPayload(q.cumulative, taxYear.startDate, q.endDate, taxYear.mtdExpenses);
   const sent = q.submission?.sent ?? null;
   const changed = sent !== null && !sameFigures(sent.payload, payload);
   // HMRC has an update for this quarter that the app didn't send (other software, or sandbox test data).
@@ -483,6 +501,8 @@ export function MtdQuarterly() {
   const current = quarters.length ? (selected ?? defaultQuarter(quarters, today)) : null;
   const q = quarters.find((x) => x.quarter === current);
   const summary = q ? q[view] : null;
+  const oneTotal = taxYear?.mtdExpenses === 'consolidated';
+  const overThreshold = oneTotal && (quarters.at(-1)?.cumulative.periodIncome.turnover ?? 0) >= VAT_REGISTRATION_THRESHOLD_PENCE;
 
   return (
     <>
@@ -528,6 +548,14 @@ export function MtdQuarterly() {
                 )}
               </p>
             </div>
+
+            {overThreshold && (
+              <Alert tone="warning">
+                This year’s turnover has reached the VAT registration threshold of {formatGBP(VAT_REGISTRATION_THRESHOLD_PENCE).replace(/\.00$/, '')}. One total
+                for expenses is only for turnover below it, so check whether to change to categories in{' '}
+                <Link className="underline" to="/settings/tax-years">Settings → Tax years</Link>.
+              </Alert>
+            )}
 
             {checkWithHmrc && (
               <div className="flex items-start gap-3 text-sm text-muted">
@@ -628,7 +656,7 @@ export function MtdQuarterly() {
                   ))}
                 </div>
               </div>
-              <FiguresTable summary={summary} categories={categories} />
+              <FiguresTable summary={summary} categories={categories} oneTotal={oneTotal} />
             </Card>
 
             <YearCalculation taxYear={taxYear} />

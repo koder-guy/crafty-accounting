@@ -9,6 +9,7 @@ import {
   isValidIsoDate,
   mileageClaims,
   mtdEarliestSendDate,
+  mtdConsolidatedExpensesPence,
   mtdPayload,
   mtdQuarters,
   mtdQuarterStatus,
@@ -143,7 +144,7 @@ describe('MTD quarters', () => {
       [{ hmrcCode: 'turnover', amountPence: 51805 }],
       [{ hmrcCode: 'adminCosts', amountPence: 1001, disallowable: true }],
     );
-    const payload = mtdPayload(summary, '2025-04-06', '2025-07-05');
+    const payload = mtdPayload(summary, '2025-04-06', '2025-07-05', 'itemised');
     expect(payload).toMatchObject({
       periodDates: { periodStartDate: '2025-04-06', periodEndDate: '2025-07-05' },
       // HMRC wants every field, zeros included.
@@ -153,7 +154,26 @@ describe('MTD quarters', () => {
     });
     expect(Object.keys(payload.periodExpenses)).toHaveLength(15);
     expect(Object.keys(payload.periodDisallowableExpenses!)).toEqual(['adminCostsDisallowable']);
-    expect(mtdPayload(buildMtdPeriodSummary([], []), '2025-04-06', '2025-07-05')).not.toHaveProperty('periodDisallowableExpenses');
+    expect(mtdPayload(buildMtdPeriodSummary([], []), '2025-04-06', '2025-07-05', 'itemised')).not.toHaveProperty('periodDisallowableExpenses');
+  });
+
+  it('sends one total for expenses, allowable only', () => {
+    const summary = buildMtdPeriodSummary(
+      [{ hmrcCode: 'turnover', amountPence: 51805 }],
+      [
+        { hmrcCode: 'adminCosts', amountPence: 2000, disallowable: false },
+        { hmrcCode: 'adminCosts', amountPence: 1001, disallowable: true },
+        // Never allowable, marked or not, as on the SA103S.
+        { hmrcCode: 'businessEntertainmentCosts', amountPence: 500, disallowable: false },
+        { hmrcCode: 'depreciation', amountPence: 300, disallowable: true },
+      ],
+    );
+    expect(mtdPayload(summary, '2025-04-06', '2025-07-05', 'consolidated')).toEqual({
+      periodDates: { periodStartDate: '2025-04-06', periodEndDate: '2025-07-05' },
+      periodIncome: { turnover: 518.05, other: 0 },
+      periodExpenses: { consolidatedExpenses: 20 },
+    });
+    expect(mtdConsolidatedExpensesPence(summary)).toBe(buildSelfAssessmentSummary(summary).totalAllowableExpensesPence);
   });
 
   it('knows the first day a quarter can be sent', () => {

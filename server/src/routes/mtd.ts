@@ -9,12 +9,14 @@ import {
   buildMtdPeriodSummary,
   displayTaxYear,
   formatDisplayDate,
+  mtdConsolidatedExpensesPence,
   mtdEarliestSendDate,
   mtdQuarters,
   mtdSubmissionSchema,
   penceToPounds,
   startYearFromLabel,
   type HmrcEnvironment,
+  type MtdExpenses,
   type MtdFinalDeclaration,
   type MtdPeriodSummary,
   type MtdQuartersResponse,
@@ -151,17 +153,20 @@ function refuseIfSent(db: Db, taxYearId: number, quarter: number, environment: H
 /**
  * A quarter's figures for MTD bridging software: a row of HMRC's field names and
  * a row of values. Every column is always there, zeros included, so a bridging
- * tool's saved import map keeps working.
+ * tool's saved import map keeps working, while the year's expenses go the same way.
  */
-function mtdCsv(summary: MtdPeriodSummary, from: string, to: string): string {
-  const figures: [string, number | undefined][] = [
-    ...INCOME_CATEGORIES.map((c): [string, number | undefined] => [c.hmrcCode, summary.periodIncome[c.hmrcCode]]),
+function mtdCsv(summary: MtdPeriodSummary, from: string, to: string, expenses: MtdExpenses): string {
+  const income = INCOME_CATEGORIES.map((c): [string, number | undefined] => [c.hmrcCode, summary.periodIncome[c.hmrcCode]]);
+  const consolidated: [string, number | undefined][] = [...income, ['consolidatedExpenses', mtdConsolidatedExpensesPence(summary)]];
+  const itemised: [string, number | undefined][] = [
+    ...income,
     ...EXPENSE_CATEGORIES.map((c): [string, number | undefined] => [c.hmrcCode, summary.periodExpenses[c.hmrcCode]]),
     ...EXPENSE_CATEGORIES.map((c): [string, number | undefined] => {
       const field = `${c.hmrcCode}Disallowable`;
       return [field, summary.periodDisallowableExpenses[field]];
     }),
   ];
+  const figures = expenses === 'consolidated' ? consolidated : itemised;
   const csv = toCsv(
     ['periodStartDate', 'periodEndDate', ...figures.map(([field]) => field)],
     [[from, to, ...figures.map(([, pence]) => penceToPounds(pence ?? 0))]],
@@ -204,7 +209,10 @@ export function mtdRouter(ctx: AppContext): Router {
     const quarter = parseQuarter(req.params.quarter);
     const { basis } = parseWith(exportSchema, req.query);
     const q = quarterSummaries(ctx.db, taxYear, ctx.config.hmrc.environment)[quarter - 1];
-    const csv = basis === 'cumulative' ? mtdCsv(q.cumulative, taxYear.startDate, q.endDate) : mtdCsv(q.period, q.startDate, q.endDate);
+    const csv =
+      basis === 'cumulative'
+        ? mtdCsv(q.cumulative, taxYear.startDate, q.endDate, taxYear.mtdExpenses)
+        : mtdCsv(q.period, q.startDate, q.endDate, taxYear.mtdExpenses);
     const label = basis === 'cumulative' ? 'year-to-date' : 'quarter-only';
     res.attachment(`crafty-mtd-${taxYear.label}-Q${quarter}-${label}.csv`).type('text/csv').send(csv);
   });
