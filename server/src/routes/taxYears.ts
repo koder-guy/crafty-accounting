@@ -15,7 +15,7 @@ import { removeDocumentFile } from '../documents';
 import { HttpError, parseId, parseWith } from '../http';
 import { getTaxYear, listTaxYears, resolveActiveTaxYearId } from '../repo';
 import { getUser } from '../users';
-import { mtdUpdateCounts } from './mtd';
+import { mtdExpensesSent, mtdUpdateCounts, quarterSummaries } from './mtd';
 
 export function taxYearsRouter(ctx: AppContext): Router {
   const router = Router();
@@ -27,7 +27,11 @@ export function taxYearsRouter(ctx: AppContext): Router {
 
   const updates = (taxYearId: number) => mtdUpdateCounts(ctx.db, taxYearId, ctx.config.hmrc.environment);
   const respond = (req: Request): TaxYearsResponse => ({
-    taxYears: listTaxYears(ctx.db).map((year) => ({ ...year, mtdUpdates: updates(year.id) })),
+    taxYears: listTaxYears(ctx.db).map((year) => ({
+      ...year,
+      mtdUpdates: updates(year.id),
+      mtdExpensesSent: mtdExpensesSent(year, quarterSummaries(ctx.db, year, ctx.config.hmrc.environment)),
+    })),
     activeTaxYearId: activeId(req),
   });
 

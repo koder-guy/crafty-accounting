@@ -41,7 +41,7 @@ import {
   type PendingHmrcAuth,
 } from '../hmrc';
 import { getTaxYear } from '../repo';
-import { getAmendments, getFinalDeclaration, getSubmissions, parseQuarter, quarterSummaries, refuseUnlessMtd } from './mtd';
+import { getAmendments, getFinalDeclaration, getSubmissions, mtdExpensesSent, parseQuarter, quarterSummaries, refuseUnlessMtd } from './mtd';
 
 // The README's setup steps list these, for subscribing the application to them.
 const BUSINESS_DETAILS: HmrcApi = { name: 'Business Details (MTD)', version: '2.0' };
@@ -336,11 +336,12 @@ export function hmrcRouter(ctx: AppContext): Router {
     const businessId = getHmrcConnection(ctx.db, environment())?.business_id;
     if (!businessId) throw new HttpError(400, 'Find your business in Settings → HMRC first.');
 
-    const q = quarterSummaries(ctx.db, taxYear, environment()).find((x) => x.quarter === quarter)!;
+    const quarters = quarterSummaries(ctx.db, taxYear, environment());
+    const q = quarters.find((x) => x.quarter === quarter)!;
     if (todayIso() < mtdEarliestSendDate(q)) {
       throw new HttpError(400, `HMRC won’t take this update until ${mtdEarliestSendDate(q)}, 10 days before the quarter ends.`);
     }
-    const payload = mtdPayload(q.cumulative, taxYear.startDate, q.endDate, taxYear.mtdExpenses);
+    const payload = mtdPayload(q.cumulative, taxYear.startDate, q.endDate, mtdExpensesSent(taxYear, quarters));
     if (!isDeepStrictEqual(parseWith(sendSchema, req.body).payload, payload)) {
       throw new HttpError(409, 'The figures have changed since you checked them. Check them again before sending.');
     }

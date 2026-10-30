@@ -29,6 +29,8 @@ export interface TaxYearListItem extends TaxYear {
    * the HMRC service in use. While there are any, the year stays MTD.
    */
   mtdUpdates: { recorded: number; sent: number };
+  /** How the year's expenses actually go, after the turnover threshold. */
+  mtdExpensesSent: MtdExpenses;
 }
 
 export interface User {
@@ -200,6 +202,8 @@ export interface MtdFinalDeclaration {
 export interface MtdQuartersResponse {
   taxYear: TaxYear;
   quarters: MtdQuarterSummary[];
+  /** How the year's expenses actually go, after the turnover threshold. */
+  mtdExpenses: MtdExpenses;
   finalDeclaration: MtdFinalDeclaration | null;
   /** Amendments confirmed after the final declaration, oldest first. */
   amendments: MtdFinalDeclaration[];

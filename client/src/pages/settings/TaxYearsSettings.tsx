@@ -319,6 +319,9 @@ function YearMtdExpenses({
       <p className="w-full text-xs text-faint">
         One total is for annual turnover below the VAT registration threshold ({formatGBP(VAT_REGISTRATION_THRESHOLD_PENCE).replace(/\.00$/, '')}). It’s
         allowable expenses only, with no categories or disallowable amounts.
+        {year.mtdExpenses === 'consolidated' && year.mtdExpensesSent === 'itemised' && (
+          <span className="text-ink"> This year’s turnover has reached it, so expenses go by category for the whole year.</span>
+        )}
       </p>
     </div>
   );

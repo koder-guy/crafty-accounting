@@ -337,7 +337,7 @@ function Amend({ data }: { data: MtdQuartersResponse }) {
   if (!canEdit) return null;
 
   const q4 = data.quarters.find((q) => q.quarter === 4)!;
-  const payload = mtdPayload(q4.cumulative, taxYear.startDate, q4.endDate, taxYear.mtdExpenses);
+  const payload = mtdPayload(q4.cumulative, taxYear.startDate, q4.endDate, data.mtdExpenses);
   const sent = q4.submission?.sent ?? null;
   const upToDate = sent !== null && sameFigures(sent.payload, payload);
   const status: { tone: BadgeTone; label: string; detail: string } = upToDate

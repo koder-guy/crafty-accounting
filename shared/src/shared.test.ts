@@ -9,6 +9,7 @@ import {
   isValidIsoDate,
   mileageClaims,
   mtdEarliestSendDate,
+  mtdExpensesToSend,
   mtdPayload,
   mtdQuarters,
   mtdQuarterStatus,
@@ -172,6 +173,12 @@ describe('MTD quarters', () => {
       periodExpenses: { consolidatedExpenses: 20 },
     });
     expect(buildSelfAssessmentSummary(summary).totalAllowableExpensesPence).toBe(2000);
+  });
+
+  it('goes by category once turnover reaches the VAT registration threshold', () => {
+    expect(mtdExpensesToSend('consolidated', 8_999_999)).toBe('consolidated');
+    expect(mtdExpensesToSend('consolidated', 9_000_000)).toBe('itemised');
+    expect(mtdExpensesToSend('itemised', 100)).toBe('itemised');
   });
 
   it('knows the first day a quarter can be sent', () => {

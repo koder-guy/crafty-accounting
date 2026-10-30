@@ -15,6 +15,7 @@ import {
   type Category,
   type HmrcObligation,
   type HmrcStatus,
+  type MtdExpenses,
   type MtdPayload,
   type MtdPeriodSummary,
   type MtdQuarterStatus,
@@ -339,6 +340,7 @@ function SendToHmrc({
   q,
   hmrc,
   categories,
+  expenses,
   canSend,
   obligation,
   laterHeld,
@@ -347,6 +349,7 @@ function SendToHmrc({
   q: MtdQuarterSummary;
   hmrc: HmrcStatus | undefined;
   categories: Category[];
+  expenses: MtdExpenses;
   /** Connected, with a business, and this person can edit. */
   canSend: boolean;
   /** HMRC's obligation for this quarter, if checked with HMRC. */
@@ -359,7 +362,7 @@ function SendToHmrc({
   const resetSend = send.reset;
   // An error belongs to the quarter it happened on.
   useEffect(() => resetSend(), [q.quarter, resetSend]);
-  const payload = mtdPayload(q.cumulative, taxYear.startDate, q.endDate, taxYear.mtdExpenses);
+  const payload = mtdPayload(q.cumulative, taxYear.startDate, q.endDate, expenses);
   const sent = q.submission?.sent ?? null;
   const changed = sent !== null && !sameFigures(sent.payload, payload);
   // HMRC has an update for this quarter that the app didn't send (other software, or sandbox test data).
@@ -500,8 +503,8 @@ export function MtdQuarterly() {
   const current = quarters.length ? (selected ?? defaultQuarter(quarters, today)) : null;
   const q = quarters.find((x) => x.quarter === current);
   const summary = q ? q[view] : null;
-  const oneTotal = taxYear?.mtdExpenses === 'consolidated';
-  const overThreshold = oneTotal && (quarters.at(-1)?.cumulative.periodIncome.turnover ?? 0) >= VAT_REGISTRATION_THRESHOLD_PENCE;
+  const oneTotal = data?.mtdExpenses === 'consolidated';
+  const overThreshold = taxYear?.mtdExpenses === 'consolidated' && data?.mtdExpenses === 'itemised';
 
   return (
     <>
@@ -551,8 +554,8 @@ export function MtdQuarterly() {
             {overThreshold && (
               <Alert tone="warning">
                 This year’s turnover has reached the VAT registration threshold of {formatGBP(VAT_REGISTRATION_THRESHOLD_PENCE).replace(/\.00$/, '')}. One total
-                for expenses is only for turnover below it, so check whether to change to categories in{' '}
-                <Link className="underline" to="/settings/tax-years">Settings → Tax years</Link>.
+                for expenses is only for turnover below it, so expenses now go by category for the whole year. Your next update sends the year
+                to date that way.
               </Alert>
             )}
 
@@ -604,6 +607,7 @@ export function MtdQuarterly() {
                     q={q}
                     hmrc={hmrc}
                     categories={categories}
+                    expenses={data.mtdExpenses}
                     canSend={sendable && canEdit}
                     obligation={obligationFor(q.endDate)}
                     laterHeld={laterHeld(q)}

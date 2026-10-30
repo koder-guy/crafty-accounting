@@ -10,6 +10,7 @@ import {
   displayTaxYear,
   formatDisplayDate,
   mtdEarliestSendDate,
+  mtdExpensesToSend,
   mtdQuarters,
   mtdSubmissionSchema,
   penceToPounds,
@@ -139,6 +140,11 @@ export function quarterSummaries(db: Db, taxYear: TaxYear, environment: HmrcEnvi
   }));
 }
 
+/** How a year's expenses actually go, from its turnover so far. */
+export function mtdExpensesSent(taxYear: TaxYear, quarters: MtdQuarterSummary[]): MtdExpenses {
+  return mtdExpensesToSend(taxYear.mtdExpenses, quarters.at(-1)!.cumulative.periodIncome.turnover ?? 0);
+}
+
 /** A record of an update the app sent to HMRC is a fact, so it can't be changed or removed by hand. */
 function refuseIfSent(db: Db, taxYearId: number, quarter: number, environment: HmrcEnvironment) {
   const row = db.prepare('SELECT sent_environment FROM mtd_submissions WHERE tax_year_id = ? AND quarter = ?').get(taxYearId, quarter) as
@@ -193,9 +199,11 @@ export function mtdRouter(ctx: AppContext): Router {
     if (!taxYear) throw new HttpError(404, 'Tax year not found');
 
     const environment = ctx.config.hmrc.environment;
+    const quarters = quarterSummaries(db, taxYear, environment);
     const response: MtdQuartersResponse = {
       taxYear,
-      quarters: quarterSummaries(db, taxYear, environment),
+      quarters,
+      mtdExpenses: mtdExpensesSent(taxYear, quarters),
       finalDeclaration: getFinalDeclaration(db, taxYearId, environment),
       amendments: getAmendments(db, taxYearId, environment),
     };
@@ -207,11 +215,13 @@ export function mtdRouter(ctx: AppContext): Router {
     if (!taxYear) throw new HttpError(404, 'Tax year not found');
     const quarter = parseQuarter(req.params.quarter);
     const { basis } = parseWith(exportSchema, req.query);
-    const q = quarterSummaries(ctx.db, taxYear, ctx.config.hmrc.environment)[quarter - 1];
+    const quarters = quarterSummaries(ctx.db, taxYear, ctx.config.hmrc.environment);
+    const q = quarters[quarter - 1];
+    const expenses = mtdExpensesSent(taxYear, quarters);
     const csv =
       basis === 'cumulative'
-        ? mtdCsv(q.cumulative, taxYear.startDate, q.endDate, taxYear.mtdExpenses)
-        : mtdCsv(q.period, q.startDate, q.endDate, taxYear.mtdExpenses);
+        ? mtdCsv(q.cumulative, taxYear.startDate, q.endDate, expenses)
+        : mtdCsv(q.period, q.startDate, q.endDate, expenses);
     const label = basis === 'cumulative' ? 'year-to-date' : 'quarter-only';
     res.attachment(`crafty-mtd-${taxYear.label}-Q${quarter}-${label}.csv`).type('text/csv').send(csv);
   });

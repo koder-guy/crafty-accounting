@@ -79,6 +79,15 @@ export function penceToMtdAmount(pence: number): number {
 /** One total can be sent for expenses while annual turnover is below this, the VAT registration threshold. */
 export const VAT_REGISTRATION_THRESHOLD_PENCE = 9_000_000;
 
+/**
+ * How a year's expenses actually go: by category for the whole year once its
+ * turnover reaches the threshold, whatever the setting. The setting stays, so
+ * a correction that brings turnover back below it returns to one total.
+ */
+export function mtdExpensesToSend(setting: MtdExpenses, yearTurnoverPence: number): MtdExpenses {
+  return yearTurnoverPence >= VAT_REGISTRATION_THRESHOLD_PENCE ? 'itemised' : setting;
+}
+
 export interface MtdPayload {
   periodDates: { periodStartDate: string; periodEndDate: string };
   periodIncome: Record<string, number>;
