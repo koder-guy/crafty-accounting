@@ -84,9 +84,8 @@ export interface MtdPayload {
 
 /**
  * MTD-shaped figures in pounds: the body of HMRC's cumulative period summary
- * request, sent to HMRC and also exported for MTD bridging software. HMRC
- * wants every income and expense field even when it's zero; disallowable
- * amounts are only listed when there are some.
+ * request. HMRC wants every income and expense field even when it's zero;
+ * disallowable amounts are only listed when there are some.
  */
 export function mtdPayload(summary: MtdPeriodSummary, periodStartDate: string, periodEndDate: string): MtdPayload {
   const every = (categories: CategorySeed[], values: Record<string, number>) =>

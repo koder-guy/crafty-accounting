@@ -990,6 +990,32 @@ describe('MTD quarters', () => {
     expect(q1.submission).toBeNull();
   });
 
+  it('exports a quarter as a CSV with the same rows every time', async () => {
+    const yearId = await createYear();
+    await agent.post('/api/incomes').send(income(yearId, { date: '2025-06-14', amountPence: 38000 })).expect(201);
+    await agent.post('/api/incomes').send(income(yearId, { date: '2025-07-06', amountPence: 13805 })).expect(201);
+    await agent.post('/api/expenses').send(expense(yearId, { date: '2025-07-06' })).expect(201);
+
+    const url = `/api/mtd/quarters/${yearId}/2/export.csv`;
+    const cumulative = await agent.get(url).query({ basis: 'cumulative' }).expect(200);
+    expect(cumulative.headers['content-disposition']).toContain('crafty-mtd-2025-26-Q2-year-to-date.csv');
+    const lines = cumulative.text.trim().split('\r\n');
+    expect(lines[0]).toContain('Section,Category,HMRC field,Period start,Period end,Amount (GBP)');
+    expect(lines).toHaveLength(1 + 2 + 15 + 15);
+    expect(lines).toContain('Income,"Turnover – takings, fees, sales or money earned",turnover,2025-04-06,2025-10-05,518.05');
+    expect(lines).toContain('Income,Other business income,other,2025-04-06,2025-10-05,0.00');
+    expect(lines).toContain('Expenses,Other business expenses,otherExpenses,2025-04-06,2025-10-05,10.00');
+    expect(lines).toContain('Disallowable expenses,Other business expenses,otherExpensesDisallowable,2025-04-06,2025-10-05,10.00');
+    expect(lines).toContain('Disallowable expenses,Advertising costs,advertisingCostsDisallowable,2025-04-06,2025-10-05,0.00');
+
+    const period = await agent.get(url).query({ basis: 'period' }).expect(200);
+    expect(period.headers['content-disposition']).toContain('crafty-mtd-2025-26-Q2-quarter-only.csv');
+    expect(period.text).toContain('turnover,2025-07-06,2025-10-05,138.05');
+
+    await agent.get(url).expect(400);
+    await agent.get(`/api/mtd/quarters/${yearId}/5/export.csv`).query({ basis: 'period' }).expect(404);
+  });
+
   it('records, updates and clears a submission, and deletes it with the tax year', async () => {
     const yearId = await createYear(2025, 'mtd');
     await agent.put(`/api/mtd/quarters/${yearId}/1/submission`).send({ submittedOn: '2025-08-01', reference: 'ABC123' }).expect(200);

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router';
-import { CalendarCheck, FileDown, FileSpreadsheet, Info, Landmark, Send } from 'lucide-react';
+import { CalendarCheck, FileSpreadsheet, Info, Landmark, Send } from 'lucide-react';
 import {
   MTD_FIRST_SEND_YEAR,
   daysBetween,
@@ -23,6 +23,7 @@ import {
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { NoTaxYear } from '../../components/NoTaxYear';
 import { SectionHeading } from '../../components/SectionLayout';
+import { ExportCsvButton } from '../../components/transactions';
 import { Alert, Badge, Button, Card, CardHeader, Field, Spinner, type BadgeTone } from '../../components/ui';
 import {
   useActiveTaxYear,
@@ -47,18 +48,6 @@ const STATUS: Record<MtdQuarterStatus, { label: string; tone: BadgeTone }> = {
 };
 
 const shortDate = (iso: string) => formatDisplayDate(iso).replace(/ \d{4}$/, '');
-
-/** Saves JSON as a downloaded file. */
-function downloadJson(data: unknown, filename: string) {
-  const url = URL.createObjectURL(new Blob([`${JSON.stringify(data, null, 2)}\n`], { type: 'application/json' }));
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = filename;
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
-}
 
 /** The quarter containing today, or the nearest end of the year. */
 /** The quarter that needs doing first: the earliest ended one not yet submitted, else the one in progress. */
@@ -495,13 +484,6 @@ export function MtdQuarterly() {
   const q = quarters.find((x) => x.quarter === current);
   const summary = q ? q[view] : null;
 
-  const exportJson = () => {
-    if (!q || !summary || !taxYear) return;
-    const from = view === 'cumulative' ? taxYear.startDate : q.startDate;
-    const basis = view === 'cumulative' ? 'year-to-date' : 'quarter-only';
-    downloadJson(mtdPayload(summary, from, q.endDate), `crafty-mtd-${taxYear.label}-Q${q.quarter}-${basis}.json`);
-  };
-
   return (
     <>
       <div className="space-y-6">
@@ -538,7 +520,7 @@ export function MtdQuarterly() {
                   </>
                 ) : (
                   <>
-                    To keep a digital link, use <span className="text-ink">Export to JSON</span> on the year-to-date figures and import
+                    To keep a digital link, use <span className="text-ink">Export CSV</span> on the year-to-date figures and import
                     the file into your MTD bridging software rather than retyping or copying them, then record each submission here. Or
                     connect to HMRC in <Link className="text-accent-soft hover:underline" to="/settings/hmrc">Settings → HMRC</Link>{' '}
                     to send updates from here.
@@ -621,12 +603,7 @@ export function MtdQuarterly() {
                     </span>
                   </span>
                 }
-                action={
-                  <Button variant="ghost" onClick={exportJson} title="Download these figures as a JSON file in MTD API format (pounds)">
-                    <FileDown className="size-4" aria-hidden />
-                    Export to JSON
-                  </Button>
-                }
+                action={<ExportCsvButton href={`/api/mtd/quarters/${taxYear.id}/${q.quarter}/export.csv?basis=${view}`} />}
               />
               <div className="px-5 pb-4 sm:px-6">
                 <div role="radiogroup" aria-label="Figures to show" className="inline-flex rounded-lg border border-line-strong bg-surface-2 p-1">

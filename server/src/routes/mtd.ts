@@ -4,20 +4,25 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import {
+  EXPENSE_CATEGORIES,
+  INCOME_CATEGORIES,
   buildMtdPeriodSummary,
   displayTaxYear,
   formatDisplayDate,
   mtdEarliestSendDate,
   mtdQuarters,
   mtdSubmissionSchema,
+  penceToPounds,
   startYearFromLabel,
   type HmrcEnvironment,
   type MtdFinalDeclaration,
+  type MtdPeriodSummary,
   type MtdQuartersResponse,
   type MtdQuarterSummary,
   type TaxYear,
 } from '@crafty/shared';
 import type { AppContext } from '../context';
+import { toCsv } from '../csv';
 import type { Db } from '../db';
 import { HttpError, parseId, parseWith } from '../http';
 import { getTaxYear, yearEntries } from '../repo';
@@ -143,7 +148,34 @@ function refuseIfSent(db: Db, taxYearId: number, quarter: number, environment: H
   }
 }
 
+/**
+ * A quarter's figures for MTD bridging software, one per row. Every row is always
+ * there, zeros included, so a bridging tool's saved import map keeps working.
+ */
+function mtdCsv(summary: MtdPeriodSummary, from: string, to: string): string {
+  const row = (section: string, category: string, field: string, pence: number | undefined) => [
+    section,
+    category,
+    field,
+    from,
+    to,
+    penceToPounds(pence ?? 0),
+  ];
+  return toCsv(
+    ['Section', 'Category', 'HMRC field', 'Period start', 'Period end', 'Amount (GBP)'],
+    [
+      ...INCOME_CATEGORIES.map((c) => row('Income', c.name, c.hmrcCode, summary.periodIncome[c.hmrcCode])),
+      ...EXPENSE_CATEGORIES.map((c) => row('Expenses', c.name, c.hmrcCode, summary.periodExpenses[c.hmrcCode])),
+      ...EXPENSE_CATEGORIES.map((c) => {
+        const field = `${c.hmrcCode}Disallowable`;
+        return row('Disallowable expenses', c.name, field, summary.periodDisallowableExpenses[field]);
+      }),
+    ],
+  );
+}
+
 const querySchema = z.object({ taxYearId: z.coerce.number().int().positive() });
+const exportSchema = z.object({ basis: z.enum(['cumulative', 'period']) });
 
 export function parseQuarter(value: string | string[] | undefined): number {
   const quarter = Number(value);
@@ -168,6 +200,17 @@ export function mtdRouter(ctx: AppContext): Router {
       amendments: getAmendments(db, taxYearId, environment),
     };
     res.json(response);
+  });
+
+  router.get('/quarters/:taxYearId/:quarter/export.csv', (req, res) => {
+    const taxYear = getTaxYear(ctx.db, parseId(req.params.taxYearId));
+    if (!taxYear) throw new HttpError(404, 'Tax year not found');
+    const quarter = parseQuarter(req.params.quarter);
+    const { basis } = parseWith(exportSchema, req.query);
+    const q = quarterSummaries(ctx.db, taxYear, ctx.config.hmrc.environment)[quarter - 1];
+    const csv = basis === 'cumulative' ? mtdCsv(q.cumulative, taxYear.startDate, q.endDate) : mtdCsv(q.period, q.startDate, q.endDate);
+    const label = basis === 'cumulative' ? 'year-to-date' : 'quarter-only';
+    res.attachment(`crafty-mtd-${taxYear.label}-Q${quarter}-${label}.csv`).type('text/csv').send(csv);
   });
 
   router.put('/quarters/:taxYearId/:quarter/submission', (req, res) => {
