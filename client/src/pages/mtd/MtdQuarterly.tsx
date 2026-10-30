@@ -7,7 +7,6 @@ import {
   daysBetween,
   formatDisplayDate,
   formatGBP,
-  mtdConsolidatedExpensesPence,
   mtdEarliestSendDate,
   mtdPayload,
   startYearFromLabel,
@@ -194,9 +193,9 @@ function FiguresTable({ summary, categories, oneTotal }: { summary: MtdPeriodSum
           {oneTotal && section('Sent to HMRC as one total')}
           {oneTotal && (
             <tr className="text-ink">
-              <td className="px-4 py-2.5 sm:pl-6">Allowable expenses, leaving out entertainment and depreciation</td>
+              <td className="px-4 py-2.5 sm:pl-6">Allowable expenses</td>
               <td className="px-4 py-2.5 font-mono text-xs text-faint">consolidatedExpenses</td>
-              <td className="tabular px-4 py-2.5 text-right">{formatGBP(mtdConsolidatedExpensesPence(summary))}</td>
+              <td className="tabular px-4 py-2.5 text-right">{formatGBP(t.allowableExpensesPence)}</td>
               <td className="sm:pr-6" />
             </tr>
           )}

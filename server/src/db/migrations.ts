@@ -285,6 +285,14 @@ ALTER TABLE tax_years ADD COLUMN mtd_expenses TEXT NOT NULL DEFAULT 'itemised'
   CHECK (mtd_expenses IN ('itemised', 'consolidated'));
 `,
   },
+  // Entertainment and depreciation are never allowable, so their lines are always disallowable.
+  {
+    version: 15,
+    sql: `
+UPDATE expense_line_items SET disallowable = 1
+WHERE category_id IN (SELECT id FROM categories WHERE type = 'EXPENSE' AND hmrc_code IN ('businessEntertainmentCosts', 'depreciation'));
+`,
+  },
 ];
 
 export const CURRENT_SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;

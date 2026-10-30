@@ -9,7 +9,6 @@ import {
   isValidIsoDate,
   mileageClaims,
   mtdEarliestSendDate,
-  mtdConsolidatedExpensesPence,
   mtdPayload,
   mtdQuarters,
   mtdQuarterStatus,
@@ -163,8 +162,7 @@ describe('MTD quarters', () => {
       [
         { hmrcCode: 'adminCosts', amountPence: 2000, disallowable: false },
         { hmrcCode: 'adminCosts', amountPence: 1001, disallowable: true },
-        // Never allowable, marked or not, as on the SA103S.
-        { hmrcCode: 'businessEntertainmentCosts', amountPence: 500, disallowable: false },
+        { hmrcCode: 'businessEntertainmentCosts', amountPence: 500, disallowable: true },
         { hmrcCode: 'depreciation', amountPence: 300, disallowable: true },
       ],
     );
@@ -173,7 +171,7 @@ describe('MTD quarters', () => {
       periodIncome: { turnover: 518.05, other: 0 },
       periodExpenses: { consolidatedExpenses: 20 },
     });
-    expect(mtdConsolidatedExpensesPence(summary)).toBe(buildSelfAssessmentSummary(summary).totalAllowableExpensesPence);
+    expect(buildSelfAssessmentSummary(summary).totalAllowableExpensesPence).toBe(2000);
   });
 
   it('knows the first day a quarter can be sent', () => {

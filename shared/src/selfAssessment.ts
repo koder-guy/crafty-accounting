@@ -34,6 +34,12 @@ export const SA103S_EXPENSE_BOXES: Sa103sBoxDefinition[] = [
 ];
 
 /** MTD categories that can never be claimed, so they never go in a box. */
+/** Always disallowable: lines in these categories are saved that way, whatever the form sends. */
+export const isNeverAllowable = (hmrcCode: string): boolean => hmrcCode in SA103S_NOT_ALLOWABLE;
+
+/** Nothing to record on the cash basis, so it isn't offered for new lines. Kept as an MTD field, sent as zero. */
+export const CASH_BASIS_UNUSED_CODE = 'depreciation';
+
 export const SA103S_NOT_ALLOWABLE: Record<string, string> = {
   businessEntertainmentCosts: 'Business and client entertaining is not an allowable expense.',
   depreciation:

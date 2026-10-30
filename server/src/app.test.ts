@@ -1027,6 +1027,71 @@ describe('MTD quarters', () => {
     await agent.get(`/api/mtd/quarters/${yearId}/5/export.csv`).query({ basis: 'period' }).expect(404);
   });
 
+  it('always saves entertainment and depreciation as disallowable', async () => {
+    const yearId = await createYear(2026, 'mtd');
+    const lines = [
+      { description: 'Client lunch', amountPence: 2000, categoryId: cat('businessEntertainmentCosts') },
+      { description: 'Old depreciation', amountPence: 500, categoryId: cat('depreciation') },
+      { description: 'Stamps', amountPence: 300, categoryId: cat('adminCosts') },
+    ];
+    const created = await agent
+      .post('/api/expenses')
+      .send(expense(yearId, { date: '2026-05-02', totalPence: 2800, lineItems: lines }))
+      .expect(201);
+    expect(created.body.lineItems.map((l: { disallowable: boolean }) => l.disallowable)).toEqual([true, true, false]);
+    expect(created.body.disallowablePence).toBe(2500);
+
+    const q1 = (await agent.get('/api/mtd/quarters').query({ taxYearId: yearId })).body.quarters[0].cumulative;
+    expect(mtdPayload(q1, '2026-04-06', '2026-07-05', 'itemised').periodDisallowableExpenses).toEqual({
+      businessEntertainmentCostsDisallowable: 20,
+      depreciationDisallowable: 5,
+    });
+    expect(q1.totals.netProfitPence).toBe(-300);
+
+    // Editing can't undo it.
+    const edited = await agent
+      .put(`/api/expenses/${created.body.id}`)
+      .send(
+        expense(yearId, {
+          date: '2026-05-02',
+          totalPence: 2800,
+          lineItems: created.body.lineItems.map((l: { id: number; description: string; amountPence: number; categoryId: number }) => ({
+            id: l.id,
+            description: l.description,
+            amountPence: l.amountPence,
+            categoryId: l.categoryId,
+            disallowable: false,
+          })),
+        }),
+      )
+      .expect(200);
+    expect(edited.body.disallowablePence).toBe(2500);
+  });
+
+  it('marks entertainment and depreciation as disallowable in an older backup', async () => {
+    const old = new Database(':memory:');
+    old.exec('CREATE TABLE schema_migrations (version INTEGER PRIMARY KEY, applied_at TEXT)');
+    for (const migration of MIGRATIONS.filter((m) => m.version <= 14)) {
+      old.exec(migration.sql);
+      old.prepare('INSERT INTO schema_migrations (version) VALUES (?)').run(migration.version);
+    }
+    seedCategories(old);
+    old.prepare("INSERT INTO tax_years (label, start_date, end_date) VALUES ('2025-26', '2025-04-06', '2026-04-05')").run();
+    old.prepare("INSERT INTO expenses (tax_year_id, date, payee, payment_method, total_pence) VALUES (1, '2025-05-02', 'Cafe', 'card', 2300)").run();
+    const line = old.prepare(
+      `INSERT INTO expense_line_items (expense_id, description, amount_pence, category_id)
+       VALUES (1, ?, ?, (SELECT id FROM categories WHERE hmrc_code = ? AND is_custom = 0))`,
+    );
+    line.run('Client lunch', 2000, 'businessEntertainmentCosts');
+    line.run('Stamps', 300, 'adminCosts');
+    const dump = dumpSql(old);
+    old.close();
+
+    await agent.post('/api/restore').attach('file', Buffer.from(dump), 'backup.sql').expect(200);
+    const { body } = await agent.get('/api/expenses/1').expect(200);
+    expect(body.lineItems.map((l: { disallowable: boolean }) => l.disallowable)).toEqual([true, false]);
+  });
+
   it('exports just the income and one expenses total when the year sends one total', async () => {
     const yearId = await createYear(2025, 'mtd');
     await agent.post('/api/incomes').send(income(yearId, { date: '2025-06-14', amountPence: 38000 })).expect(201);

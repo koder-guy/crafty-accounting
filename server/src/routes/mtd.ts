@@ -9,7 +9,6 @@ import {
   buildMtdPeriodSummary,
   displayTaxYear,
   formatDisplayDate,
-  mtdConsolidatedExpensesPence,
   mtdEarliestSendDate,
   mtdQuarters,
   mtdSubmissionSchema,
@@ -157,7 +156,7 @@ function refuseIfSent(db: Db, taxYearId: number, quarter: number, environment: H
  */
 function mtdCsv(summary: MtdPeriodSummary, from: string, to: string, expenses: MtdExpenses): string {
   const income = INCOME_CATEGORIES.map((c): [string, number | undefined] => [c.hmrcCode, summary.periodIncome[c.hmrcCode]]);
-  const consolidated: [string, number | undefined][] = [...income, ['consolidatedExpenses', mtdConsolidatedExpensesPence(summary)]];
+  const consolidated: [string, number | undefined][] = [...income, ['consolidatedExpenses', summary.totals.allowableExpensesPence]];
   const itemised: [string, number | undefined][] = [
     ...income,
     ...EXPENSE_CATEGORIES.map((c): [string, number | undefined] => [c.hmrcCode, summary.periodExpenses[c.hmrcCode]]),

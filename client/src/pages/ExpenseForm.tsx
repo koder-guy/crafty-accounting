@@ -3,8 +3,10 @@ import { useFieldArray, useForm, useWatch } from 'react-hook-form';
 import { useNavigate, useParams, useSearchParams } from 'react-router';
 import { Plus, Trash2 } from 'lucide-react';
 import {
+  CASH_BASIS_UNUSED_CODE,
   formatGBP,
   displayTaxYear,
+  isNeverAllowable,
   formatDisplayDate,
   isDateInTaxYear,
   parsePoundsToPence,
@@ -64,6 +66,13 @@ export function ExpenseForm() {
   const { taxYear: activeYear, isLoading: yearLoading } = useActiveTaxYear();
   const { data: categories = [] } = useCategories();
   const expenseCategories = categories.filter((c) => c.type === 'EXPENSE');
+  // Depreciation isn't offered, but a line already using it (or a custom category mapped to it) keeps it.
+  const lineCategories = (current: string | undefined) => {
+    const usesIt = categories.some((c) => String(c.id) === current && c.hmrcCode === CASH_BASIS_UNUSED_CODE);
+    return usesIt ? categories : categories.filter((c) => c.hmrcCode !== CASH_BASIS_UNUSED_CODE);
+  };
+  const neverAllowable = (categoryId: string | undefined) =>
+    expenseCategories.some((c) => String(c.id) === categoryId && isNeverAllowable(c.hmrcCode));
   const defaultCategory = String(expenseCategories.find((c) => !c.isCustom && c.hmrcCode === 'costOfGoods')?.id ?? '');
   const save = useSaveTransaction<ExpenseWithLineItems>('expenses');
 
@@ -174,7 +183,7 @@ export function ExpenseForm() {
   const lineSum = linePence.reduce<number>((acc, p) => acc + (p ?? 0), 0);
   const totalPence = parsePoundsToPence(watchedTotal ?? '');
   const disallowableSum = (watchedLines ?? []).reduce(
-    (acc, li, i) => acc + (li?.disallowable ? (linePence[i] ?? 0) : 0),
+    (acc, li, i) => acc + (li?.disallowable || neverAllowable(li?.categoryId) ? (linePence[i] ?? 0) : 0),
     0,
   );
   const difference = totalPence !== null ? totalPence - lineSum : null;
@@ -376,7 +385,7 @@ export function ExpenseForm() {
                             {...register(`lineItems.${index}.categoryId`, { required: 'Choose a category' })}
                           >
                             <option value="">Choose…</option>
-                            <CategoryOptions categories={categories} type="EXPENSE" />
+                            <CategoryOptions categories={lineCategories(watchedLines?.[index]?.categoryId)} type="EXPENSE" />
                           </select>
                           {lineErrors?.categoryId && <p className="mt-1 text-xs text-out-soft">{lineErrors.categoryId.message}</p>}
                         </td>
@@ -391,12 +400,24 @@ export function ExpenseForm() {
                           {lineErrors?.amount && <p className="mt-1 text-xs text-out-soft">{lineErrors.amount.message}</p>}
                         </td>
                         <td className="px-4 py-3 text-center">
-                          <input
-                            type="checkbox"
-                            aria-label={`Line ${index + 1} disallowable`}
-                            className="mt-2.5 size-4 accent-[var(--color-accent)]"
-                            {...register(`lineItems.${index}.disallowable`)}
-                          />
+                          {neverAllowable(watchedLines?.[index]?.categoryId) ? (
+                            <input
+                              type="checkbox"
+                              aria-label={`Line ${index + 1} disallowable`}
+                              title="HMRC never allows this category"
+                              className="mt-2.5 size-4 accent-[var(--color-accent)]"
+                              checked
+                              disabled
+                              readOnly
+                            />
+                          ) : (
+                            <input
+                              type="checkbox"
+                              aria-label={`Line ${index + 1} disallowable`}
+                              className="mt-2.5 size-4 accent-[var(--color-accent)]"
+                              {...register(`lineItems.${index}.disallowable`)}
+                            />
+                          )}
                         </td>
                         <td className="px-2 py-3 text-center">
                           <IconButton

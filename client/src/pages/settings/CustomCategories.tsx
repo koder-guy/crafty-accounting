@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { Pencil, Plus, Tags, Trash2 } from 'lucide-react';
-import type { Category } from '@crafty/shared';
+import { CASH_BASIS_UNUSED_CODE, type Category } from '@crafty/shared';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { Alert, Badge, Button, Card, CardHeader, EmptyState, Field, IconButton, Spinner } from '../../components/ui';
 import { useCanEdit, useCategories, useCategoryMutations } from '../../lib/queries';
@@ -43,7 +43,8 @@ function CategoryForm({
   const group = (type: Category['type'], label: string) => (
     <optgroup label={label}>
       {standard
-        .filter((s) => s.type === type)
+        // A custom category already mapped to depreciation keeps its choice.
+        .filter((s) => s.type === type && (s.hmrcCode !== CASH_BASIS_UNUSED_CODE || s.id === mappedTo?.id))
         .map((s) => (
           <option key={s.id} value={s.id}>
             {s.name}

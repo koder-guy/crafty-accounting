@@ -6,6 +6,7 @@ import {
   formatDisplayDate,
   incomeInputSchema,
   isDateInTaxYear,
+  isNeverAllowable,
   MAX_DOCUMENTS,
   PAYMENT_METHOD_LABELS,
   penceToPounds,
@@ -260,7 +261,7 @@ export function expensesRouter(ctx: AppContext): Router {
     description: item.description,
     amountPence: item.amountPence,
     categoryId: item.categoryId,
-    disallowable: item.disallowable ? 1 : 0,
+    disallowable: item.disallowable || isNeverAllowable(getCategory(ctx.db, item.categoryId)!.hmrcCode) ? 1 : 0,
     sortOrder,
   });
 

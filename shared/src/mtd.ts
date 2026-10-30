@@ -1,6 +1,5 @@
 import { EXPENSE_CATEGORIES, INCOME_CATEGORIES, type CategorySeed } from './categories';
 import type { MtdExpenses } from './schemas';
-import { SA103S_NOT_ALLOWABLE } from './selfAssessment';
 
 // Aggregates transactions into the shape of an MTD Self-Employment period
 // summary. Amounts stay in pence here; convert with penceToMtdAmount when
@@ -80,17 +79,6 @@ export function penceToMtdAmount(pence: number): number {
 /** One total can be sent for expenses while annual turnover is below this, the VAT registration threshold. */
 export const VAT_REGISTRATION_THRESHOLD_PENCE = 9_000_000;
 
-/**
- * Expenses as one total: HMRC wants allowable expenses only. Entertainment and
- * depreciation are left out even when not marked disallowable, as on the SA103S.
- */
-export function mtdConsolidatedExpensesPence(summary: MtdPeriodSummary): number {
-  return Object.keys(SA103S_NOT_ALLOWABLE).reduce(
-    (total, code) => total - (summary.periodExpenses[code] ?? 0) + (summary.periodDisallowableExpenses[`${code}Disallowable`] ?? 0),
-    summary.totals.allowableExpensesPence,
-  );
-}
-
 export interface MtdPayload {
   periodDates: { periodStartDate: string; periodEndDate: string };
   periodIncome: Record<string, number>;
@@ -115,7 +103,7 @@ export function mtdPayload(summary: MtdPeriodSummary, periodStartDate: string, p
   const periodDates = { periodStartDate, periodEndDate };
   const periodIncome = every(INCOME_CATEGORIES, summary.periodIncome);
   if (expenses === 'consolidated') {
-    return { periodDates, periodIncome, periodExpenses: { consolidatedExpenses: penceToMtdAmount(mtdConsolidatedExpensesPence(summary)) } };
+    return { periodDates, periodIncome, periodExpenses: { consolidatedExpenses: penceToMtdAmount(summary.totals.allowableExpensesPence) } };
   }
   return {
     periodDates,
