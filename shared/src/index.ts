@@ -7,6 +7,7 @@ export * from './selfAssessment';
 export * from './mileage';
 export * from './taxEstimate';
 export * from './useOfHome';
+export * from './photos';
 export * from './types';
 
 export const APP_NAME = 'Crafty Accounting';

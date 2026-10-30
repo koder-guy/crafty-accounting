@@ -5,7 +5,7 @@ import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import request from 'supertest';
 import Database from 'better-sqlite3';
-import { mtdPayload, type Category, type SubmissionMethod } from '@crafty/shared';
+import { mtdPayload, photoFilename, type Category, type SubmissionMethod } from '@crafty/shared';
 import { createApp } from './app';
 import { dumpSql } from './backup';
 import { NEXT_UPDATED_AT, nextTimestamp } from './repo';
@@ -507,6 +507,24 @@ describe('incomes', () => {
 
     const doc = await agent.get(`/api/documents/${encodeURIComponent('Square payout 14-06-2025.pdf')}`).expect(200);
     expect(doc.headers['content-type']).toBe('application/pdf');
+  });
+
+  it('stores photos from a camera under their generated names', async () => {
+    const yearId = await createYear();
+    const jpeg = photoFilename({ type: 'image/jpeg', name: 'image.jpg' });
+    const heic = photoFilename({ type: 'image/heic', name: 'IMG_0001.HEIC' });
+    expect(documentNameProblem(jpeg)).toBeNull();
+    expect(documentNameProblem(heic)).toBeNull();
+    await agent
+      .post('/api/expenses')
+      .field('data', JSON.stringify(expense(yearId)))
+      .attach('documents', Buffer.from('jpeg'), jpeg)
+      .attach('documents', Buffer.from('heic'), heic)
+      .expect(201);
+    const saved = await agent.get(`/api/documents/${encodeURIComponent(jpeg)}`).expect(200);
+    expect(saved.headers['content-type']).toBe('image/jpeg');
+    const savedHeic = await agent.get(`/api/documents/${encodeURIComponent(heic)}`).expect(200);
+    expect(savedHeic.headers['content-type']).toBe('image/heic');
   });
 
   it('rejects disallowed file types', async () => {

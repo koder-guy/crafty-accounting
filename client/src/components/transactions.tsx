@@ -3,11 +3,12 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode }
 import { createPortal } from 'react-dom';
 import type { UseFormRegisterReturn } from 'react-hook-form';
 import { Link, useSearchParams } from 'react-router';
-import { ChevronDown, ChevronsUpDown, ChevronUp, Download, Eye, FileText, Paperclip, Pencil, Search, Trash2 } from 'lucide-react';
+import { Camera, ChevronDown, ChevronsUpDown, ChevronUp, Download, Eye, FileText, Paperclip, Pencil, Search, Trash2 } from 'lucide-react';
 import {
   MAX_DOCUMENTS,
   PAYMENT_METHOD_LABELS,
   PAYMENT_METHODS,
+  photoFilename,
   type Category,
   type CategoryType,
   type PaymentMethod,
@@ -18,6 +19,7 @@ import {
 import { documentUrl } from '../lib/api';
 import { dismissWithoutClicking } from '../lib/menus';
 import { useCanEdit } from '../lib/queries';
+import { CameraDialog, useCameraOption } from './CameraDialog';
 import { CategoryOptions } from './CategoryOptions';
 import { Button, IconButton, PaymentBadge, SOFT_DANGER } from './ui';
 
@@ -465,6 +467,11 @@ export function documentProblem(file: File): string | null {
 const fileSize = (bytes: number) =>
   bytes < 1024 * 1024 ? `${Math.max(1, Math.round(bytes / 1024))} KB` : `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 
+const asPhoto = (file: File) => new File([file], photoFilename(file), { type: file.type, lastModified: file.lastModified });
+
+// What an iPhone calls every photo taken from the file picker, which would clash with the last one.
+const CAMERA_DEFAULT_NAME = /^image\.\w+$/i;
+
 /**
  * The documents on a transaction: the ones already attached (each can be marked
  * for removal) and new files picked to add when it's saved.
@@ -483,14 +490,21 @@ export function DocumentField({
   onRemoveIds: (ids: number[]) => void;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const photoInputRef = useRef<HTMLInputElement>(null);
   const [error, setError] = useState<string | null>(null);
+  const [cameraOpen, setCameraOpen] = useState(false);
+  const cameraOption = useCameraOption();
   const kept = current.length - removeIds.length;
   const room = MAX_DOCUMENTS - kept - files.length;
+  const addButton = `inline-flex items-center gap-1.5 rounded-md border border-line-strong bg-surface px-3 py-1.5 text-sm text-ink ${
+    room > 0 ? 'cursor-pointer hover:border-accent-soft/60' : 'cursor-not-allowed opacity-50'
+  }`;
 
-  const choose = (picked: FileList | null) => {
+  const choose = (picked: File[]) => {
     setError(null);
-    const chosen = [...(picked ?? [])];
+    const chosen = picked.map((f) => (CAMERA_DEFAULT_NAME.test(f.name) ? asPhoto(f) : f));
     if (inputRef.current) inputRef.current.value = '';
+    if (photoInputRef.current) photoInputRef.current.value = '';
     if (chosen.length === 0) return;
     const taken = new Set([...current.map((d) => d.filename), ...files.map((f) => f.name)]);
     for (const file of chosen) {
@@ -550,11 +564,35 @@ export function DocumentField({
           </li>
         ))}
         <li className="flex flex-wrap items-center gap-3 px-4 py-2.5">
-          <span className="min-w-0 flex-1 text-sm text-muted">
+          <span className="min-w-max flex-1 text-sm text-muted">
             {current.length === 0 && files.length === 0
               ? 'No documents attached'
               : `${kept + files.length} of ${MAX_DOCUMENTS} documents`}
           </span>
+          {cameraOption === 'phone' && (
+            <>
+              <input
+                ref={photoInputRef}
+                id="document-photo"
+                type="file"
+                accept="image/*"
+                capture="environment"
+                className="sr-only"
+                disabled={room <= 0}
+                onChange={(e) => choose([...(e.target.files ?? [])].map(asPhoto))}
+              />
+              <label htmlFor="document-photo" className={addButton}>
+                <Camera className="size-4" aria-hidden />
+                Take photo
+              </label>
+            </>
+          )}
+          {(cameraOption === 'webcam' || cameraOption === 'needsHttps') && (
+            <button type="button" className={addButton} disabled={room <= 0} onClick={() => setCameraOpen(true)}>
+              <Camera className="size-4" aria-hidden />
+              Take photo
+            </button>
+          )}
           <input
             ref={inputRef}
             id="document"
@@ -563,19 +601,15 @@ export function DocumentField({
             accept={ACCEPT}
             className="sr-only"
             disabled={room <= 0}
-            onChange={(e) => choose(e.target.files)}
+            onChange={(e) => choose([...(e.target.files ?? [])])}
           />
-          <label
-            htmlFor="document"
-            className={`rounded-md border border-line-strong bg-surface px-3 py-1.5 text-sm text-ink ${
-              room > 0 ? 'cursor-pointer hover:border-accent-soft/60' : 'cursor-not-allowed opacity-50'
-            }`}
-          >
+          <label htmlFor="document" className={addButton}>
             {current.length || files.length ? 'Add more' : 'Choose files'}
           </label>
         </li>
       </ul>
       {error && <p className="mt-1.5 text-xs text-out-soft">{error}</p>}
+      {cameraOpen && <CameraDialog onPhoto={(photo) => choose([photo])} onClose={() => setCameraOpen(false)} />}
     </div>
   );
 }

@@ -15,6 +15,7 @@ import {
   mtdQuarterStatus,
   parseMilesToTenths,
   parsePoundsToPence,
+  photoFilename,
   penceToPounds,
   selfAssessmentDeadline,
   startYearFromLabel,
@@ -379,6 +380,20 @@ describe('use of home', () => {
     expect(months[0]).toMatchObject({ startDate: '2025-04-06', endDate: '2025-05-05' });
     expect(months[8]).toMatchObject({ startDate: '2025-12-06', endDate: '2026-01-05' });
     expect(months[11]).toMatchObject({ startDate: '2026-03-06', endDate: '2026-04-05' });
+  });
+});
+
+describe('photo filenames', () => {
+  const at = new Date(2026, 9, 30, 14, 5, 9);
+
+  it('names a photo by when it was taken, in local time, with a random part', () => {
+    expect(photoFilename({ type: 'image/jpeg', name: 'image.jpg' }, at)).toMatch(/^Photo 2026-10-30 14-05-09 [0-9a-f]{4}\.jpg$/);
+  });
+
+  it('takes the extension from the type, then the old name, then assumes JPEG', () => {
+    expect(photoFilename({ type: 'image/heic', name: 'image.jpg' }, at)).toMatch(/\.heic$/);
+    expect(photoFilename({ type: '', name: 'IMG_0001.HEIC' }, at)).toMatch(/\.heic$/);
+    expect(photoFilename({ type: '' }, at)).toMatch(/\.jpg$/);
   });
 });
 
