@@ -3,11 +3,7 @@
 #
 #   /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/koder-guy/crafty-accounting/main/install.sh)"
 #
-# The repository is public, so no token is needed. Should it be made private
-# again, the script asks for a GitHub token that can read it (a fine-grained
-# personal access token with Contents: Read-only) unless GITHUB_TOKEN is set; the
-# token is only used for the downloads and isn't saved. To update, run
-# ~/crafty-accounting/crafty update.
+# To update, run ~/crafty-accounting/crafty update.
 #
 # Everything goes in ~/crafty-accounting: its own copy of Node 22 (from nodejs.org),
 # the app, your settings (.env) and your books (data/). Nothing is installed system
@@ -25,15 +21,12 @@
 #   CRAFTY_BRANCH          branch or tag to install (default main)
 #   CRAFTY_TARBALL         URL of the app's source .tar.gz, instead of GitHub's for CRAFTY_BRANCH
 #   CRAFTY_REPO            GitHub repository to install from (default koder-guy/crafty-accounting)
-#   GITHUB_TOKEN           token for downloading from the private repository (see above)
 
 set -euo pipefail
 
 REPO="${CRAFTY_REPO:-koder-guy/crafty-accounting}"
 BRANCH="${CRAFTY_BRANCH:-main}"
-# GitHub's API serves a private repository's source to a token (redirecting to a
-# short-lived download link); its public archive URLs don't take one.
-TARBALL="${CRAFTY_TARBALL:-https://api.github.com/repos/$REPO/tarball/$BRANCH}"
+TARBALL="${CRAFTY_TARBALL:-https://github.com/$REPO/archive/$BRANCH.tar.gz}"
 DIR="${CRAFTY_DIR:-$HOME/crafty-accounting}"
 NODE_DIST="https://nodejs.org/dist/latest-v22.x"
 
@@ -45,43 +38,6 @@ fail() { printf '\n%sError: %s%s\n' "$red" "$1" "$reset" >&2; exit 1; }
 for tool in curl tar; do
   command -v "$tool" >/dev/null 2>&1 || fail "$tool is needed. Install it with your package manager (e.g. sudo apt install $tool) and run this again."
 done
-
-# ---- GitHub token, needed while the repository is private ----
-# The HTTP status GitHub gives for reading the repository, with the token if one
-# is given: 200 if it can.
-repo_status() {
-  local auth=()
-  [ -n "${1:-}" ] && auth=(-H "Authorization: Bearer $1")
-  curl -sS -o /dev/null -w '%{http_code}' ${auth[@]+"${auth[@]}"} "https://api.github.com/repos/$REPO" 2>/dev/null || true
-}
-if [ -z "${CRAFTY_TARBALL:-}" ]; then
-  if [ -n "${GITHUB_TOKEN:-}" ]; then
-    status="$(repo_status "$GITHUB_TOKEN")"
-    if [ "$status" != 200 ]; then
-      [ "$(repo_status)" = 200 ] || fail "GitHub didn't accept GITHUB_TOKEN for $REPO (HTTP $status). Check it can read the repository and hasn't expired."
-      echo "GitHub didn't accept GITHUB_TOKEN, but $REPO is public, so carrying on without it."
-      GITHUB_TOKEN=""
-    fi
-  elif [ "$(repo_status)" = 200 ]; then
-    : # A public repository: no token needed.
-  elif (: </dev/tty) 2>/dev/null; then
-    echo "The app is in a private GitHub repository. Paste a GitHub token that can read"
-    echo "$REPO (it won't be shown) and press Enter."
-    for attempt in 1 2 3; do
-      printf 'GitHub token: '
-      read -rs GITHUB_TOKEN </dev/tty || true
-      echo
-      [ -n "$GITHUB_TOKEN" ] || continue
-      status="$(repo_status "$GITHUB_TOKEN")"
-      [ "$status" = 200 ] && break
-      echo "GitHub didn't accept that token (HTTP $status). Check it can read the repository and hasn't expired."
-      GITHUB_TOKEN=""
-    done
-    [ -n "$GITHUB_TOKEN" ] || fail "no working GitHub token. Make a fine-grained token for $REPO with Contents: Read-only."
-  else
-    fail "GITHUB_TOKEN isn't set and there's no terminal to ask for it. The repository is private, so the download needs a GitHub token (fine-grained, Contents: Read-only)."
-  fi
-fi
 
 case "$(uname -s)" in
   Darwin) OS=darwin ;;
@@ -100,6 +56,11 @@ fi
 sha256() {
   if command -v sha256sum >/dev/null 2>&1; then sha256sum "$1" | cut -d' ' -f1; else shasum -a 256 "$1" | cut -d' ' -f1; fi
 }
+
+# install-docker.sh uses the same folder by default, laid out differently.
+if [ -f "$DIR/docker-compose.yml" ] || grep -qs '^# Written by install-docker.sh' "$DIR/.env"; then
+  fail "$DIR has the Docker install. Update that with $DIR/install-docker.sh, or put this one somewhere else with CRAFTY_DIR."
+fi
 
 mkdir -p "$DIR"
 cd "$DIR"
@@ -127,11 +88,7 @@ export PATH="$DIR/node/bin:$PATH"
 # ---- The app, built next to the running copy so a failed update leaves it working ----
 step "Downloading the app ($BRANCH)"
 rm -rf app.new && mkdir app.new
-# The token goes only to GitHub's API: curl drops the header when following the redirect.
-auth=()
-[ -n "${GITHUB_TOKEN:-}" ] && auth=(-H "Authorization: Bearer $GITHUB_TOKEN")
-curl -fsSL ${auth[@]+"${auth[@]}"} "$TARBALL" | tar -xz -C app.new --strip-components=1 \
-  || fail "couldn't download the app ($BRANCH). Check that GITHUB_TOKEN can read $REPO and hasn't expired."
+curl -fsSL "$TARBALL" | tar -xz -C app.new --strip-components=1 || fail "couldn't download the app ($BRANCH) from $TARBALL."
 
 step "Installing packages (this takes a minute or two)"
 # better-sqlite3, esbuild and fsevents ship ready-built binaries. Without

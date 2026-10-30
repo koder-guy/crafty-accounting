@@ -4,21 +4,19 @@
 #
 #   /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/koder-guy/crafty-accounting/main/install-docker.sh)"
 #
-# The repository is public, so no token is needed. Should it be made private
-# again, the script asks for a GitHub token that can read it (a fine-grained
-# personal access token with Contents: Read-only) unless GITHUB_TOKEN is set; the
-# token is only used for the downloads and isn't saved. To update, run
-# ~/crafty-accounting-docker/install-docker.sh again.
+# To update, run ~/crafty-accounting/install-docker.sh again.
 #
 # Needs Docker with Compose: Docker Desktop (or OrbStack) on a Mac. On Linux it
 # offers to install Docker with Docker's own script (get.docker.com) if it's missing.
 # The source, settings (.env) and automatic backups (backups/) go in
-# ~/crafty-accounting-docker; the books are in the crafty-data Docker volume.
+# ~/crafty-accounting, the same folder install.sh uses, so only one of the two can
+# be there; the books are in the crafty-data Docker volume. An install in the old
+# folder, ~/crafty-accounting-docker, is moved there.
 # Docker restarts the containers when Docker itself starts (restart: unless-stopped
 # in docker-compose.yml).
 #
 # Optional settings, given as environment variables before the command:
-#   CRAFTY_DIR             where to install (default ~/crafty-accounting-docker)
+#   CRAFTY_DIR             where to install (default ~/crafty-accounting)
 #   CRAFTY_HTTP_PORT       HTTP port (default 80, or 8080 if 80 is taken)
 #   CRAFTY_HTTPS_PORT      HTTPS port (default 443, or 8443 if 443 is taken)
 #   CRAFTY_ADMIN_NAME      first person's sign-in name (default Admin)
@@ -27,7 +25,6 @@
 #   CRAFTY_TARBALL         URL of the app's source .tar.gz, instead of GitHub's for CRAFTY_BRANCH
 #   CRAFTY_PROJECT         Docker Compose project name (default crafty-accounting)
 #   CRAFTY_REPO            GitHub repository to install from (default koder-guy/crafty-accounting)
-#   GITHUB_TOKEN           token for downloading from the private repository (see above)
 
 set -euo pipefail
 
@@ -36,16 +33,26 @@ set -euo pipefail
 main() {
   local REPO="${CRAFTY_REPO:-koder-guy/crafty-accounting}"
   local BRANCH="${CRAFTY_BRANCH:-main}"
-  # GitHub's API serves a private repository's source to a token (redirecting to a
-  # short-lived download link); its public archive URLs don't take one.
-  local TARBALL="${CRAFTY_TARBALL:-https://api.github.com/repos/$REPO/tarball/$BRANCH}"
+  local TARBALL="${CRAFTY_TARBALL:-https://github.com/$REPO/archive/$BRANCH.tar.gz}"
+  local NEW_DIR="$HOME/crafty-accounting" OLD_DIR="$HOME/crafty-accounting-docker" MOVE_FROM=""
   # Run as an install's own install-docker.sh (to update it), that install is the default.
-  local default_dir="$HOME/crafty-accounting-docker" here
+  local default_dir="$NEW_DIR" here
   if [ -f "${BASH_SOURCE[0]:-}" ]; then
     here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-    grep -qs '^# Written by install-docker.sh' "$here/.env" && default_dir="$here"
+    is_docker_install "$here" && default_dir="$here"
   fi
   local DIR="${CRAFTY_DIR:-$default_dir}"
+  # Installs used to go in ~/crafty-accounting-docker: move one to the new folder if that's free.
+  if [ -z "${CRAFTY_DIR:-}" ] && { [ "$DIR" = "$NEW_DIR" ] || [ "$DIR" = "$OLD_DIR" ]; } \
+    && is_docker_install "$OLD_DIR" && ! is_docker_install "$NEW_DIR"; then
+    if [ -z "$(ls -A "$NEW_DIR" 2>/dev/null)" ]; then
+      MOVE_FROM="$OLD_DIR"
+      DIR="$NEW_DIR"
+    else
+      DIR="$OLD_DIR"
+      echo "$NEW_DIR is already in use, so updating the install in $OLD_DIR where it is."
+    fi
+  fi
 
   bold=$'\033[1m'; green=$'\033[32m'; red=$'\033[31m'; reset=$'\033[0m'
 
@@ -59,19 +66,29 @@ main() {
     *) fail "this installer is for macOS and Linux." ;;
   esac
 
-  get_token
+  # install.sh uses the same folder by default, laid out differently.
+  if [ -x "$DIR/crafty" ] && [ -d "$DIR/app" ] && ! is_docker_install "$DIR"; then
+    fail "$DIR has the install made without Docker (install.sh). Update that with $DIR/crafty update, or put this one somewhere else with CRAFTY_DIR."
+  fi
+
   check_docker
+
+  if [ -n "$MOVE_FROM" ]; then
+    step "Moving the install from $MOVE_FROM to $DIR"
+    # The books stay in their Docker volumes; only the containers go, and they're recreated below.
+    (cd "$MOVE_FROM" && compose down) || fail "couldn't stop the containers in $MOVE_FROM (see above)."
+    rmdir "$DIR" 2>/dev/null || true
+    mv "$MOVE_FROM" "$DIR" || fail "couldn't move $MOVE_FROM to $DIR."
+    sed -i.bak "s|cd $MOVE_FROM \&\&|cd $DIR \&\&|" "$DIR/.env" && rm -f "$DIR/.env.bak"
+  fi
 
   # ---- The app's source ----
   step "Downloading the app ($BRANCH)"
   mkdir -p "$DIR"
   local src
   src="$(mktemp -d)"
-  local auth=()
-  [ -n "${GITHUB_TOKEN:-}" ] && auth=(-H "Authorization: Bearer $GITHUB_TOKEN")
-  # The token goes only to GitHub's API: curl drops the header when following the redirect.
-  curl -fsSL ${auth[@]+"${auth[@]}"} "$TARBALL" | tar -xz -C "$src" --strip-components=1 \
-    || { rm -rf "$src"; fail "couldn't download the app ($BRANCH). Check that GITHUB_TOKEN can read $REPO and hasn't expired."; }
+  curl -fsSL "$TARBALL" | tar -xz -C "$src" --strip-components=1 \
+    || { rm -rf "$src"; fail "couldn't download the app ($BRANCH) from $TARBALL."; }
   cp -R "$src/." "$DIR/"
   rm -rf "$src"
   chmod +x "$DIR/install-docker.sh"
@@ -208,6 +225,10 @@ Docker starts it again whenever Docker itself starts.
   Settings:    $ENV_FILE
   Backups:     $DIR/backups (daily); the books are in the crafty-data Docker volume
 EOF
+  if [ -n "$MOVE_FROM" ]; then
+    echo
+    echo "The install moved from $MOVE_FROM to $DIR. In a terminal still in the old folder, run: cd $DIR"
+  fi
 }
 
 step() { printf '\n%s==> %s%s\n' "$bold" "$1" "$reset"; }
@@ -216,45 +237,8 @@ env_value() { sed -n "s/^$1=//p" "$DIR/.env" | tail -n 1; }
 port_busy() { (exec 3<>"/dev/tcp/127.0.0.1/$1") 2>/dev/null; }
 compose() { $DOCKER_CMD compose "$@"; }
 
-# The HTTP status GitHub gives for reading the repository, with the token if one
-# is given: 200 if it can.
-repo_status() {
-  local auth=()
-  [ -n "${1:-}" ] && auth=(-H "Authorization: Bearer $1")
-  curl -sS -o /dev/null -w '%{http_code}' ${auth[@]+"${auth[@]}"} "https://api.github.com/repos/$REPO" 2>/dev/null || true
-}
-
-get_token() {
-  [ -z "${CRAFTY_TARBALL:-}" ] || return 0
-  local status
-  if [ -n "${GITHUB_TOKEN:-}" ]; then
-    status="$(repo_status "$GITHUB_TOKEN")"
-    if [ "$status" != 200 ]; then
-      [ "$(repo_status)" = 200 ] || fail "GitHub didn't accept GITHUB_TOKEN for $REPO (HTTP $status). Check it can read the repository and hasn't expired."
-      echo "GitHub didn't accept GITHUB_TOKEN, but $REPO is public, so carrying on without it."
-      GITHUB_TOKEN=""
-    fi
-  elif [ "$(repo_status)" = 200 ]; then
-    : # A public repository: no token needed.
-  elif (: </dev/tty) 2>/dev/null; then
-    echo "The app is in a private GitHub repository. Paste a GitHub token that can read"
-    echo "$REPO (it won't be shown) and press Enter."
-    local attempt
-    for attempt in 1 2 3; do
-      printf 'GitHub token: '
-      read -rs GITHUB_TOKEN </dev/tty || true
-      echo
-      [ -n "$GITHUB_TOKEN" ] || continue
-      status="$(repo_status "$GITHUB_TOKEN")"
-      [ "$status" = 200 ] && break
-      echo "GitHub didn't accept that token (HTTP $status). Check it can read the repository and hasn't expired."
-      GITHUB_TOKEN=""
-    done
-    [ -n "$GITHUB_TOKEN" ] || fail "no working GitHub token. Make a fine-grained token for $REPO with Contents: Read-only."
-  else
-    fail "GITHUB_TOKEN isn't set and there's no terminal to ask for it. The repository is private, so the download needs a GitHub token (fine-grained, Contents: Read-only)."
-  fi
-}
+# Whether a folder holds an install made by this script.
+is_docker_install() { grep -qs '^# Written by install-docker.sh' "$1/.env"; }
 
 # Sets DOCKER_CMD to "docker", or "sudo docker" on Linux when this user can't use Docker directly.
 check_docker() {
