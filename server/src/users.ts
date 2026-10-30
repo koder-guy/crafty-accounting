@@ -28,9 +28,9 @@ export function listUsers(db: Db): User[] {
   return (db.prepare('SELECT * FROM users ORDER BY name COLLATE NOCASE').all() as Row[]).map(mapUser);
 }
 
-export function getUser(db: Db, id: number): (User & { activeTaxYearId: number | null }) | null {
+export function getUser(db: Db, id: number): (User & { activeTaxYearId: number | null; mustChangePassword: boolean }) | null {
   const row = db.prepare('SELECT * FROM users WHERE id = ?').get(id) as Row | undefined;
-  return row ? { ...mapUser(row), activeTaxYearId: row.active_tax_year_id } : null;
+  return row ? { ...mapUser(row), activeTaxYearId: row.active_tax_year_id, mustChangePassword: row.must_change_password === 1 } : null;
 }
 
 /** The user with this name (ignoring case) if the password matches. */
@@ -41,8 +41,10 @@ export function authenticate(db: Db, name: string, password: string): User | nul
   return row && ok ? mapUser(row) : null;
 }
 
-export function createUser(db: Db, name: string, password: string, role: Role = 'editor'): number {
-  const result = db.prepare('INSERT INTO users (name, password_hash, role) VALUES (?, ?, ?)').run(name, hashPassword(password), role);
+export function createUser(db: Db, name: string, password: string, role: Role = 'editor', mustChangePassword = false): number {
+  const result = db
+    .prepare('INSERT INTO users (name, password_hash, role, must_change_password) VALUES (?, ?, ?, ?)')
+    .run(name, hashPassword(password), role, mustChangePassword ? 1 : 0);
   return Number(result.lastInsertRowid);
 }
 
@@ -53,16 +55,17 @@ export const nameTaken = (db: Db, name: string, exceptId = 0) =>
 
 export const userCount = (db: Db) => (db.prepare('SELECT COUNT(*) AS n FROM users').get() as { n: number }).n;
 
+/** The first person's password when ADMIN_PASSWORD isn't set. It has to be changed at the first sign-in. */
+export const DEFAULT_ADMIN_PASSWORD = 'admin';
+
 /**
- * On a new install (or one upgraded from the single shared password), creates
- * the first user from ADMIN_NAME and ADMIN_PASSWORD. After that, people are
+ * On a new install, creates the first person from ADMIN_NAME (default Admin)
+ * and ADMIN_PASSWORD. Without ADMIN_PASSWORD they get the default password,
+ * which they must change when they first sign in. After that, people are
  * managed in Settings → People and these variables are ignored. The first
  * person is always an editor.
  */
 export function ensureFirstUser(db: Db, name: string, password: string | null): void {
   if (userCount(db) > 0) return;
-  if (!password) {
-    throw new Error('No users exist yet: set ADMIN_PASSWORD (and optionally ADMIN_NAME) to create the first one (see .env.example)');
-  }
-  createUser(db, name, password);
+  createUser(db, name, password ?? DEFAULT_ADMIN_PASSWORD, 'editor', password === null);
 }

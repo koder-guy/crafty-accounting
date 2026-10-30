@@ -5,7 +5,7 @@ import { Router } from 'express';
 import { createUserSchema, updateUserSchema } from '@crafty/shared';
 import type { AppContext } from '../context';
 import { HttpError, parseId, parseWith } from '../http';
-import { createUser, editorCount, getUser, hashPassword, listUsers, nameTaken } from '../users';
+import { DEFAULT_ADMIN_PASSWORD, createUser, editorCount, getUser, hashPassword, listUsers, nameTaken } from '../users';
 
 export function usersRouter(ctx: AppContext): Router {
   const router = Router();
@@ -32,6 +32,9 @@ export function usersRouter(ctx: AppContext): Router {
     const person = getUser(ctx.db, id);
     if (!person) throw new HttpError(404, 'User not found');
     const { name, password, role } = parseWith(updateUserSchema, req.body);
+    if (req.user!.mustChangePassword && (password === undefined || name !== undefined || role !== undefined)) {
+      throw new HttpError(403, 'Choose a new password before carrying on.');
+    }
     if (req.user!.role === 'viewer' && (id !== req.user!.id || name !== undefined || role !== undefined)) {
       throw new HttpError(403, 'Your account is read-only. You can change your own password, but nothing else.');
     }
@@ -44,7 +47,11 @@ export function usersRouter(ctx: AppContext): Router {
       ctx.db.prepare('UPDATE users SET name = ? WHERE id = ?').run(name, id);
     }
     if (password !== undefined) {
-      ctx.db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(hashPassword(password), id);
+      if (password === DEFAULT_ADMIN_PASSWORD) throw new HttpError(400, 'Choose a password other than the default.');
+      // Choosing their own password clears the need to change it; an editor setting someone else's doesn't.
+      ctx.db
+        .prepare('UPDATE users SET password_hash = ?, must_change_password = must_change_password AND ? WHERE id = ?')
+        .run(hashPassword(password), id === req.user!.id ? 0 : 1, id);
     }
     res.json(listUsers(ctx.db).find((u) => u.id === id));
   });

@@ -5,6 +5,7 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router';
 import './index.css';
 import { setUnauthorizedHandler } from './lib/api';
 import { useMe } from './lib/queries';
+import { ChooseNewPassword } from './pages/ChooseNewPassword';
 import { Layout } from './components/Layout';
 import { EditorOnly } from './components/ReadOnly';
 import { Spinner } from './components/ui';
@@ -47,6 +48,7 @@ function App() {
   const { data, isLoading } = useMe();
   if (isLoading) return <Spinner />;
   if (!data?.authenticated) return <Login />;
+  if (data.mustChangePassword) return <ChooseNewPassword />;
 
   return (
     <Routes>

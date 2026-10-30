@@ -29,7 +29,7 @@ Self-hosted bookkeeping for UK sole traders on the cash basis. Keep your income 
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/koder-guy/crafty-accounting/main/install.sh)"
 ```
 
-[`install.sh`](install.sh) works on macOS and on Linux distributions such as Ubuntu, Debian and Fedora (Intel/AMD or ARM), and needs only `curl` and `tar`. It needs no administrator password: everything goes in `~/crafty-accounting`, including its own copy of Node 22. It starts the app and prints the addresses to open with the sign-in name, `Admin`, and a random password. Change the password in **Settings → People**.
+[`install.sh`](install.sh) works on macOS and on Linux distributions such as Ubuntu, Debian and Fedora (Intel/AMD or ARM), and needs only `curl` and `tar`. It needs no administrator password: everything goes in `~/crafty-accounting`, including its own copy of Node 22. It starts the app and prints the addresses to open.
 
 The app keeps running when the terminal closes, but doesn't start by itself after a restart:
 
@@ -37,7 +37,9 @@ The app keeps running when the terminal closes, but doesn't start by itself afte
 ~/crafty-accounting/crafty start
 ```
 
-`crafty` also takes `stop`, `restart`, `status`, `log` and `update`. An update keeps your books and settings, and leaves the running copy alone if it fails. Settings are in `~/crafty-accounting/.env`, the books in `~/crafty-accounting/data`. On a new install you can set `CRAFTY_DIR`, `CRAFTY_PORT`, `CRAFTY_ADMIN_NAME` or `CRAFTY_ADMIN_PASSWORD` before `/bin/bash`.
+`crafty` also takes `stop`, `restart`, `status`, `log` and `update`. An update keeps your books and settings, and leaves the running copy alone if it fails. Settings are in `~/crafty-accounting/.env`, the books in `~/crafty-accounting/data`. On a new install you can set `CRAFTY_DIR` or `CRAFTY_PORT` before `/bin/bash`.
+
+**Signing in for the first time:** use the name `Admin` and the password `admin`. You'll be asked to choose your own password before anything else; rename yourself and add other people in **Settings → People**.
 
 This serves plain HTTP, which is fine on a home network. For HTTPS, or on Alpine and other musl-based Linux, use Docker.
 
@@ -49,15 +51,11 @@ Needs Docker: on a Mac, [Docker Desktop](https://www.docker.com/products/docker-
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/koder-guy/crafty-accounting/main/install-docker.sh)"
 ```
 
-[`install-docker.sh`](install-docker.sh) sets everything up in `~/crafty-accounting`, starts the containers and prints the `https://` addresses to open with the sign-in details. It uses ports 80 and 443, or 8080 and 8443 if those are taken (choose with `CRAFTY_HTTP_PORT` and `CRAFTY_HTTPS_PORT`). It saves Caddy's certificate as `crafty-root.crt` and prints the command to trust it on a Mac; for other devices see [HTTPS](#https). To update, run `~/crafty-accounting/install-docker.sh` again. The Docker and non-Docker installs share that folder, so to have both, give one another folder with `CRAFTY_DIR`.
+[`install-docker.sh`](install-docker.sh) sets everything up in `~/crafty-accounting`, starts the containers and prints the `https://` addresses to open. Sign in as `Admin` / `admin` and choose your own password. It uses ports 80 and 443, or 8080 and 8443 if those are taken (choose with `CRAFTY_HTTP_PORT` and `CRAFTY_HTTPS_PORT`). It saves Caddy's certificate as `crafty-root.crt` and prints the command to trust it on a Mac; for other devices see [HTTPS](#https). To update, run `~/crafty-accounting/install-docker.sh` again. The Docker and non-Docker installs share that folder, so to have both, give one another folder with `CRAFTY_DIR`.
 
 ## Run with Docker Compose by hand
 
-```bash
-cp .env.example .env
-```
-
-In `.env`, set `ADMIN_NAME` and `ADMIN_PASSWORD` for the first person (later people are added in **Settings → People**), `SESSION_SECRET` (from `openssl rand -hex 32`), and `SITE_ADDRESS` to the address(es) you'll use, such as `crafty.local, 192.168.1.50`.
+Everything has a default, so a `.env` file is only needed for what you change (see [Configuration](#configuration)). Usually that's `SITE_ADDRESS`, the address(es) you'll use, such as `SITE_ADDRESS=crafty.local, 192.168.1.50`.
 
 Automatic backups need a folder the container's user (UID 1000) can write to. Ideally point `BACKUP_HOST_DIR` at another disk or a NAS share instead of `./backups`:
 
@@ -69,7 +67,7 @@ mkdir -p ./backups && sudo chown 1000:1000 ./backups
 docker compose up -d --build
 ```
 
-The app is at `https://<SITE_ADDRESS>`. Caddy (`crafty-caddy`) provides HTTPS in front of the app (`crafty-accounting`). The database and documents are in the `crafty-data` volume. To update, get the new code and run the same command; database migrations run on start.
+The app is at `https://<SITE_ADDRESS>`; sign in as `Admin` / `admin` and choose your own password. Caddy (`crafty-caddy`) provides HTTPS in front of the app (`crafty-accounting`). The database and documents are in the `crafty-data` volume. To update, get the new code and run the same command; database migrations run on start.
 
 ### HTTPS
 
@@ -95,9 +93,11 @@ If ports 80 and 443 are taken, change `HTTP_PORT` and `HTTPS_PORT`; the address 
 
 ## Configuration
 
+Settings go in a `.env` file next to the app (the installers write one). Only include what you change.
+
 | Variable | Default | Purpose |
 |---|---|---|
-| `ADMIN_NAME` / `ADMIN_PASSWORD` | `Admin` / *(required at first)* | The first person, created when nobody exists yet; ignored after that |
+| `ADMIN_NAME` / `ADMIN_PASSWORD` | `Admin` / `admin` | The first person, created when nobody exists yet; ignored after that. With the default password they must choose their own when they first sign in. |
 | `SESSION_SECRET` | generated | Signs the session cookie; one is generated and kept with the data if empty |
 | `PORT` | `3000` | Port the app listens on |
 | `SITE_ADDRESS` | `localhost` | Docker: address(es) for HTTPS, comma separated |
@@ -156,7 +156,6 @@ Requires Node 22+.
 
 ```bash
 npm install
-cp .env.example .env
 npm run dev
 ```
 

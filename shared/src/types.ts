@@ -40,6 +40,8 @@ export interface User {
 export interface MeResponse {
   authenticated: boolean;
   user?: User;
+  /** Signed in with the default password: they must choose their own before anything else. */
+  mustChangePassword?: boolean;
 }
 
 export interface TaxYearsResponse {

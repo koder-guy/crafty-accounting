@@ -18,8 +18,6 @@
 #   CRAFTY_DIR             where to install (default ~/crafty-accounting)
 #   CRAFTY_HTTP_PORT       HTTP port (default 80, or 8080 if 80 is taken)
 #   CRAFTY_HTTPS_PORT      HTTPS port (default 443, or 8443 if 443 is taken)
-#   CRAFTY_ADMIN_NAME      first person's sign-in name (default Admin)
-#   CRAFTY_ADMIN_PASSWORD  their password (default: a random one, printed at the end)
 #   CRAFTY_BRANCH          branch or tag to install (default main)
 #   CRAFTY_TARBALL         URL of the app's source .tar.gz, instead of GitHub's for CRAFTY_BRANCH
 #   CRAFTY_PROJECT         Docker Compose project name (default crafty-accounting)
@@ -83,7 +81,7 @@ main() {
   fi
 
   # ---- Settings ----
-  local ENV_FILE="$DIR/.env" NEW_PASSWORD=""
+  local ENV_FILE="$DIR/.env" NEW_INSTALL=0
   if [ ! -f "$ENV_FILE" ]; then
     step "Writing settings to $ENV_FILE"
     local http_port="${CRAFTY_HTTP_PORT:-}" https_port="${CRAFTY_HTTPS_PORT:-}"
@@ -96,17 +94,13 @@ main() {
     local site="localhost"
     [ -n "$HOST_NAME" ] && site="$site, $HOST_NAME.local"
     [ -n "$LAN_IP" ] && site="$site, $LAN_IP"
-    NEW_PASSWORD="${CRAFTY_ADMIN_PASSWORD:-$(od -An -N9 -tx1 /dev/urandom | tr -d ' \n' | sed 's/\(......\)\(......\)/\1-\2-/')}"
+    NEW_INSTALL=1
     (umask 077 && cat > "$ENV_FILE" <<EOF
-# Written by install-docker.sh. See .env.example and the README for every setting.
+# Written by install-docker.sh. See "Configuration" in the README for every setting.
 # Apply changes with:  cd $DIR && docker compose up -d
 
 COMPOSE_PROJECT_NAME=${CRAFTY_PROJECT:-crafty-accounting}
 
-# The first person to sign in. Used only until someone exists; after that,
-# change names and passwords in Settings → People.
-ADMIN_NAME=${CRAFTY_ADMIN_NAME:-Admin}
-ADMIN_PASSWORD=$NEW_PASSWORD
 SESSION_SECRET=$(od -An -N32 -tx1 /dev/urandom | tr -d ' \n')
 
 # HTTPS: the addresses you browse to, and a private certificate for them (see the
@@ -129,9 +123,8 @@ EOF
   else
     echo "Keeping the existing settings in $ENV_FILE."
   fi
-  local HTTPS_PORT ADMIN_NAME
+  local HTTPS_PORT
   HTTPS_PORT="$(env_value HTTPS_PORT)"; HTTPS_PORT="${HTTPS_PORT:-443}"
-  ADMIN_NAME="$(env_value ADMIN_NAME)"; ADMIN_NAME="${ADMIN_NAME:-Admin}"
 
   # ---- Build and start ----
   step "Building the app (the first time takes a few minutes)"
@@ -172,13 +165,12 @@ EOF
     case "$label" in On*) label="Other devices at home:" ;; *) label="                      " ;; esac
   done
   echo
-  if [ -n "$NEW_PASSWORD" ]; then
+  if [ "$NEW_INSTALL" = 1 ]; then
     echo "Sign in with:"
-    echo "  Name:      $ADMIN_NAME"
-    echo "  Password:  $NEW_PASSWORD"
+    echo "  Name:      Admin"
+    echo "  Password:  admin"
     echo
-    echo "Change the password in Settings → People after signing in. Until then it's"
-    echo "also in $ENV_FILE."
+    echo "You'll be asked to choose your own password straight away."
   else
     echo "Sign in with your existing name and password."
   fi

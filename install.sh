@@ -16,8 +16,6 @@
 # Optional settings, given as environment variables before the command:
 #   CRAFTY_DIR             where to install (default ~/crafty-accounting)
 #   CRAFTY_PORT            port to serve on (default 3000)
-#   CRAFTY_ADMIN_NAME      first person's sign-in name (default Admin)
-#   CRAFTY_ADMIN_PASSWORD  their password (default: a random one, printed at the end)
 #   CRAFTY_BRANCH          branch or tag to install (default main)
 #   CRAFTY_TARBALL         URL of the app's source .tar.gz, instead of GitHub's for CRAFTY_BRANCH
 #   CRAFTY_REPO            GitHub repository to install from (default koder-guy/crafty-accounting)
@@ -100,20 +98,15 @@ step "Building the app"
 
 # ---- Settings ----
 ENV_FILE="$DIR/.env"
-NEW_PASSWORD=""
+NEW_INSTALL=0
 if [ ! -f "$ENV_FILE" ]; then
   step "Writing settings to $ENV_FILE"
-  ADMIN_NAME="${CRAFTY_ADMIN_NAME:-Admin}"
-  NEW_PASSWORD="${CRAFTY_ADMIN_PASSWORD:-$(od -An -N9 -tx1 /dev/urandom | tr -d ' \n' | sed 's/\(......\)\(......\)/\1-\2-/')}"
+  NEW_INSTALL=1
   SESSION_SECRET="$(od -An -N32 -tx1 /dev/urandom | tr -d ' \n')"
   (umask 077 && cat > "$ENV_FILE" <<EOF
-# Written by install.sh. See app/.env.example and the README for every setting.
+# Written by install.sh. See "Configuration" in the README for every setting.
 # Restart the app after changing anything:  $DIR/crafty restart
 
-# The first person to sign in. Used only until someone exists; after that,
-# change names and passwords in Settings → People.
-ADMIN_NAME=$ADMIN_NAME
-ADMIN_PASSWORD=$NEW_PASSWORD
 SESSION_SECRET=$SESSION_SECRET
 
 PORT=${CRAFTY_PORT:-3000}
@@ -134,7 +127,6 @@ else
   echo "Keeping the existing settings in $ENV_FILE."
 fi
 PORT="$(sed -n 's/^PORT=//p' "$ENV_FILE" | tail -n 1)"; PORT="${PORT:-3000}"
-ADMIN_NAME="$(sed -n 's/^ADMIN_NAME=//p' "$ENV_FILE" | tail -n 1)"; ADMIN_NAME="${ADMIN_NAME:-Admin}"
 
 # ---- Start and stop script ----
 # Written to a new file and moved into place: `crafty update` is still reading the old one.
@@ -231,13 +223,12 @@ label="Other devices at home:"
 if [ -n "$HOST_NAME" ]; then echo "  $label  http://$HOST_NAME.local:$PORT"; label="                      "; fi
 if [ -n "$LAN_IP" ]; then echo "  $label  http://$LAN_IP:$PORT"; fi
 echo
-if [ -n "$NEW_PASSWORD" ]; then
+if [ "$NEW_INSTALL" = 1 ]; then
   echo "Sign in with:"
-  echo "  Name:      $ADMIN_NAME"
-  echo "  Password:  $NEW_PASSWORD"
+  echo "  Name:      Admin"
+  echo "  Password:  admin"
   echo
-  echo "Change the password in Settings → People after signing in. Until then it's"
-  echo "also in $ENV_FILE."
+  echo "You'll be asked to choose your own password straight away."
 else
   echo "Sign in with your existing name and password."
 fi

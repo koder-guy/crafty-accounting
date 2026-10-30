@@ -64,6 +64,18 @@ export function useLogin() {
   });
 }
 
+/** Replaces the default password; the server then lets them into the rest of the app. */
+export function useChooseNewPassword() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, password }: { id: number; password: string }) => api.put(`/users/${id}`, { password }),
+    onSuccess: () => {
+      clearDataQueries(qc);
+      qc.invalidateQueries({ queryKey: ['me'] });
+    },
+  });
+}
+
 export function useLogout() {
   const qc = useQueryClient();
   return useMutation({

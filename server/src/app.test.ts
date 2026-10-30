@@ -93,16 +93,38 @@ describe('auth', () => {
     expect((await other.get('/api/auth/me')).body).toMatchObject({ authenticated: true, user: { name: NAME } });
   });
 
-  it('needs ADMIN_PASSWORD only while nobody has been set up', () => {
+  it('creates Admin / admin on a new install, who must choose a new password first', async () => {
     const emptyDir = fs.mkdtempSync(path.join(os.tmpdir(), 'crafty-test-'));
+    const fresh = createContext(loadConfig({ DATA_DIR: emptyDir, CLIENT_DIST: path.join(emptyDir, 'none') }));
     try {
-      expect(() => createContext(loadConfig({ DATA_DIR: emptyDir }))).toThrow(/ADMIN_PASSWORD/);
+      const admin = request.agent(createApp(fresh));
+      const login = await admin.post('/api/auth/login').send({ name: 'Admin', password: 'admin' }).expect(200);
+      expect(login.body).toMatchObject({ authenticated: true, user: { name: 'Admin', role: 'editor' }, mustChangePassword: true });
+      const id = login.body.user.id;
+
+      // Nothing else until then: not the books, not other changes to themselves.
+      expect((await admin.get('/api/tax-years').expect(403)).body.error).toMatch(/new password/);
+      await admin.post('/api/tax-years').send({ startYear: 2025 }).expect(403);
+      await admin.put(`/api/users/${id}`).send({ name: 'Me' }).expect(403);
+      await admin.put(`/api/users/${id}`).send({ password: 'short' }).expect(400);
+
+      await admin.put(`/api/users/${id}`).send({ password: 'my-own-password' }).expect(200);
+      expect((await admin.get('/api/auth/me')).body.mustChangePassword).toBe(false);
+      await admin.get('/api/tax-years').expect(200);
+      await admin.post('/api/auth/logout').expect(200);
+      await admin.post('/api/auth/login').send({ name: 'Admin', password: 'admin' }).expect(401);
+      await admin.post('/api/auth/login').send({ name: 'Admin', password: 'my-own-password' }).expect(200);
     } finally {
+      fresh.db.close();
       fs.rmSync(emptyDir, { recursive: true, force: true });
     }
-    // The test install already has a user, so it opens without one.
+  });
+
+  it('uses ADMIN_NAME and ADMIN_PASSWORD for the first person, without a forced change, and only then', async () => {
+    expect((await agent.get('/api/auth/me')).body).toMatchObject({ user: { name: NAME }, mustChangePassword: false });
+    // The test install already has a user, so the settings are ignored.
     ctx.db.close();
-    ctx = createContext(loadConfig({ DATA_DIR: dataDir, ADMIN_PASSWORD: 'ignored' }));
+    ctx = createContext(loadConfig({ DATA_DIR: dataDir, ADMIN_NAME: 'Someone', ADMIN_PASSWORD: 'ignored' }));
     expect(ctx.db.prepare('SELECT name FROM users').all()).toEqual([{ name: NAME }]);
   });
 });

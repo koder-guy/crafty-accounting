@@ -4,7 +4,10 @@ services:
     image: crafty-accounting:latest
     container_name: crafty-accounting
     restart: unless-stopped
-    env_file: .env
+    # Optional: everything has a default (see "Configuration" in the README).
+    env_file:
+      - path: .env
+        required: false
     environment:
       DATA_DIR: /data
       BACKUP_DIR: /backups

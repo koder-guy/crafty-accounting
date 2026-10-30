@@ -269,6 +269,14 @@ CREATE TABLE mtd_amendments (
 );
 `,
   },
+  // A person who must choose a new password before doing anything else: the
+  // first person, when created with the default password.
+  {
+    version: 13,
+    sql: `
+ALTER TABLE users ADD COLUMN must_change_password INTEGER NOT NULL DEFAULT 0;
+`,
+  },
 ];
 
 export const CURRENT_SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;

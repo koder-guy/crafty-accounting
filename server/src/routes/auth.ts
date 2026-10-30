@@ -10,7 +10,7 @@ declare global {
   namespace Express {
     interface Request {
       /** The signed-in person, set by requireAuth. */
-      user?: { id: number; name: string; role: Role; activeTaxYearId: number | null };
+      user?: { id: number; name: string; role: Role; activeTaxYearId: number | null; mustChangePassword: boolean };
     }
   }
 }
@@ -28,6 +28,16 @@ export function requireAuth(ctx: AppContext): RequestHandler {
     next();
   };
 }
+
+/**
+ * Until someone with the default password has chosen their own, they can do
+ * nothing but that. Mounted on /api after requireAuth; signing out is under /api/auth.
+ */
+export const passwordChangeGuard: RequestHandler = (req, _res, next) => {
+  if (!req.user?.mustChangePassword) return next();
+  if (req.method === 'PUT' && req.path === `/users/${req.user.id}`) return next();
+  next(new HttpError(403, 'Choose a new password before carrying on.'));
+};
 
 /** Backup downloads are for editors only: a backup is a full copy of the books, more than viewing and exporting. */
 const EDITOR_ONLY_DOWNLOADS = [/^\/backup\.(sql|zip)$/, /^\/backup\/auto(\/|$)/];
@@ -51,6 +61,17 @@ export const readOnlyGuard: RequestHandler = (req, _res, next) => {
 export function authRouter(ctx: AppContext): Router {
   const router = Router();
 
+  const meResponse = (userId: number | null): MeResponse => {
+    const user = userId === null ? null : getUser(ctx.db, userId);
+    return user
+      ? {
+          authenticated: true,
+          user: { id: user.id, name: user.name, role: user.role, createdAt: user.createdAt },
+          mustChangePassword: user.mustChangePassword,
+        }
+      : { authenticated: false };
+  };
+
   const loginLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
     limit: 10,
@@ -67,7 +88,7 @@ export function authRouter(ctx: AppContext): Router {
     const user = authenticate(ctx.db, name, password);
     if (!user) throw new HttpError(401, 'Incorrect name or password');
     req.session = { userId: user.id };
-    res.json({ authenticated: true, user } satisfies MeResponse);
+    res.json(meResponse(user.id));
   });
 
   router.post('/logout', (req, res) => {
@@ -76,11 +97,7 @@ export function authRouter(ctx: AppContext): Router {
   });
 
   router.get('/me', (req, res) => {
-    const user = typeof req.session?.userId === 'number' ? getUser(ctx.db, req.session.userId) : null;
-    const body: MeResponse = user
-      ? { authenticated: true, user: { id: user.id, name: user.name, role: user.role, createdAt: user.createdAt } }
-      : { authenticated: false };
-    res.json(body);
+    res.json(meResponse(typeof req.session?.userId === 'number' ? req.session.userId : null));
   });
 
   return router;
