@@ -244,7 +244,7 @@ function SubmissionPanel({ taxYearId, q }: { taxYearId: number; q: MtdQuarterSum
         </p>
         <div className="flex gap-2">
           <Button onClick={() => setEditing(true)}>Edit</Button>
-          <Button variant="ghost" busy={clear.isPending} onClick={() => clear.mutate(q.quarter)}>
+          <Button busy={clear.isPending} onClick={() => clear.mutate(q.quarter)}>
             Mark as not submitted
           </Button>
         </div>
