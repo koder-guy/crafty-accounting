@@ -10,8 +10,7 @@
 # offers to install Docker with Docker's own script (get.docker.com) if it's missing.
 # The source, settings (.env) and automatic backups (backups/) go in
 # ~/crafty-accounting, the same folder install.sh uses, so only one of the two can
-# be there; the books are in the crafty-data Docker volume. An install in the old
-# folder, ~/crafty-accounting-docker, is moved there.
+# be there; the books are in the crafty-data Docker volume.
 # Docker restarts the containers when Docker itself starts (restart: unless-stopped
 # in docker-compose.yml).
 #
@@ -34,25 +33,13 @@ main() {
   local REPO="${CRAFTY_REPO:-koder-guy/crafty-accounting}"
   local BRANCH="${CRAFTY_BRANCH:-main}"
   local TARBALL="${CRAFTY_TARBALL:-https://github.com/$REPO/archive/$BRANCH.tar.gz}"
-  local NEW_DIR="$HOME/crafty-accounting" OLD_DIR="$HOME/crafty-accounting-docker" MOVE_FROM=""
   # Run as an install's own install-docker.sh (to update it), that install is the default.
-  local default_dir="$NEW_DIR" here
+  local default_dir="$HOME/crafty-accounting" here
   if [ -f "${BASH_SOURCE[0]:-}" ]; then
     here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
     is_docker_install "$here" && default_dir="$here"
   fi
   local DIR="${CRAFTY_DIR:-$default_dir}"
-  # Installs used to go in ~/crafty-accounting-docker: move one to the new folder if that's free.
-  if [ -z "${CRAFTY_DIR:-}" ] && { [ "$DIR" = "$NEW_DIR" ] || [ "$DIR" = "$OLD_DIR" ]; } \
-    && is_docker_install "$OLD_DIR" && ! is_docker_install "$NEW_DIR"; then
-    if [ -z "$(ls -A "$NEW_DIR" 2>/dev/null)" ]; then
-      MOVE_FROM="$OLD_DIR"
-      DIR="$NEW_DIR"
-    else
-      DIR="$OLD_DIR"
-      echo "$NEW_DIR is already in use, so updating the install in $OLD_DIR where it is."
-    fi
-  fi
 
   bold=$'\033[1m'; green=$'\033[32m'; red=$'\033[31m'; reset=$'\033[0m'
 
@@ -72,15 +59,6 @@ main() {
   fi
 
   check_docker
-
-  if [ -n "$MOVE_FROM" ]; then
-    step "Moving the install from $MOVE_FROM to $DIR"
-    # The books stay in their Docker volumes; only the containers go, and they're recreated below.
-    (cd "$MOVE_FROM" && compose down) || fail "couldn't stop the containers in $MOVE_FROM (see above)."
-    rmdir "$DIR" 2>/dev/null || true
-    mv "$MOVE_FROM" "$DIR" || fail "couldn't move $MOVE_FROM to $DIR."
-    sed -i.bak "s|cd $MOVE_FROM \&\&|cd $DIR \&\&|" "$DIR/.env" && rm -f "$DIR/.env.bak"
-  fi
 
   # ---- The app's source ----
   step "Downloading the app ($BRANCH)"
@@ -225,10 +203,6 @@ Docker starts it again whenever Docker itself starts.
   Settings:    $ENV_FILE
   Backups:     $DIR/backups (daily); the books are in the crafty-data Docker volume
 EOF
-  if [ -n "$MOVE_FROM" ]; then
-    echo
-    echo "The install moved from $MOVE_FROM to $DIR. In a terminal still in the old folder, run: cd $DIR"
-  fi
 }
 
 step() { printf '\n%s==> %s%s\n' "$bold" "$1" "$reset"; }

@@ -49,7 +49,7 @@ Needs Docker: on a Mac, [Docker Desktop](https://www.docker.com/products/docker-
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/koder-guy/crafty-accounting/main/install-docker.sh)"
 ```
 
-[`install-docker.sh`](install-docker.sh) sets everything up in `~/crafty-accounting`, starts the containers and prints the `https://` addresses to open with the sign-in details. It uses ports 80 and 443, or 8080 and 8443 if those are taken (choose with `CRAFTY_HTTP_PORT` and `CRAFTY_HTTPS_PORT`). It saves Caddy's certificate as `crafty-root.crt` and prints the command to trust it on a Mac; for other devices see [HTTPS](#https). To update, run `~/crafty-accounting/install-docker.sh` again; an install in the old `~/crafty-accounting-docker` folder is moved there. The Docker and non-Docker installs share that folder, so to have both, give one another folder with `CRAFTY_DIR`.
+[`install-docker.sh`](install-docker.sh) sets everything up in `~/crafty-accounting`, starts the containers and prints the `https://` addresses to open with the sign-in details. It uses ports 80 and 443, or 8080 and 8443 if those are taken (choose with `CRAFTY_HTTP_PORT` and `CRAFTY_HTTPS_PORT`). It saves Caddy's certificate as `crafty-root.crt` and prints the command to trust it on a Mac; for other devices see [HTTPS](#https). To update, run `~/crafty-accounting/install-docker.sh` again. The Docker and non-Docker installs share that folder, so to have both, give one another folder with `CRAFTY_DIR`.
 
 ## Run with Docker Compose by hand
 
