@@ -457,11 +457,14 @@ export function PaymentMethodPicker({ registration }: { registration: UseFormReg
 const ACCEPT = '.pdf,.jpg,.jpeg,.png,.webp,.heic,.heif,application/pdf,image/jpeg,image/png,image/webp,image/heic,image/heif';
 const ALLOWED = /\.(pdf|jpe?g|png|webp|heic|heif)$/i;
 
-export function documentProblem(file: File): string | null {
-  if (!ALLOWED.test(file.name)) return 'Only PDF and image files (JPG, PNG, WebP, HEIC) can be attached';
-  if (file.name.startsWith('.') || /[\\/]/.test(file.name) || file.name.includes('..')) {
+export function documentProblem(name: string): string | null {
+  if (!ALLOWED.test(name)) return 'Only PDF and image files (JPG, PNG, WebP, HEIC) can be attached';
+  if (name.startsWith('.') || /[\\/]/.test(name) || name.includes('..')) {
     return 'Rename the file: it must not start with a dot or contain slashes or ".."';
   }
+  if (name.length > 200) return 'Rename the file: the name must be 200 characters or fewer';
+  if (/[\x00-\x1f\x7f]/.test(name)) return 'Rename the file: the name contains control characters';
+  if (name !== name.trim()) return 'Rename the file: the name must not start or end with spaces';
   return null;
 }
 
@@ -472,6 +475,35 @@ const asPhoto = (file: File) => new File([file], photoFilename(file), { type: fi
 
 // What an iPhone calls every photo taken from the file picker, which would clash with the last one.
 const CAMERA_DEFAULT_NAME = /^image\.\w+$/i;
+
+const fileExtension = (name: string) => /\.[^.]+$/.exec(name)?.[0] ?? '';
+
+// A File's name can't change, so renaming makes a new File. This keeps its row and the name to go
+// back to if the box is cleared.
+const newFileInfo = new WeakMap<File, { key: number; firstName: string }>();
+let nextFileKey = 0;
+function fileInfo(file: File) {
+  let info = newFileInfo.get(file);
+  if (!info) {
+    info = { key: nextFileKey++, firstName: file.name };
+    newFileInfo.set(file, info);
+  }
+  return info;
+}
+function renamedFile(file: File, name: string) {
+  const renamed = new File([file], name, { type: file.type, lastModified: file.lastModified });
+  newFileInfo.set(renamed, fileInfo(file));
+  return renamed;
+}
+
+/** The filename a name box means: its extension is fixed, typing it is harmless, and blank is the first name. */
+function nameFromDraft(file: File, draft: string) {
+  const { firstName } = fileInfo(file);
+  const extension = fileExtension(firstName);
+  let stem = draft.trim();
+  if (stem.toLowerCase().endsWith(extension.toLowerCase())) stem = stem.slice(0, stem.length - extension.length).trimEnd();
+  return stem ? `${stem}${extension}` : firstName;
+}
 
 /**
  * The documents on a transaction: the ones already attached (each can be marked
@@ -484,6 +516,7 @@ export function DocumentField({
   onFiles,
   onRemoveIds,
   onPreparing,
+  onBadNames,
 }: {
   current: TransactionDocument[];
   files: File[];
@@ -492,12 +525,16 @@ export function DocumentField({
   onRemoveIds: (ids: number[]) => void;
   /** Photos are being compressed: saving now would leave them out. */
   onPreparing: (preparing: boolean) => void;
+  /** A new document's name needs fixing before it can be saved. */
+  onBadNames: (bad: boolean) => void;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
   const [error, setError] = useState<string | null>(null);
   const [cameraOpen, setCameraOpen] = useState(false);
   const [preparing, setPreparing] = useState(false);
+  // What's in each new document's name box, once edited; a file takes the name when all of them are valid.
+  const [drafts, setDrafts] = useState<Record<number, string>>({});
   const cameraOption = useCameraOption();
   const kept = current.length - removeIds.length;
   const room = MAX_DOCUMENTS - kept - files.length;
@@ -510,7 +547,7 @@ export function DocumentField({
     if (chosen.length === 0) return;
     const taken = new Set([...current.map((d) => d.filename), ...files.map((f) => f.name)]);
     for (const file of chosen) {
-      const problem = documentProblem(file) ?? (taken.has(file.name) ? 'A document with this name is already attached' : null);
+      const problem = documentProblem(file.name) ?? (taken.has(file.name) ? 'A document with this name is already attached' : null);
       if (problem) return setError(`${file.name}: ${problem}`);
       taken.add(file.name);
     }
@@ -534,6 +571,26 @@ export function DocumentField({
     onPreparing(false);
     chooseLatest.current(prepared);
   };
+
+  const newNames = files.map((file) => {
+    const draft = drafts[fileInfo(file).key];
+    return draft === undefined ? file.name : nameFromDraft(file, draft);
+  });
+  const nameProblems = newNames.map((name, i) => {
+    const problem = documentProblem(name);
+    if (problem) return problem.replace('Rename the file: it', 'The name').replace('Rename the file: the name', 'The name');
+    const clash = current.some((d) => d.filename === name) || newNames.some((other, j) => j !== i && other === name);
+    return clash ? 'A document with this name is already attached' : null;
+  });
+  const badNames = nameProblems.some(Boolean);
+
+  useEffect(() => {
+    onBadNames(badNames);
+    if (!badNames && newNames.some((name, i) => name !== files[i].name)) {
+      onFiles(files.map((file, i) => (newNames[i] === file.name ? file : renamedFile(file, newNames[i]))));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [badNames, newNames.join('/')]);
 
   const toggleRemove = (docId: number) =>
     onRemoveIds(removeIds.includes(docId) ? removeIds.filter((x) => x !== docId) : [...removeIds, docId]);
@@ -568,20 +625,43 @@ export function DocumentField({
             </li>
           );
         })}
-        {files.map((file, i) => (
-          <li key={`${file.name}-${i}`} className="flex flex-wrap items-center gap-3 px-4 py-2.5">
-            <FileText className="size-5 shrink-0 text-accent-soft" aria-hidden />
-            <div className="min-w-0 flex-1 text-sm">
-              <span className="break-all text-ink">{file.name}</span>
-              <span className="ml-2 text-xs text-muted">
-                {fileSize(file.size)} · added when you save
-              </span>
-            </div>
-            <Button type="button" variant="ghost" className="px-2 py-1.5" onClick={() => onFiles(files.filter((_, j) => j !== i))}>
-              Undo
-            </Button>
-          </li>
-        ))}
+        {files.map((file, i) => {
+          const { key, firstName } = fileInfo(file);
+          const extension = fileExtension(firstName);
+          const problem = nameProblems[i];
+          return (
+            <li key={key} className="flex items-center gap-3 px-4 py-2.5">
+              <FileText className="size-5 shrink-0 text-accent-soft" aria-hidden />
+              <div className="min-w-0 flex-1 text-sm">
+                <div className="flex items-center gap-1.5">
+                  <input
+                    aria-label={`Name for ${firstName}`}
+                    aria-invalid={problem ? true : undefined}
+                    autoComplete="off"
+                    className="field min-w-0 flex-1 py-1.5"
+                    value={drafts[key] ?? file.name.slice(0, file.name.length - extension.length)}
+                    onChange={(e) => setDrafts({ ...drafts, [key]: e.target.value })}
+                    onBlur={() => {
+                      if (drafts[key] !== undefined) setDrafts({ ...drafts, [key]: newNames[i].slice(0, newNames[i].length - extension.length) });
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') e.preventDefault();
+                    }}
+                  />
+                  <span className="shrink-0 text-muted">{extension}</span>
+                </div>
+                {problem ? (
+                  <p className="mt-1 text-xs text-out-soft">{problem}</p>
+                ) : (
+                  <p className="mt-1 text-xs text-muted">{fileSize(file.size)} · added when you save</p>
+                )}
+              </div>
+              <Button type="button" variant="ghost" className="px-2 py-1.5" onClick={() => onFiles(files.filter((_, j) => j !== i))}>
+                Undo
+              </Button>
+            </li>
+          );
+        })}
         <li className="flex flex-wrap items-center gap-3 px-4 py-2.5">
           <span className="min-w-max flex-1 text-sm text-muted">
             {preparing

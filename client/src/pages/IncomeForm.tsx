@@ -43,6 +43,7 @@ export function IncomeForm() {
   const [files, setFiles] = useState<File[]>([]);
   const [removeIds, setRemoveIds] = useState<number[]>([]);
   const [preparingPhoto, setPreparingPhoto] = useState(false);
+  const [badDocumentNames, setBadDocumentNames] = useState(false);
 
   const {
     register,
@@ -270,6 +271,7 @@ export function IncomeForm() {
                   onFiles={setFiles}
                   onRemoveIds={setRemoveIds}
                   onPreparing={setPreparingPhoto}
+                  onBadNames={setBadDocumentNames}
                 />
               </Field>
             </div>
@@ -286,7 +288,7 @@ export function IncomeForm() {
               <Button type="button" variant="ghost" onClick={() => navigate(backTo)}>
                 Cancel
               </Button>
-              <Button type="submit" variant="primary" busy={save.isPending || preparingPhoto}>
+              <Button type="submit" variant="primary" busy={save.isPending || preparingPhoto} disabled={badDocumentNames}>
                 {id ? 'Save changes' : 'Add incoming'}
               </Button>
             </div>
