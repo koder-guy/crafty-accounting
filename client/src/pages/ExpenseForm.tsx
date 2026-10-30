@@ -64,7 +64,7 @@ export function ExpenseForm() {
   const { data: original, isLoading: loadingOriginal, error: originalError } = useExpense(copyId);
   const { data: years } = useTaxYears();
   const { taxYear: activeYear, isLoading: yearLoading } = useActiveTaxYear();
-  const { data: categories = [] } = useCategories();
+  const { data: categories = [], isLoading: loadingCategories, error: categoriesError } = useCategories();
   const expenseCategories = categories.filter((c) => c.type === 'EXPENSE');
   // Depreciation isn't offered, but a line already using it (or a custom category mapped to it) keeps it.
   const lineCategories = (current: string | undefined) => {
@@ -136,11 +136,11 @@ export function ExpenseForm() {
   useEffect(() => {
     const key = id ? `edit-${id}` : `new-${activeYear?.id}-${copyId}`;
     if (filledFor.current === key) return;
-    if (id && existing) {
+    // Wait for the categories every time, or the category menus can't show the choices.
+    if (id && existing && expenseCategories.length) {
       filledFor.current = key;
       fillFrom(existing);
     } else if (copyId && original && activeYear && expenseCategories.length) {
-      // Wait for the categories too, or the category menus can't show the copied choice.
       // Invoice and order numbers and the document belong to the original, so they aren't copied.
       filledFor.current = key;
       reset({
@@ -231,7 +231,7 @@ export function ExpenseForm() {
   const title = id ? 'Edit outgoing' : copyId ? 'Duplicate outgoing' : 'Add outgoing';
   const backTo = id ? `/outgoing/${id}` : copyId ? `/outgoing/${copyId}` : '/outgoing';
 
-  if (yearLoading || (id && loadingExisting) || (copyId && loadingOriginal)) {
+  if (yearLoading || loadingCategories || (id && loadingExisting) || (copyId && loadingOriginal)) {
     return (
       <>
         <PageHeader title={title} />
@@ -239,12 +239,12 @@ export function ExpenseForm() {
       </>
     );
   }
-  if (loadError || originalError) {
+  if (loadError || originalError || categoriesError) {
     return (
       <>
         <PageHeader title={title} />
         <PageBody>
-          <Alert>{(loadError ?? originalError)!.message}</Alert>
+          <Alert>{(loadError ?? originalError ?? categoriesError)!.message}</Alert>
         </PageBody>
       </>
     );

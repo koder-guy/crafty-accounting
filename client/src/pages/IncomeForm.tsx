@@ -33,7 +33,7 @@ export function IncomeForm() {
   const { data: original, isLoading: loadingOriginal, error: originalError } = useIncome(copyId);
   const { data: years } = useTaxYears();
   const { taxYear: activeYear, isLoading: yearLoading } = useActiveTaxYear();
-  const { data: categories = [] } = useCategories();
+  const { data: categories = [], isLoading: loadingCategories, error: categoriesError } = useCategories();
   const incomeCategories = categories.filter((c) => c.type === 'INCOME');
   const save = useSaveTransaction<Income>('incomes');
 
@@ -87,11 +87,11 @@ export function IncomeForm() {
   useEffect(() => {
     const key = id ? `edit-${id}` : `new-${activeYear?.id}-${copyId}`;
     if (filledFor.current === key) return;
-    if (id && existing) {
+    // Wait for the categories every time, or the category menu can't show the choice.
+    if (id && existing && incomeCategories.length) {
       filledFor.current = key;
       fillFrom(existing);
     } else if (copyId && original && activeYear && incomeCategories.length) {
-      // Wait for the categories too, or the category menus can't show the copied choice.
       // The reference and document belong to the original, so they aren't copied.
       filledFor.current = key;
       reset({
@@ -155,7 +155,7 @@ export function IncomeForm() {
   const title = id ? 'Edit incoming' : copyId ? 'Duplicate incoming' : 'Add incoming';
   const backTo = id ? `/incoming/${id}` : copyId ? `/incoming/${copyId}` : '/incoming';
 
-  if (yearLoading || (id && loadingExisting) || (copyId && loadingOriginal)) {
+  if (yearLoading || loadingCategories || (id && loadingExisting) || (copyId && loadingOriginal)) {
     return (
       <>
         <PageHeader title={title} />
@@ -163,12 +163,12 @@ export function IncomeForm() {
       </>
     );
   }
-  if (loadError || originalError) {
+  if (loadError || originalError || categoriesError) {
     return (
       <>
         <PageHeader title={title} />
         <PageBody>
-          <Alert>{(loadError ?? originalError)!.message}</Alert>
+          <Alert>{(loadError ?? originalError ?? categoriesError)!.message}</Alert>
         </PageBody>
       </>
     );
