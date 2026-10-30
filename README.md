@@ -55,19 +55,25 @@ Needs Docker: on a Mac, [Docker Desktop](https://www.docker.com/products/docker-
 
 ## Run with Docker Compose by hand
 
-Everything has a default, so a `.env` file is only needed for what you change (see [Configuration](#configuration)). Usually that's `SITE_ADDRESS`, the address(es) you'll use, such as `SITE_ADDRESS=crafty.local, 192.168.1.50`.
+Clone the repository and start it from inside the folder:
 
-Automatic backups need a folder the container's user (UID 1000) can write to. Ideally point `BACKUP_HOST_DIR` at another disk or a NAS share instead of `./backups`:
+```bash
+git clone https://github.com/koder-guy/crafty-accounting.git
+cd crafty-accounting
+docker compose up -d --build
+```
+
+Open `https://localhost`, sign in as `Admin` / `admin` and choose your own password. Browsers warn about the certificate until you trust it (see [HTTPS](#https)).
+
+Everything has a default, so a `.env` file in the same folder is only needed for what you change (see [Configuration](#configuration)). Usually that's `SITE_ADDRESS`, so other devices can reach it, such as `SITE_ADDRESS=localhost, crafty.local, 192.168.1.50`. Run `docker compose up -d` after changing it.
+
+Automatic backups go to `./backups`, or to `BACKUP_HOST_DIR` (ideally another disk or a NAS share). On Linux, let the container's user write there:
 
 ```bash
 mkdir -p ./backups && sudo chown 1000:1000 ./backups
 ```
 
-```bash
-docker compose up -d --build
-```
-
-The app is at `https://<SITE_ADDRESS>`; sign in as `Admin` / `admin` and choose your own password. Caddy (`crafty-caddy`) provides HTTPS in front of the app (`crafty-accounting`). The database and documents are in the `crafty-data` volume. To update, get the new code and run the same command; database migrations run on start.
+Caddy (`crafty-caddy`) provides HTTPS in front of the app (`crafty-accounting`). The database and documents are in the `crafty-data` Docker volume. To update, run `git pull` and `docker compose up -d --build` again; database migrations run on start.
 
 ### HTTPS
 
