@@ -22,7 +22,7 @@ import { compressPhoto } from '../lib/compressPhoto';
 import { useCanEdit } from '../lib/queries';
 import { CameraDialog, useCameraOption } from './CameraDialog';
 import { CategoryOptions } from './CategoryOptions';
-import { Button, IconButton, PaymentBadge, SOFT_DANGER } from './ui';
+import { IconButton, PaymentBadge, SOFT_DANGER } from './ui';
 
 // ---- Filters (kept in the URL so they survive navigation) ----
 
@@ -468,9 +468,6 @@ export function documentProblem(name: string): string | null {
   return null;
 }
 
-const fileSize = (bytes: number) =>
-  bytes < 1024 * 1024 ? `${Math.max(1, Math.round(bytes / 1024))} KB` : `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-
 const asPhoto = (file: File) => new File([file], photoFilename(file), { type: file.type, lastModified: file.lastModified });
 
 // What an iPhone calls every photo taken from the file picker, which would clash with the last one.
@@ -630,10 +627,10 @@ export function DocumentField({
           const extension = fileExtension(firstName);
           const problem = nameProblems[i];
           return (
-            <li key={key} className="flex items-center gap-3 px-4 py-2.5">
-              <FileText className="size-5 shrink-0 text-accent-soft" aria-hidden />
-              <div className="min-w-0 flex-1 text-sm">
-                <div className="flex items-center gap-1.5">
+            <li key={key} className="px-4 py-2.5">
+              <div className="flex items-center gap-3">
+                <FileText className="size-5 shrink-0 text-accent-soft" aria-hidden />
+                <div className="flex min-w-0 flex-1 items-center gap-1.5 text-sm">
                   <input
                     aria-label={`Name for ${firstName}`}
                     aria-invalid={problem ? true : undefined}
@@ -650,15 +647,15 @@ export function DocumentField({
                   />
                   <span className="shrink-0 text-muted">{extension}</span>
                 </div>
-                {problem ? (
-                  <p className="mt-1 text-xs text-out-soft">{problem}</p>
-                ) : (
-                  <p className="mt-1 text-xs text-muted">{fileSize(file.size)} · added when you save</p>
-                )}
+                <button
+                  type="button"
+                  className="shrink-0 rounded-md border border-line-strong bg-surface px-3 py-1.5 text-sm text-ink transition-colors hover:border-accent-soft/60"
+                  onClick={() => onFiles(files.filter((_, j) => j !== i))}
+                >
+                  Undo
+                </button>
               </div>
-              <Button type="button" variant="ghost" className="px-2 py-1.5" onClick={() => onFiles(files.filter((_, j) => j !== i))}>
-                Undo
-              </Button>
+              {problem && <p className="mt-1 ml-8 text-xs text-out-soft">{problem}</p>}
             </li>
           );
         })}
