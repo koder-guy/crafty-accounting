@@ -81,6 +81,7 @@ export function ExpenseForm() {
   // New documents to add, and attached ones to remove, when the form is saved.
   const [files, setFiles] = useState<File[]>([]);
   const [removeIds, setRemoveIds] = useState<number[]>([]);
+  const [preparingPhoto, setPreparingPhoto] = useState(false);
 
   const {
     register,
@@ -485,6 +486,7 @@ export function ExpenseForm() {
                   removeIds={removeIds}
                   onFiles={setFiles}
                   onRemoveIds={setRemoveIds}
+                  onPreparing={setPreparingPhoto}
                 />
               </Field>
             </div>
@@ -501,7 +503,7 @@ export function ExpenseForm() {
               <Button type="button" variant="ghost" onClick={() => navigate(backTo)}>
                 Cancel
               </Button>
-              <Button type="submit" variant="primary" busy={save.isPending}>
+              <Button type="submit" variant="primary" busy={save.isPending || preparingPhoto}>
                 {id ? 'Save changes' : 'Add outgoing'}
               </Button>
             </div>

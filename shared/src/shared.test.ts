@@ -15,6 +15,7 @@ import {
   mtdQuarterStatus,
   parseMilesToTenths,
   parsePoundsToPence,
+  photoEncodeAttempts,
   photoFilename,
   penceToPounds,
   selfAssessmentDeadline,
@@ -380,6 +381,27 @@ describe('use of home', () => {
     expect(months[0]).toMatchObject({ startDate: '2025-04-06', endDate: '2025-05-05' });
     expect(months[8]).toMatchObject({ startDate: '2025-12-06', endDate: '2026-01-05' });
     expect(months[11]).toMatchObject({ startDate: '2026-03-06', endDate: '2026-04-05' });
+  });
+});
+
+describe('photo compression attempts', () => {
+  it('starts at 3000 pixels and tries lower quality before a smaller image', () => {
+    const attempts = photoEncodeAttempts(6000);
+    expect(attempts.slice(0, 4)).toEqual([
+      { scale: 0.5, quality: 0.85 },
+      { scale: 0.5, quality: 0.7 },
+      { scale: 0.5, quality: 0.55 },
+      { scale: 2250 / 6000, quality: 0.85 },
+    ]);
+    expect(attempts.at(-1)).toEqual({ scale: 1000 / 6000, quality: 0.55 });
+  });
+
+  it('never enlarges a small photo', () => {
+    expect(photoEncodeAttempts(800)).toEqual([
+      { scale: 1, quality: 0.85 },
+      { scale: 1, quality: 0.7 },
+      { scale: 1, quality: 0.55 },
+    ]);
   });
 });
 

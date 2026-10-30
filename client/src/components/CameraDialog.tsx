@@ -1,6 +1,5 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { LoaderCircle } from 'lucide-react';
-import { photoFilename } from '@crafty/shared';
 import { Alert, Button } from './ui';
 
 /**
@@ -115,7 +114,7 @@ export function CameraDialog({ onPhoto, onClose }: { onPhoto: (photo: File) => v
 
   const use = () => {
     if (!photo) return;
-    onPhoto(new File([photo.blob], photoFilename(photo.blob), { type: photo.blob.type }));
+    onPhoto(new File([photo.blob], 'photo.jpg', { type: photo.blob.type }));
     onClose();
   };
 

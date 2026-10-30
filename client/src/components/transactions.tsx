@@ -18,6 +18,7 @@ import {
 } from '@crafty/shared';
 import { documentUrl } from '../lib/api';
 import { dismissWithoutClicking } from '../lib/menus';
+import { compressPhoto } from '../lib/compressPhoto';
 import { useCanEdit } from '../lib/queries';
 import { CameraDialog, useCameraOption } from './CameraDialog';
 import { CategoryOptions } from './CategoryOptions';
@@ -482,29 +483,30 @@ export function DocumentField({
   removeIds,
   onFiles,
   onRemoveIds,
+  onPreparing,
 }: {
   current: TransactionDocument[];
   files: File[];
   removeIds: number[];
   onFiles: (files: File[]) => void;
   onRemoveIds: (ids: number[]) => void;
+  /** Photos are being compressed: saving now would leave them out. */
+  onPreparing: (preparing: boolean) => void;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
   const [error, setError] = useState<string | null>(null);
   const [cameraOpen, setCameraOpen] = useState(false);
+  const [preparing, setPreparing] = useState(false);
   const cameraOption = useCameraOption();
   const kept = current.length - removeIds.length;
   const room = MAX_DOCUMENTS - kept - files.length;
+  const canAdd = room > 0 && !preparing;
   const addButton = `inline-flex items-center gap-1.5 rounded-md border border-line-strong bg-surface px-3 py-1.5 text-sm text-ink ${
-    room > 0 ? 'cursor-pointer hover:border-accent-soft/60' : 'cursor-not-allowed opacity-50'
+    canAdd ? 'cursor-pointer hover:border-accent-soft/60' : 'cursor-not-allowed opacity-50'
   }`;
 
-  const choose = (picked: File[]) => {
-    setError(null);
-    const chosen = picked.map((f) => (CAMERA_DEFAULT_NAME.test(f.name) ? asPhoto(f) : f));
-    if (inputRef.current) inputRef.current.value = '';
-    if (photoInputRef.current) photoInputRef.current.value = '';
+  const choose = (chosen: File[]) => {
     if (chosen.length === 0) return;
     const taken = new Set([...current.map((d) => d.filename), ...files.map((f) => f.name)]);
     for (const file of chosen) {
@@ -514,6 +516,23 @@ export function DocumentField({
     }
     if (chosen.length > room) return setError(`A transaction can have at most ${MAX_DOCUMENTS} documents`);
     onFiles([...files, ...chosen]);
+  };
+  // Compressing takes a moment, and the list can change meanwhile.
+  const chooseLatest = useRef(choose);
+  chooseLatest.current = choose;
+
+  const add = async (picked: File[], isPhoto: (file: File) => boolean) => {
+    setError(null);
+    if (inputRef.current) inputRef.current.value = '';
+    if (photoInputRef.current) photoInputRef.current.value = '';
+    if (!picked.some(isPhoto)) return choose(picked);
+    setPreparing(true);
+    onPreparing(true);
+    const prepared: File[] = [];
+    for (const file of picked) prepared.push(isPhoto(file) ? asPhoto(await compressPhoto(file)) : file);
+    setPreparing(false);
+    onPreparing(false);
+    chooseLatest.current(prepared);
   };
 
   const toggleRemove = (docId: number) =>
@@ -565,7 +584,9 @@ export function DocumentField({
         ))}
         <li className="flex flex-wrap items-center gap-3 px-4 py-2.5">
           <span className="min-w-max flex-1 text-sm text-muted">
-            {current.length === 0 && files.length === 0
+            {preparing
+              ? 'Preparing photo…'
+              : current.length === 0 && files.length === 0
               ? 'No documents attached'
               : `${kept + files.length} of ${MAX_DOCUMENTS} documents`}
           </span>
@@ -578,8 +599,8 @@ export function DocumentField({
                 accept="image/*"
                 capture="environment"
                 className="sr-only"
-                disabled={room <= 0}
-                onChange={(e) => choose([...(e.target.files ?? [])].map(asPhoto))}
+                disabled={!canAdd}
+                onChange={(e) => add([...(e.target.files ?? [])], () => true)}
               />
               <label htmlFor="document-photo" className={addButton}>
                 <Camera className="size-4" aria-hidden />
@@ -588,7 +609,7 @@ export function DocumentField({
             </>
           )}
           {(cameraOption === 'webcam' || cameraOption === 'needsHttps') && (
-            <button type="button" className={addButton} disabled={room <= 0} onClick={() => setCameraOpen(true)}>
+            <button type="button" className={addButton} disabled={!canAdd} onClick={() => setCameraOpen(true)}>
               <Camera className="size-4" aria-hidden />
               Take photo
             </button>
@@ -600,8 +621,8 @@ export function DocumentField({
             multiple
             accept={ACCEPT}
             className="sr-only"
-            disabled={room <= 0}
-            onChange={(e) => choose([...(e.target.files ?? [])])}
+            disabled={!canAdd}
+            onChange={(e) => add([...(e.target.files ?? [])], (f) => CAMERA_DEFAULT_NAME.test(f.name))}
           />
           <label htmlFor="document" className={addButton}>
             {current.length || files.length ? 'Add more' : 'Choose files'}
@@ -609,7 +630,7 @@ export function DocumentField({
         </li>
       </ul>
       {error && <p className="mt-1.5 text-xs text-out-soft">{error}</p>}
-      {cameraOpen && <CameraDialog onPhoto={(photo) => choose([photo])} onClose={() => setCameraOpen(false)} />}
+      {cameraOpen && <CameraDialog onPhoto={(photo) => add([photo], () => true)} onClose={() => setCameraOpen(false)} />}
     </div>
   );
 }
