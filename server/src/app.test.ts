@@ -990,7 +990,7 @@ describe('MTD quarters', () => {
     expect(q1.submission).toBeNull();
   });
 
-  it('exports a quarter as a CSV with the same rows every time', async () => {
+  it('exports a quarter as a CSV of field names and values, with the same columns every time', async () => {
     const yearId = await createYear();
     await agent.post('/api/incomes').send(income(yearId, { date: '2025-06-14', amountPence: 38000 })).expect(201);
     await agent.post('/api/incomes').send(income(yearId, { date: '2025-07-06', amountPence: 13805 })).expect(201);
@@ -999,18 +999,29 @@ describe('MTD quarters', () => {
     const url = `/api/mtd/quarters/${yearId}/2/export.csv`;
     const cumulative = await agent.get(url).query({ basis: 'cumulative' }).expect(200);
     expect(cumulative.headers['content-disposition']).toContain('crafty-mtd-2025-26-Q2-year-to-date.csv');
-    const lines = cumulative.text.trim().split('\r\n');
-    expect(lines[0]).toContain('Section,Category,HMRC field,Period start,Period end,Amount (GBP)');
-    expect(lines).toHaveLength(1 + 2 + 15 + 15);
-    expect(lines).toContain('Income,"Turnover – takings, fees, sales or money earned",turnover,2025-04-06,2025-10-05,518.05');
-    expect(lines).toContain('Income,Other business income,other,2025-04-06,2025-10-05,0.00');
-    expect(lines).toContain('Expenses,Other business expenses,otherExpenses,2025-04-06,2025-10-05,10.00');
-    expect(lines).toContain('Disallowable expenses,Other business expenses,otherExpensesDisallowable,2025-04-06,2025-10-05,10.00');
-    expect(lines).toContain('Disallowable expenses,Advertising costs,advertisingCostsDisallowable,2025-04-06,2025-10-05,0.00');
+    const figures = (text: string) => {
+      const [fields, values, ...rest] = text.trim().split('\r\n').map((line) => line.split(','));
+      expect(rest).toEqual([]);
+      expect(values).toHaveLength(fields.length);
+      return Object.fromEntries(fields.map((field, i) => [field, values[i]]));
+    };
+    expect(cumulative.text.startsWith('periodStartDate,')).toBe(true);
+    const year = figures(cumulative.text);
+    expect(Object.keys(year)).toHaveLength(2 + 2 + 15 + 15);
+    expect(Object.keys(year).slice(0, 3)).toEqual(['periodStartDate', 'periodEndDate', 'turnover']);
+    expect(year).toMatchObject({
+      periodStartDate: '2025-04-06',
+      periodEndDate: '2025-10-05',
+      turnover: '518.05',
+      other: '0.00',
+      otherExpenses: '10.00',
+      otherExpensesDisallowable: '10.00',
+      advertisingCostsDisallowable: '0.00',
+    });
 
     const period = await agent.get(url).query({ basis: 'period' }).expect(200);
     expect(period.headers['content-disposition']).toContain('crafty-mtd-2025-26-Q2-quarter-only.csv');
-    expect(period.text).toContain('turnover,2025-07-06,2025-10-05,138.05');
+    expect(figures(period.text)).toMatchObject({ periodStartDate: '2025-07-06', periodEndDate: '2025-10-05', turnover: '138.05' });
 
     await agent.get(url).expect(400);
     await agent.get(`/api/mtd/quarters/${yearId}/5/export.csv`).query({ basis: 'period' }).expect(404);

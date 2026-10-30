@@ -132,7 +132,7 @@ A restore is checked in a separate database before anything is replaced, and old
 
 ## Making Tax Digital
 
-From the 2025/26 tax year, an MTD year goes to HMRC like this. Without a connection to HMRC, you can still export each quarter's figures as a CSV for bridging software and record the submission. It has one row per figure, always the same rows, with the HMRC field name on each. Bridging tools each have their own import format, so you may need to map the columns.
+From the 2025/26 tax year, an MTD year goes to HMRC like this. Without a connection to HMRC, you can still export each quarter's figures as a CSV for bridging software and record the submission. It has a row of HMRC's field names and a row of values, always the same columns. Bridging tools each have their own import format, so you may need to map the columns. Disallowable amounts are in the expense columns and in their own, so don't add them all up.
 
 - **Quarterly updates** cover 6 Apr–5 Jul, 6 Jul–5 Oct, 6 Oct–5 Jan and 6 Jan–5 Apr, each due by the 7th of the next month. They're cumulative, so each sends the year to date. **Send to HMRC** shows the figures to confirm first, and HMRC takes an update from 10 days before its quarter ends. The page shows what HMRC expects and has received, and warns when a later change affects a quarter already sent.
 - **HMRC's tax calculation** for the year so far appears on the Quarterly updates page, next to the app's own estimate.

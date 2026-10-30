@@ -149,29 +149,25 @@ function refuseIfSent(db: Db, taxYearId: number, quarter: number, environment: H
 }
 
 /**
- * A quarter's figures for MTD bridging software, one per row. Every row is always
- * there, zeros included, so a bridging tool's saved import map keeps working.
+ * A quarter's figures for MTD bridging software: a row of HMRC's field names and
+ * a row of values. Every column is always there, zeros included, so a bridging
+ * tool's saved import map keeps working.
  */
 function mtdCsv(summary: MtdPeriodSummary, from: string, to: string): string {
-  const row = (section: string, category: string, field: string, pence: number | undefined) => [
-    section,
-    category,
-    field,
-    from,
-    to,
-    penceToPounds(pence ?? 0),
+  const figures: [string, number | undefined][] = [
+    ...INCOME_CATEGORIES.map((c): [string, number | undefined] => [c.hmrcCode, summary.periodIncome[c.hmrcCode]]),
+    ...EXPENSE_CATEGORIES.map((c): [string, number | undefined] => [c.hmrcCode, summary.periodExpenses[c.hmrcCode]]),
+    ...EXPENSE_CATEGORIES.map((c): [string, number | undefined] => {
+      const field = `${c.hmrcCode}Disallowable`;
+      return [field, summary.periodDisallowableExpenses[field]];
+    }),
   ];
-  return toCsv(
-    ['Section', 'Category', 'HMRC field', 'Period start', 'Period end', 'Amount (GBP)'],
-    [
-      ...INCOME_CATEGORIES.map((c) => row('Income', c.name, c.hmrcCode, summary.periodIncome[c.hmrcCode])),
-      ...EXPENSE_CATEGORIES.map((c) => row('Expenses', c.name, c.hmrcCode, summary.periodExpenses[c.hmrcCode])),
-      ...EXPENSE_CATEGORIES.map((c) => {
-        const field = `${c.hmrcCode}Disallowable`;
-        return row('Disallowable expenses', c.name, field, summary.periodDisallowableExpenses[field]);
-      }),
-    ],
+  const csv = toCsv(
+    ['periodStartDate', 'periodEndDate', ...figures.map(([field]) => field)],
+    [[from, to, ...figures.map(([, pence]) => penceToPounds(pence ?? 0))]],
   );
+  // No byte-order mark: there's no £ here for Excel to misread, and an importer could take it as part of the first field's name.
+  return csv.replace(/^﻿/, '');
 }
 
 const querySchema = z.object({ taxYearId: z.coerce.number().int().positive() });
