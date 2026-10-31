@@ -98,8 +98,9 @@ export interface MtdPayload {
 /**
  * MTD-shaped figures in pounds: the body of HMRC's cumulative period summary
  * request. HMRC wants every income and expense field even when it's zero;
- * disallowable amounts are only listed when there are some. With one total for
- * expenses, HMRC refuses any other expense field or disallowable amount.
+ * disallowable amounts are only listed when there are some. One total is HMRC's
+ * "sum of all allowable expenses", already without the disallowable amounts, so
+ * they aren't sent as well. HMRC refuses it alongside any other expense field.
  */
 export function mtdPayload(summary: MtdPeriodSummary, periodStartDate: string, periodEndDate: string, expenses: MtdExpenses): MtdPayload {
   const every = (categories: CategorySeed[], values: Record<string, number>) =>
