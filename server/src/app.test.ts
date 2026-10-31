@@ -897,6 +897,19 @@ describe('use of home', () => {
     await save(yearId, [{ index: 12, hours: 30 }]).expect(400);
   });
 
+  it('exports the months with hours to CSV', async () => {
+    const yearId = await createYear();
+    await save(yearId, [{ index: 0, hours: 30 }, { index: 11, hours: 10 }]).expect(200);
+    const csv = await agent.get('/api/use-of-home/export.csv').query({ taxYearId: yearId }).expect(200);
+    expect(csv.headers['content-disposition']).toContain('use-of-home-2025-26.csv');
+    expect(csv.text.replace('\ufeff', '').trim().split('\r\n')).toEqual([
+      'From,To,Hours,Claim (GBP)',
+      '2025-04-06,2025-05-05,30,10.00',
+      '2026-03-06,2026-04-05,10,0.00',
+    ]);
+    await agent.get('/api/use-of-home/export.csv').query({ taxYearId: 999 }).expect(404);
+  });
+
   it('refuses a save made from out-of-date hours', async () => {
     const yearId = await createYear();
     const first = (await save(yearId, [{ index: 0, hours: 30 }], null).expect(200)).body;

@@ -14,6 +14,7 @@ import { ChangedElsewhere, recordedBy } from '../../components/FormShell';
 import { NoTaxYear } from '../../components/NoTaxYear';
 import { SectionHeading } from '../../components/SectionLayout';
 import { SentQuarterNotice } from '../../components/SentQuarterNotice';
+import { ExportCsvButton } from '../../components/transactions';
 import { Alert, Button, Card, CardHeader, Spinner } from '../../components/ui';
 import { useActiveTaxYear, useCanEdit, useSaveUseOfHome, useUseOfHome } from '../../lib/queries';
 
@@ -191,6 +192,13 @@ export function UseOfHome() {
         <SectionHeading
           title="Use of Home"
           description="Hours worked at home each month, claimed at HMRC's flat rate instead of a share of household bills."
+          actions={
+            taxYear &&
+            data &&
+            data.totals.hours > 0 && (
+              <ExportCsvButton href={`/api/use-of-home/export.csv?taxYearId=${taxYear.id}`} />
+            )
+          }
         />
           {yearLoading || (taxYear && isLoading) ? (
             <Spinner />

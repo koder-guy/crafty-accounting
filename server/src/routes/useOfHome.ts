@@ -1,8 +1,9 @@
 // Hours worked at home each month, claimed at HMRC's flat rate.
 import { Router } from 'express';
 import { z } from 'zod';
-import { useOfHomeInputSchema } from '@crafty/shared';
+import { penceToPounds, useOfHomeInputSchema } from '@crafty/shared';
 import type { AppContext } from '../context';
+import { toCsv } from '../csv';
 import { HttpError, parseWith } from '../http';
 import { getTaxYear, getUseOfHome, nextTimestamp } from '../repo';
 
@@ -16,6 +17,18 @@ export function useOfHomeRouter(ctx: AppContext): Router {
     const taxYear = getTaxYear(ctx.db, taxYearId);
     if (!taxYear) throw new HttpError(404, 'Tax year not found');
     res.json(getUseOfHome(ctx.db, taxYear));
+  });
+
+  router.get('/export.csv', (req, res) => {
+    const { taxYearId } = parseWith(querySchema, req.query);
+    const taxYear = getTaxYear(ctx.db, taxYearId);
+    if (!taxYear) throw new HttpError(404, 'Tax year not found');
+    // Every month with hours, including any under 25 that earn no claim.
+    const rows = getUseOfHome(ctx.db, taxYear)
+      .months.filter((m) => m.hours > 0)
+      .map((m) => [m.startDate, m.endDate, m.hours, penceToPounds(m.claimPence)]);
+    const csv = toCsv(['From', 'To', 'Hours', 'Claim (GBP)'], rows);
+    res.attachment(`use-of-home-${taxYear.label}.csv`).type('text/csv').send(csv);
   });
 
   /** Replaces the year's hours in one go. */
