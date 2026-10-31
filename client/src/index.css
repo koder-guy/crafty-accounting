@@ -46,10 +46,6 @@
   select.field {
     height: 2.375rem;
   }
-  input[type='date']::-webkit-calendar-picker-indicator {
-    filter: invert(0.7);
-    cursor: pointer;
-  }
 }
 
 /* Printing (and Save as PDF) uses a light version of the theme. */

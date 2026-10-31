@@ -7,7 +7,7 @@ export interface TaxYearDates {
   endDate: string;
 }
 
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+export const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
 const pad2 = (n: number) => String(n).padStart(2, '0');
@@ -123,4 +123,34 @@ export function formatDisplayDate(isoDate: string): string {
   if (!isValidIsoDate(isoDate)) return isoDate;
   const [y, m, d] = isoDate.split('-').map(Number);
   return `${d} ${MONTHS[m - 1]} ${y}`;
+}
+
+/** An ISO date as date fields show it: dd/mm/yyyy, or '' when there's no valid date. */
+export function formatDateInput(isoDate: string): string {
+  if (!isValidIsoDate(isoDate)) return '';
+  const [y, m, d] = isoDate.split('-');
+  return `${d}/${m}/${y}`;
+}
+
+/** Reads a typed date, always day first: 8/10/2026, 08-10-26, 08102026 or 2026-10-08. Null if it isn't a real date. */
+export function parseDateInput(text: string): string | null {
+  const typed = text.trim();
+  if (isValidIsoDate(typed)) return typed;
+  const parts = /^(\d{1,2})[/.\- ](\d{1,2})[/.\- ](\d{4}|\d{2})$/.exec(typed) ?? /^(\d{2})(\d{2})(\d{4}|\d{2})$/.exec(typed);
+  if (!parts) return null;
+  const year = parts[3].length === 2 ? `20${parts[3]}` : parts[3];
+  const iso = `${year}-${parts[2].padStart(2, '0')}-${parts[1].padStart(2, '0')}`;
+  return isValidIsoDate(iso) ? iso : null;
+}
+
+export function addDaysIso(isoDate: string, days: number): string {
+  const [y, m, d] = isoDate.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d + days)).toISOString().slice(0, 10);
+}
+
+/** The same day in another month, or that month's last day if it's shorter. */
+export function addMonthsIso(isoDate: string, months: number): string {
+  const [y, m, d] = isoDate.split('-').map(Number);
+  const lastDay = new Date(Date.UTC(y, m - 1 + months + 1, 0)).getUTCDate();
+  return new Date(Date.UTC(y, m - 1 + months, Math.min(d, lastDay))).toISOString().slice(0, 10);
 }

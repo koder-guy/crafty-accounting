@@ -19,6 +19,7 @@ import {
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { MileageCheckAlert } from '../../components/MileageCheckAlert';
 import { ExportCsvButton } from '../../components/transactions';
+import { DateInput } from '../../components/DateInput';
 import { ChangedElsewhere, dateInYear, duplicateDate, recordedBy, yearRangeHint } from '../../components/FormShell';
 import { NoTaxYear } from '../../components/NoTaxYear';
 import { SectionHeading } from '../../components/SectionLayout';
@@ -90,15 +91,7 @@ function TripForm({
     <form onSubmit={submit} noValidate className="space-y-4 px-5 pb-6 sm:px-6">
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <Field label="Date" htmlFor="trip-date" error={errors.date} hint={yearRangeHint(taxYear)}>
-          <input
-            id="trip-date"
-            type="date"
-            className="field"
-            min={taxYear.startDate}
-            max={taxYear.endDate}
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
-          />
+          <DateInput id="trip-date" min={taxYear.startDate} max={taxYear.endDate} value={date} onChange={setDate} />
         </Field>
         <Field label="Miles" htmlFor="trip-miles" error={errors.miles} hint="The whole journey, there and back">
           <input

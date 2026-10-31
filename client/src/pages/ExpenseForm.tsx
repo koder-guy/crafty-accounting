@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { useFieldArray, useForm, useWatch } from 'react-hook-form';
+import { Controller, useFieldArray, useForm, useWatch } from 'react-hook-form';
 import { useNavigate, useParams, useSearchParams } from 'react-router';
 import { Plus, Trash2 } from 'lucide-react';
 import {
@@ -19,6 +19,7 @@ import { CategoryOptions } from '../components/CategoryOptions';
 import { BackLink, ChangedElsewhere, CopiedFrom, dateInYear, duplicateDate, yearRangeHint } from '../components/FormShell';
 import { NoTaxYear } from '../components/NoTaxYear';
 import { PageBody, PageHeader } from '../components/PageHeader';
+import { DateInput } from '../components/DateInput';
 import { DocumentField, PaymentMethodPicker } from '../components/transactions';
 import { SentQuarterNotice } from '../components/SentQuarterNotice';
 import { Alert, Button, Card, CardHeader, Field, IconButton, Spinner } from '../components/ui';
@@ -282,13 +283,13 @@ export function ExpenseForm() {
           <Card className="p-5 sm:p-6">
             <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
               <Field label="Date" htmlFor="date" error={errors.date?.message} hint={yearRangeHint(taxYear)}>
-                <input
-                  id="date"
-                  type="date"
-                  className="field"
-                  min={taxYear.startDate}
-                  max={taxYear.endDate}
-                  {...register('date', { validate: dateInYear(taxYear) })}
+                <Controller
+                  control={control}
+                  name="date"
+                  rules={{ validate: dateInYear(taxYear) }}
+                  render={({ field }) => (
+                    <DateInput id="date" min={taxYear.startDate} max={taxYear.endDate} value={field.value} onChange={field.onChange} onBlur={field.onBlur} ref={field.ref} />
+                  )}
                 />
               </Field>
               <Field label="Payee" htmlFor="payee" error={errors.payee?.message}>

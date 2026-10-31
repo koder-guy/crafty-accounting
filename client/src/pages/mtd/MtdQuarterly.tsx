@@ -26,6 +26,7 @@ import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { NoTaxYear } from '../../components/NoTaxYear';
 import { SectionHeading } from '../../components/SectionLayout';
 import { ExportCsvButton } from '../../components/transactions';
+import { DateInput } from '../../components/DateInput';
 import { Alert, Badge, Button, Card, CardHeader, Field, Spinner, type BadgeTone } from '../../components/ui';
 import {
   useActiveTaxYear,
@@ -272,7 +273,7 @@ function SubmissionPanel({ taxYearId, q }: { taxYearId: number; q: MtdQuarterSum
       }}
     >
       <Field label="Date submitted" htmlFor="submitted-on" className="sm:w-48">
-        <input id="submitted-on" type="date" className="field" required min={earliest} value={submittedOn} onChange={(e) => setSubmittedOn(e.target.value)} />
+        <DateInput id="submitted-on" required min={earliest} value={submittedOn} onChange={setSubmittedOn} />
       </Field>
       <Field label="HMRC reference (optional)" htmlFor="submission-ref" className="sm:w-64">
         <input id="submission-ref" className="field" value={reference} onChange={(e) => setReference(e.target.value)} />

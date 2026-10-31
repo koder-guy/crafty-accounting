@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
+  addDaysIso,
+  addMonthsIso,
+  formatDateInput,
+  parseDateInput,
   buildMtdPeriodSummary,
   buildSelfAssessmentSummary,
   compareSections,
@@ -60,6 +64,17 @@ describe('tax years', () => {
   it('validates ISO dates', () => {
     expect(isValidIsoDate('2024-02-29')).toBe(true);
     expect(isValidIsoDate('2025-02-29')).toBe(false);
+    expect(parseDateInput('8/10/2026')).toBe('2026-10-08');
+    expect(parseDateInput('08-10-26')).toBe('2026-10-08');
+    expect(parseDateInput('08102026')).toBe('2026-10-08');
+    expect(parseDateInput('2026-10-08')).toBe('2026-10-08');
+    expect(parseDateInput('31/02/2026')).toBeNull();
+    expect(parseDateInput('8/10/2')).toBeNull();
+    expect(formatDateInput('2026-10-08')).toBe('08/10/2026');
+    expect(formatDateInput('')).toBe('');
+    expect(addDaysIso('2026-12-31', 1)).toBe('2027-01-01');
+    expect(addMonthsIso('2026-01-31', 1)).toBe('2026-02-28');
+    expect(addMonthsIso('2026-01-15', -1)).toBe('2025-12-15');
     expect(isValidIsoDate('2025-4-6')).toBe(false);
   });
 

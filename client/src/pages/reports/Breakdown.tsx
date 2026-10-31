@@ -13,7 +13,8 @@ import {
   type BreakdownSection,
 } from '@crafty/shared';
 import { SectionHeading } from '../../components/SectionLayout';
-import { Alert, Badge, Button, Card, CardHeader, EmptyState, IconButton, Spinner } from '../../components/ui';
+import { DateInput } from '../../components/DateInput';
+import { Alert, Badge, Button, Card, CardHeader, EmptyState, Field, IconButton, Spinner } from '../../components/ui';
 import { useActiveTaxYear, useBreakdown, useBreakdownItems, type BreakdownSelection } from '../../lib/queries';
 import { printPage } from '../../lib/liveUpdates';
 
@@ -357,7 +358,8 @@ export function Breakdown() {
       (prev) => {
         const next = new URLSearchParams(prev);
         for (const [k, v] of Object.entries(changes)) {
-          if (v) next.set(k, v);
+          // An emptied date stays empty (''), rather than going back to the default.
+          if (v !== null) next.set(k, v);
           else next.delete(k);
         }
         return next;
@@ -421,14 +423,12 @@ export function Breakdown() {
               </option>
             </select>
           </label>
-          <label className="block sm:w-44">
-            <span className="mb-1.5 block text-sm font-medium">From</span>
-            <input type="date" className="field" value={from} onChange={(e) => update({ from: e.target.value, show: null })} />
-          </label>
-          <label className="block sm:w-44">
-            <span className="mb-1.5 block text-sm font-medium">To</span>
-            <input type="date" className="field" value={to} onChange={(e) => update({ to: e.target.value, show: null })} />
-          </label>
+          <Field label="From" htmlFor="breakdown-from" className="sm:w-44">
+            <DateInput id="breakdown-from" value={from} onChange={(v) => update({ from: v, show: null })} />
+          </Field>
+          <Field label="To" htmlFor="breakdown-to" className="sm:w-44">
+            <DateInput id="breakdown-to" value={to} onChange={(v) => update({ to: v, show: null })} />
+          </Field>
         </div>
         <p className="hidden text-sm print:block">
           Period: {formatDisplayDate(from)} to {formatDisplayDate(to)}
