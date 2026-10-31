@@ -194,7 +194,7 @@ export const taxSettingsSchema = z.object({
 });
 
 export const loginSchema = z.object({
-  name: z.string().trim().min(1, 'Enter your name'),
+  name: z.string().trim().min(1, 'Enter your username'),
   password: z.string().min(1, 'Enter your password'),
 });
 
@@ -212,7 +212,7 @@ export const ROLE_DESCRIPTIONS: Record<Role, string> = {
   viewer: 'Can view everything, export CSVs and print reports, but not change anything or download backups',
 };
 
-const userName = z.string().trim().min(1, 'Enter a name').max(50, 'Use 50 characters or fewer');
+const userName = z.string().trim().min(1, 'Enter a username').max(50, 'Use 50 characters or fewer');
 const newPassword = z.string().min(8, 'Use at least 8 characters').max(200);
 const role = z.enum(ROLES, 'Choose what they can do');
 

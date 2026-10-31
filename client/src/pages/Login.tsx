@@ -24,15 +24,15 @@ export function Login() {
           <h1 className="text-xl font-bold text-white">{APP_NAME}</h1>
           <p className="mt-1 text-sm text-muted">Sign in to your books</p>
         </div>
-        <label htmlFor="name" className="mb-1.5 block text-sm font-medium">
-          Name
+        <label htmlFor="username" className="mb-1.5 block text-sm font-medium">
+          Username
         </label>
         <div className="relative mb-4">
           <UserRound className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-faint" aria-hidden />
           <input
-            id="name"
+            id="username"
             autoComplete="username"
-            autoCapitalize="words"
+            autoCapitalize="none"
             autoFocus
             className="field pl-9"
             value={name}

@@ -86,7 +86,7 @@ export function authRouter(ctx: AppContext): Router {
   router.post('/login', loginLimiter, (req, res) => {
     const { name, password } = parseWith(loginSchema, req.body);
     const user = authenticate(ctx.db, name, password);
-    if (!user) throw new HttpError(401, 'Incorrect name or password');
+    if (!user) throw new HttpError(401, 'Incorrect username or password');
     req.session = { userId: user.id };
     res.json(meResponse(user.id));
   });

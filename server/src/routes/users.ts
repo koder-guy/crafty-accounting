@@ -12,7 +12,7 @@ export function usersRouter(ctx: AppContext): Router {
 
   const checkName = (name: string, exceptId = 0) => {
     if (nameTaken(ctx.db, name, exceptId)) {
-      throw new HttpError(409, `There's already someone called ${name}`, [{ path: 'name', message: 'Name already in use' }]);
+      throw new HttpError(409, `The username ${name} is already in use`, [{ path: 'name', message: 'Username already in use' }]);
     }
   };
 

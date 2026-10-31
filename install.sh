@@ -225,12 +225,12 @@ if [ -n "$LAN_IP" ]; then echo "  $label  http://$LAN_IP:$PORT"; fi
 echo
 if [ "$NEW_INSTALL" = 1 ]; then
   echo "Sign in with:"
-  echo "  Name:      Admin"
+  echo "  Username:  Admin"
   echo "  Password:  admin"
   echo
   echo "You'll be asked to choose your own password straight away."
 else
-  echo "Sign in with your existing name and password."
+  echo "Sign in with your existing username and password."
 fi
 echo
 echo "It keeps running after you close this window, until you stop it or restart"

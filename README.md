@@ -39,7 +39,7 @@ The app keeps running when the terminal closes, but doesn't start by itself afte
 
 `crafty` also takes `stop`, `restart`, `status`, `log` and `update`. An update keeps your books and settings, and leaves the running copy alone if it fails. Settings are in `~/crafty-accounting/.env`, the books in `~/crafty-accounting/data`. On a new install you can set `CRAFTY_DIR` or `CRAFTY_PORT` before `/bin/bash`.
 
-**Signing in for the first time:** use the name `Admin` and the password `admin`. You'll be asked to choose your own password before anything else; rename yourself and add other people in **Settings → People**.
+**Signing in for the first time:** use the username `Admin` and the password `admin`. You'll be asked to choose your own password before anything else; change your username and add other people in **Settings → People**.
 
 This serves plain HTTP, which is fine on a home network. For HTTPS, or on Alpine and other musl-based Linux, use Docker.
 
@@ -103,7 +103,7 @@ Settings go in a `.env` file next to the app (the installers write one). Only in
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `ADMIN_NAME` / `ADMIN_PASSWORD` | `Admin` / `admin` | The first person, created when nobody exists yet; ignored after that. With the default password they must choose their own when they first sign in. |
+| `ADMIN_NAME` / `ADMIN_PASSWORD` | `Admin` / `admin` | The first person's username and password, created when nobody exists yet; ignored after that. With the default password they must choose their own when they first sign in. |
 | `SESSION_SECRET` | generated | Signs the session cookie; one is generated and kept with the data if empty |
 | `PORT` | `3000` | Port the app listens on |
 | `SITE_ADDRESS` | `localhost` | Docker: address(es) for HTTPS, comma separated |

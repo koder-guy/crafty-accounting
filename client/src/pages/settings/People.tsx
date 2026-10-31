@@ -54,7 +54,7 @@ function RoleChoice({
   );
 }
 
-/** Adds a person, or edits someone: name, access and optionally a new password. */
+/** Adds a person, or edits someone: username, access and optionally a new password. */
 function PersonForm({ editing, editorCount, onDone }: { editing: User | null; editorCount: number; onDone: () => void }) {
   const { create, update } = useUserMutations();
   const { data: me } = useMe();
@@ -67,7 +67,7 @@ function PersonForm({ editing, editorCount, onDone }: { editing: User | null; ed
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
-    if (!name.trim()) return setError('Enter a name');
+    if (!name.trim()) return setError('Enter a username');
     if ((!editing || password) && password.length < 8) return setError('Use a password of at least 8 characters');
     setError(null);
     const onSuccess = () => {
@@ -86,7 +86,7 @@ function PersonForm({ editing, editorCount, onDone }: { editing: User | null; ed
   return (
     <form onSubmit={submit} noValidate className="space-y-4 px-5 pb-6 sm:px-6">
       <div className="grid gap-4 md:grid-cols-2">
-        <Field label="Name" htmlFor="person-name" hint="What they type to sign in">
+        <Field label="Username" htmlFor="person-name" hint="What they type to sign in">
           <input
             id="person-name"
             className="field"
@@ -222,7 +222,7 @@ export function People() {
               <table className="w-full text-sm">
                 <thead className="text-xs tracking-wide text-muted uppercase">
                   <tr className="border-y border-line">
-                    <th scope="col" className="px-4 py-3 text-left font-medium sm:pl-6">Name</th>
+                    <th scope="col" className="px-4 py-3 text-left font-medium sm:pl-6">Username</th>
                     <th scope="col" className="px-4 py-3 text-left font-medium">Access</th>
                     <th scope="col" className="px-4 py-3 text-left font-medium">Added</th>
                     {canEdit && <th scope="col" className="px-4 py-3 text-right font-medium sm:pr-6">Actions</th>}
@@ -283,7 +283,7 @@ export function People() {
         }}
       >
         <p>They'll be signed out straight away and won't be able to sign in again.</p>
-        <p>The transactions they added stay, still showing their name.</p>
+        <p>The transactions they added stay, still showing their username.</p>
       </ConfirmDialog>
     </div>
   );

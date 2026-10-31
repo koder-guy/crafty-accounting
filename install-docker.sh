@@ -167,12 +167,12 @@ EOF
   echo
   if [ "$NEW_INSTALL" = 1 ]; then
     echo "Sign in with:"
-    echo "  Name:      Admin"
+    echo "  Username:  Admin"
     echo "  Password:  admin"
     echo
     echo "You'll be asked to choose your own password straight away."
   else
-    echo "Sign in with your existing name and password."
+    echo "Sign in with your existing username and password."
   fi
   if [ -n "$CERT" ]; then
     echo
