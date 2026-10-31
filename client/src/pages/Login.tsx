@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { LockKeyhole, UserRound, Wallet } from 'lucide-react';
-import { APP_NAME } from '@crafty/shared';
+import { APP_NAME, APP_VERSION } from '@crafty/shared';
 import { Alert, Button } from '../components/ui';
 import { useLogin } from '../lib/queries';
 
@@ -22,7 +22,8 @@ export function Login() {
             <Wallet className="size-7 text-white" aria-hidden />
           </div>
           <h1 className="text-xl font-bold text-white">{APP_NAME}</h1>
-          <p className="mt-1 text-sm text-muted">Sign in to your books</p>
+          <p className="mt-0.5 text-xs text-faint">v{APP_VERSION}</p>
+          <p className="mt-2 text-sm text-muted">Sign in to your books</p>
         </div>
         <label htmlFor="username" className="mb-1.5 block text-sm font-medium">
           Username
