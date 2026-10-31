@@ -647,6 +647,20 @@ describe('incomes', () => {
     expect(lines[1]).toContain('Christmas fair');
     expect(lines[1]).toContain('138.00');
   });
+
+  it('filters by a tax month, 6th to 5th inclusive, in the list and the CSV', async () => {
+    const yearId = await createYear();
+    for (const date of ['2025-05-05', '2025-05-06', '2025-06-05', '2025-06-06']) {
+      await agent.post('/api/incomes').send(income(yearId, { date, description: date })).expect(201);
+    }
+    const month = { taxYearId: yearId, from: '2025-05-06', to: '2025-06-05' };
+
+    const list = await agent.get('/api/incomes').query(month).expect(200);
+    expect(list.body.map((i: { date: string }) => i.date).sort()).toEqual(['2025-05-06', '2025-06-05']);
+
+    const csv = await agent.get('/api/incomes/export.csv').query(month).expect(200);
+    expect(csv.text.trim().split('\r\n')).toHaveLength(3);
+  });
 });
 
 describe('expenses', () => {

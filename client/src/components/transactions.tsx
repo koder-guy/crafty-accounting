@@ -9,6 +9,8 @@ import {
   PAYMENT_METHOD_LABELS,
   PAYMENT_METHODS,
   photoFilename,
+  startYearFromLabel,
+  taxMonths,
   type Category,
   type CategoryType,
   type PaymentMethod,
@@ -26,22 +28,28 @@ import { IconButton, PaymentBadge, SOFT_DANGER } from './ui';
 
 // ---- Filters (kept in the URL so they survive navigation) ----
 
-const FILTER_KEYS = ['search', 'categoryId', 'paymentMethod'] as const;
+const FILTER_KEYS = ['search', 'taxMonth', 'categoryId', 'paymentMethod'] as const;
 
 export function useTransactionFilters(taxYear: TaxYear | null) {
   const [params, setParams] = useSearchParams();
   const get = (key: string) => params.get(key) ?? '';
+  const startYear = taxYear && startYearFromLabel(taxYear.label);
+  const months = useMemo(() => (startYear ? taxMonths(startYear) : []), [startYear]);
 
   const filters: TransactionFilters | null = useMemo(() => {
     if (!taxYear) return null;
     const method = params.get('paymentMethod');
+    // Kept as an index, so the same month stays picked when the tax year changes.
+    const month = params.get('taxMonth') ? months[Number(params.get('taxMonth'))] : undefined;
     return {
       taxYearId: taxYear.id,
       search: params.get('search') || undefined,
+      from: month?.startDate,
+      to: month?.endDate,
       categoryId: Number(params.get('categoryId')) || undefined,
       paymentMethod: PAYMENT_METHODS.includes(method as PaymentMethod) ? (method as PaymentMethod) : undefined,
     };
-  }, [params, taxYear]);
+  }, [params, taxYear, months]);
 
   const set = (key: (typeof FILTER_KEYS)[number], value: string) =>
     setParams(
@@ -55,10 +63,10 @@ export function useTransactionFilters(taxYear: TaxYear | null) {
     );
 
   const active = FILTER_KEYS.some((k) => params.get(k));
-  return { filters, get, set, active };
+  return { filters, months, get, set, active };
 }
 
-/** Category and payment method menus, then the text search on the right. */
+/** Tax month, category and payment method menus, then the text search on the right. */
 export function FilterBar({
   filterState,
   categories,
@@ -68,7 +76,7 @@ export function FilterBar({
   categories: Category[];
   type: CategoryType;
 }) {
-  const { get, set } = filterState;
+  const { months, get, set } = filterState;
   const [search, setSearch] = useState(get('search'));
   const first = useRef(true);
 
@@ -84,12 +92,20 @@ export function FilterBar({
   }, [search]);
 
   return (
-    <div className="flex flex-col gap-3 border-b border-line px-5 pb-5 sm:flex-row sm:justify-end sm:px-6">
-      <FilterSelect label="Category" className="sm:w-72" value={get('categoryId')} onChange={(v) => set('categoryId', v)}>
+    <div className="grid gap-3 border-b border-line px-5 pb-5 sm:grid-cols-2 sm:px-6 xl:flex xl:justify-end">
+      <FilterSelect label="Tax month" className="xl:w-60" value={get('taxMonth')} onChange={(v) => set('taxMonth', v)}>
+        <option value="">All tax months</option>
+        {months.map((m) => (
+          <option key={m.index} value={m.index}>
+            {m.range}
+          </option>
+        ))}
+      </FilterSelect>
+      <FilterSelect label="Category" className="min-w-0 xl:w-72" value={get('categoryId')} onChange={(v) => set('categoryId', v)}>
         <option value="">All categories</option>
         <CategoryOptions categories={categories} type={type} />
       </FilterSelect>
-      <FilterSelect label="Payment method" className="sm:w-44" value={get('paymentMethod')} onChange={(v) => set('paymentMethod', v)}>
+      <FilterSelect label="Payment method" className="xl:w-44" value={get('paymentMethod')} onChange={(v) => set('paymentMethod', v)}>
         <option value="">All payment types</option>
         {PAYMENT_METHODS.map((m) => (
           <option key={m} value={m}>
@@ -97,7 +113,7 @@ export function FilterBar({
           </option>
         ))}
       </FilterSelect>
-      <div className="relative sm:w-64">
+      <div className="relative xl:w-64">
         <label htmlFor="f-search" className="sr-only">
           Search
         </label>
