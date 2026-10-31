@@ -66,7 +66,7 @@ export function useTransactionFilters(taxYear: TaxYear | null) {
   return { filters, months, month, get, set, active };
 }
 
-/** Tax month, category and payment method menus, then the text search on the right. */
+/** The text search, then the payment method, category and tax month menus. */
 export function FilterBar({
   filterState,
   categories,
@@ -92,27 +92,7 @@ export function FilterBar({
   }, [search]);
 
   return (
-    <div className="grid gap-3 border-b border-line px-5 pb-5 sm:grid-cols-2 sm:px-6 xl:flex xl:justify-end">
-      <FilterSelect label="Tax month" tooltip={month?.range} className="xl:w-44" value={get('taxMonth')} onChange={(v) => set('taxMonth', v)}>
-        <option value="">All tax months</option>
-        {months.map((m) => (
-          <option key={m.index} value={m.index}>
-            {m.name}
-          </option>
-        ))}
-      </FilterSelect>
-      <FilterSelect label="Category" className="min-w-0 xl:w-72" value={get('categoryId')} onChange={(v) => set('categoryId', v)}>
-        <option value="">All categories</option>
-        <CategoryOptions categories={categories} type={type} />
-      </FilterSelect>
-      <FilterSelect label="Payment method" className="xl:w-44" value={get('paymentMethod')} onChange={(v) => set('paymentMethod', v)}>
-        <option value="">All payment types</option>
-        {PAYMENT_METHODS.map((m) => (
-          <option key={m} value={m}>
-            {PAYMENT_METHOD_LABELS[m]}
-          </option>
-        ))}
-      </FilterSelect>
+    <div className="grid gap-3 border-b border-line px-5 pb-5 sm:grid-cols-2 sm:px-6 xl:flex">
       <div className="relative xl:w-64">
         <label htmlFor="f-search" className="sr-only">
           Search
@@ -127,6 +107,26 @@ export function FilterBar({
           onChange={(e) => setSearch(e.target.value)}
         />
       </div>
+      <FilterSelect label="Payment method" className="xl:w-44" value={get('paymentMethod')} onChange={(v) => set('paymentMethod', v)}>
+        <option value="">All payment types</option>
+        {PAYMENT_METHODS.map((m) => (
+          <option key={m} value={m}>
+            {PAYMENT_METHOD_LABELS[m]}
+          </option>
+        ))}
+      </FilterSelect>
+      <FilterSelect label="Category" className="min-w-0 xl:w-72" value={get('categoryId')} onChange={(v) => set('categoryId', v)}>
+        <option value="">All categories</option>
+        <CategoryOptions categories={categories} type={type} />
+      </FilterSelect>
+      <FilterSelect label="Tax month" tooltip={month?.range} className="xl:w-44" value={get('taxMonth')} onChange={(v) => set('taxMonth', v)}>
+        <option value="">All tax months</option>
+        {months.map((m) => (
+          <option key={m.index} value={m.index}>
+            {m.name}
+          </option>
+        ))}
+      </FilterSelect>
     </div>
   );
 }
