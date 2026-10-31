@@ -658,6 +658,21 @@ export function MtdQuarterly() {
                     </button>
                   ))}
                 </div>
+                <p className="mt-3 text-sm text-muted">
+                  Expenses in the CSV and your update to HMRC are{' '}
+                  <span className="font-medium text-ink">{oneTotal ? 'consolidated into one total' : 'by category'}</span>.
+                  {oneTotal && ' The categories below are for your own reference.'}
+                  {canEdit && !overThreshold && (
+                    <>
+                      {' '}
+                      You can change this in{' '}
+                      <Link className="text-accent-soft hover:underline" to="/settings/tax-years">
+                        Settings → Tax years
+                      </Link>
+                      .
+                    </>
+                  )}
+                </p>
               </div>
               <FiguresTable summary={summary} categories={categories} oneTotal={oneTotal} />
             </Card>
