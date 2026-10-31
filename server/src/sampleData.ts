@@ -1,5 +1,5 @@
-// Generates realistic sample data for testing: two tax years of craft-fair
-// sales and purchases, some attached PDFs and recorded MTD submissions.
+// Generates realistic sample data for testing: five tax years of a growing
+// craft-fair business's sales and purchases, some attached PDFs and recorded MTD submissions.
 // The output is deterministic for a given "today" so test runs are repeatable.
 import fs from 'node:fs';
 import path from 'node:path';
@@ -20,6 +20,11 @@ export interface SampleDataResult {
   submissions: number;
   trips: number;
 }
+
+/** Past tax years to generate, before the current one. */
+const SAMPLE_PAST_YEARS = 4;
+/** How much smaller sales are for each year back. */
+const SAMPLE_YEARLY_GROWTH = 0.12;
 
 const FAIRS = [
   'Abingdon Market',
@@ -308,10 +313,12 @@ export function generateSampleData(db: Db, uploadsDir: string, today = todayIso(
       insertCategory.run(c.type, c.name, c.code);
       custom.set(c.name, (findCategory.get(c.type, c.name) as { id: number }).id);
     }
-    for (const startYear of [currentStart - 1, currentStart]) {
+    for (let startYear = currentStart - SAMPLE_PAST_YEARS; startYear <= currentStart; startYear++) {
       const year = taxYearFromStartYear(startYear);
-      // Last year went in a Self Assessment return; this year is Making Tax Digital, to show both.
+      // Past years went in Self Assessment returns; this year is Making Tax Digital, to show both.
       const mtd = startYear === currentStart;
+      // The business has grown: earlier years have fewer fairs and smaller takings, so comparing years shows a trend.
+      const growth = 1 - (currentStart - startYear) * SAMPLE_YEARLY_GROWTH;
       const yearId = Number(insertYear.run(year.label, year.startDate, year.endDate, mtd ? 'mtd' : 'self_assessment').lastInsertRowid);
       currentYearId = yearId;
       result.taxYears++;
@@ -320,9 +327,9 @@ export function generateSampleData(db: Db, uploadsDir: string, today = todayIso(
 
       // Craft fairs on about two Saturdays a month: card and cash takings.
       for (const date of saturdays(year.startDate, end)) {
-        if (!rnd.chance(0.5)) continue;
+        if (!rnd.chance(0.5 * growth)) continue;
         const fair = rnd.pick(FAIRS);
-        const busy = /Christmas/.test(fair) || date.slice(5, 7) === '12' ? 1.8 : 1;
+        const busy = (/Christmas/.test(fair) || date.slice(5, 7) === '12' ? 1.8 : 1) * growth;
         const card = Math.round(rnd.int(6000, 42000) * busy);
         const docs: Docs = [];
         if (rnd.chance(0.3)) {
@@ -354,7 +361,7 @@ export function generateSampleData(db: Db, uploadsDir: string, today = todayIso(
             docs.push(attach(`${payoutDate} Etsy payout.pdf`, `Etsy payout ${payoutDate}`));
             if (rnd.chance(0.5)) docs.push(attach(`${payoutDate} Etsy monthly statement.pdf`, `Etsy statement ${payoutDate}`));
           }
-          insertIncome(yearId, payoutDate, 'Etsy payout', `ETSY-${rnd.int(1000000, 9999999)}`, 'bank_transfer', rnd.int(3500, 19000), custom.get('Etsy sales'), null, docs);
+          insertIncome(yearId, payoutDate, 'Etsy payout', `ETSY-${rnd.int(1000000, 9999999)}`, 'bank_transfer', Math.round(rnd.int(3500, 19000) * growth), custom.get('Etsy sales'), null, docs);
           result.incomes++;
         }
         for (let i = rnd.int(1, 3); i > 0; i--) {

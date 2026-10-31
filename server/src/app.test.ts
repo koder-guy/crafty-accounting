@@ -2454,7 +2454,7 @@ describe('sample data', () => {
 
   it('generates consistent data that the API and backups accept', async () => {
     const result = generateSampleData(ctx.db, uploads(), '2026-10-26');
-    expect(result.taxYears).toBe(2);
+    expect(result.taxYears).toBe(5);
     expect(result.incomes).toBeGreaterThan(40);
     expect(result.expenses).toBeGreaterThan(40);
     expect(result.documents).toBeGreaterThan(5);
@@ -2494,12 +2494,17 @@ describe('sample data', () => {
     for (const c of customs) expect(c.usageCount).toBeGreaterThan(0);
 
     const { body } = await agent.get('/api/tax-years').expect(200);
-    expect(body.taxYears.map((y: { label: string }) => y.label)).toEqual(['2026-27', '2025-26']);
-    // This year is MTD with Q1 recorded; last year was a Self Assessment return.
+    expect(body.taxYears.map((y: { label: string }) => y.label)).toEqual(['2026-27', '2025-26', '2024-25', '2023-24', '2022-23']);
+    // This year is MTD with Q1 recorded; past years were Self Assessment returns.
     expect(body.taxYears.map((y: { submissionMethod: string; mtdUpdates: object }) => [y.submissionMethod, y.mtdUpdates])).toEqual([
       ['mtd', { recorded: 1, sent: 0 }],
-      ['self_assessment', { recorded: 0, sent: 0 }],
+      ...Array(4).fill(['self_assessment', { recorded: 0, sent: 0 }]),
     ]);
+    // The business grows, so comparing years has a trend to show, and every year has its own tax rates.
+    const yearIds = [...body.taxYears].reverse().map((y: { id: number }) => y.id);
+    const { years } = (await agent.get('/api/reports/year-comparison').query({ taxYearId: yearIds[3], compareToId: yearIds[0], period: 'full' }).expect(200)).body;
+    expect(years[0].totals.incomePence).toBeGreaterThan(years[1].totals.incomePence);
+    expect(years[1].tax.estimate.ratesAssumed).toBe(false);
     await agent.get('/api/dashboard').query({ taxYearId: body.activeTaxYearId }).expect(200);
     const dump = (await agent.get('/api/backup.sql').expect(200)).text;
     await agent.post('/api/restore').attach('file', Buffer.from(dump), 'backup.sql').expect(200);
@@ -2508,7 +2513,7 @@ describe('sample data', () => {
   it('can be loaded from the app into an empty install, and is flagged until cleared', async () => {
     expect((await agent.get('/api/sample-data').expect(200)).body).toEqual({ loaded: false, canLoad: true });
     const { body } = await agent.post('/api/sample-data').expect(201);
-    expect(body.taxYears).toBe(2);
+    expect(body.taxYears).toBe(5);
     expect((await agent.get('/api/sample-data')).body).toEqual({ loaded: true, canLoad: false });
     await agent.post('/api/sample-data').expect(409);
 
@@ -2526,7 +2531,7 @@ describe('sample data', () => {
     expect(() => generateSampleData(ctx.db, uploads(), '2026-10-26')).toThrow(/already has data/);
     clearData(ctx.db, uploads());
     expect(fs.readdirSync(uploads())).toHaveLength(0);
-    expect(generateSampleData(ctx.db, uploads(), '2026-10-26').taxYears).toBe(2);
+    expect(generateSampleData(ctx.db, uploads(), '2026-10-26').taxYears).toBe(5);
   });
 });
 

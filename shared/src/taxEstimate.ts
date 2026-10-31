@@ -39,6 +39,14 @@ const FROZEN_THRESHOLDS: TaxRates = {
 
 /** Rates by tax year label. Thresholds have been frozen since 2021, and Class 4 has been 6% since April 2024. */
 export const TAX_RATES: Record<string, TaxRates> = {
+  '2022-23': {
+    ...FROZEN_THRESHOLDS,
+    additionalRateFromPence: 150_000_00,
+    class4LowerLimitPence: 11_908_00,
+    class4MainRate: 0.0973,
+    class4UpperRate: 0.0273,
+  },
+  '2023-24': { ...FROZEN_THRESHOLDS, class4MainRate: 0.09 },
   '2024-25': FROZEN_THRESHOLDS,
   '2025-26': FROZEN_THRESHOLDS,
   '2026-27': FROZEN_THRESHOLDS,

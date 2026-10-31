@@ -360,6 +360,12 @@ describe('tax estimate', () => {
 
   it('assumes the latest known rates for a later year', () => {
     expect(taxRatesFor('2030-31')).toMatchObject({ ratesLabel: '2026-27', assumed: true });
+    expect(taxRatesFor('2021-22')).toMatchObject({ ratesLabel: '2022-23', assumed: true });
+    expect(taxRatesFor('2023-24')).toMatchObject({ assumed: false, rates: { class4MainRate: 0.09, class4LowerLimitPence: 12_570_00 } });
+    expect(taxRatesFor('2022-23')).toMatchObject({
+      assumed: false,
+      rates: { class4MainRate: 0.0973, class4UpperRate: 0.0273, class4LowerLimitPence: 11_908_00, additionalRateFromPence: 150_000_00 },
+    });
     expect(taxPaymentDates(2026)).toEqual({ balancing: '2028-01-31', secondPaymentOnAccount: '2028-07-31' });
   });
 });
