@@ -15,6 +15,7 @@ Self-hosted bookkeeping for UK sole traders on the cash basis. Keep your income 
 - **Dashboard**: totals, a monthly chart, a breakdown by HMRC category and key dates.
 - **Reports**:
   - **Breakdown**: income and spending for any period, by category and payee, with the transactions behind each row.
+  - **Compare years**: two tax years side by side: incoming, outgoing, profit and margin, month by month and by category, plus the estimated tax for full years. A year still in progress is compared with the same stretch of the other.
   - **Tax estimate**: Income Tax and Class 4 National Insurance on the year's profit, using the trading allowance if that's better. It shows what to put aside and when it's due, including payments on account, and can allow for a salary or pension. Rates are for England, Wales and Northern Ireland.
 - **Self Assessment → Year-end summary**: the figures for each box of the SA103S (self-employment, short), with disallowable amounts listed and a trading allowance comparison. Business entertaining is always disallowable, in every total. Depreciation isn't offered for new expenses, because on the cash basis you claim equipment when you buy it.
 - **Making Tax Digital**: quarterly updates, HMRC's tax calculation, the final declaration and amendments (see [Making Tax Digital](#making-tax-digital)).

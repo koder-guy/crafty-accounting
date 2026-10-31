@@ -141,6 +141,15 @@ export const reportRangeSchema = z
   .object({ from: isoDate, to: isoDate })
   .refine((r) => r.from <= r.to, { message: 'The start date must be on or before the end date', path: ['to'] });
 
+/** Two tax years to compare: the same stretch of each, or both in full. */
+export const yearComparisonSchema = z
+  .object({
+    taxYearId: z.coerce.number().int().positive(),
+    compareToId: z.coerce.number().int().positive(),
+    period: z.enum(['same', 'full']),
+  })
+  .refine((q) => q.taxYearId !== q.compareToId, { message: 'Choose two different tax years', path: ['compareToId'] });
+
 /** What to list in a breakdown drill-down: one category, a category group, or a payee. */
 export const breakdownItemsSchema = z
   .object({

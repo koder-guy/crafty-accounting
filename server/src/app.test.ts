@@ -2376,6 +2376,79 @@ describe('HMRC connection', () => {
   });
 });
 
+describe('comparing tax years', () => {
+  async function twoYears() {
+    const earlier = await createYear(2024);
+    const later = await createYear(2025);
+    await agent.post('/api/incomes').send(income(earlier, { date: '2024-06-14', amountPence: 10000 })).expect(201);
+    await agent.post('/api/incomes').send(income(earlier, { date: '2025-03-01', amountPence: 90000 })).expect(201);
+    await agent.post('/api/expenses').send(expense(earlier, { date: '2024-05-02' })).expect(201);
+    await agent.post('/api/expenses').send(expense(earlier, { date: '2025-03-02', invoiceNumber: 'INV-101' })).expect(201);
+    await agent.post('/api/incomes').send(income(later, { date: '2025-06-14', amountPence: 20000 })).expect(201);
+    await agent.post('/api/expenses').send(expense(later, { date: '2025-07-20', invoiceNumber: 'INV-102' })).expect(201);
+    return { earlier, later };
+  }
+  const compare = (taxYearId: number, compareToId: number, period: string) => agent.get('/api/reports/year-comparison').query({ taxYearId, compareToId, period });
+
+  it('compares the same stretch of each year, up to the last date recorded in the later one', async () => {
+    const { earlier, later } = await twoYears();
+    const { period, years } = (await compare(later, earlier, 'same').expect(200)).body;
+    expect(period).toBe('same');
+    expect(years[0]).toMatchObject({ from: '2025-04-06', to: '2025-07-20', tax: null });
+    expect(years[1]).toMatchObject({ from: '2024-04-06', to: '2024-07-20', tax: null });
+    expect(years[0].totals).toEqual({ incomePence: 20000, allowableExpensesPence: 3550, disallowablePence: 1000, profitPence: 16450 });
+    // The March sale and expense in the earlier year fall after the cut-off.
+    expect(years[1].totals).toEqual({ incomePence: 10000, allowableExpensesPence: 3550, disallowablePence: 1000, profitPence: 6450 });
+    expect(years[1].income.totalPence).toBe(10000);
+    expect(years[1].monthly.map((m: { label: string }) => m.label)).toEqual(['Apr 24', 'May 24', 'Jun 24', 'Jul 24']);
+    expect(years[1].monthly[2]).toMatchObject({ incomePence: 10000, expensesPence: 0, profitPence: 10000 });
+    expect(years[1].monthly[0]).toMatchObject({ incomePence: 0, expensesPence: 3550, profitPence: -3550 });
+  });
+
+  it('uses the later year for the cut-off whichever way round they are chosen', async () => {
+    const { earlier, later } = await twoYears();
+    const { years } = (await compare(earlier, later, 'same').expect(200)).body;
+    expect(years[0].to).toBe('2024-07-20');
+    expect(years[1].to).toBe('2025-07-20');
+  });
+
+  it('matches the Year-end summary and tax estimate for full years', async () => {
+    const { earlier, later } = await twoYears();
+    const { years } = (await compare(later, earlier, 'full').expect(200)).body;
+    expect(years[1]).toMatchObject({ to: '2025-04-05' });
+    expect(years[1].monthly).toHaveLength(12);
+    const yearEnd = (await agent.get('/api/reports/year-end').query({ taxYearId: earlier }).expect(200)).body.summary;
+    expect(years[1].totals.profitPence).toBe(yearEnd.netProfitPence);
+    expect(years[1].totals.incomePence).toBe(100000);
+    const estimate = (await agent.get('/api/reports/tax-estimate').query({ taxYearId: earlier }).expect(200)).body;
+    expect(years[1].tax).toEqual(estimate);
+  });
+
+  it('includes flat-rate claims in totals and categories', async () => {
+    const { earlier, later } = await twoYears();
+    await agent
+      .post('/api/mileage')
+      .send({ taxYearId: later, date: '2025-06-01', description: 'Fair', vehicle: 'car', distanceTenths: 300 })
+      .expect(201);
+    const { years } = (await compare(later, earlier, 'same').expect(200)).body;
+    expect(years[0].totals.allowableExpensesPence).toBe(3550 + 1350);
+    const travel = years[0].expenses.groups.find((g: { hmrcCode: string }) => g.hmrcCode === 'carVanTravelExpenses');
+    expect(travel.flatRates).toMatchObject([{ kind: 'mileage', totalPence: 1350 }]);
+  });
+
+  it('refuses the same year twice and unknown years, and lets viewers read it', async () => {
+    const { earlier, later } = await twoYears();
+    await compare(later, later, 'same').expect(400);
+    await compare(later, earlier, 'sideways').expect(400);
+    await compare(later, 9999, 'same').expect(404);
+
+    await agent.post('/api/users').send({ name: 'Vera', password: 'viewer-password', role: 'viewer' }).expect(201);
+    const viewer = request.agent(createApp(ctx));
+    await viewer.post('/api/auth/login').send({ name: 'Vera', password: 'viewer-password' }).expect(200);
+    await viewer.get('/api/reports/year-comparison').query({ taxYearId: later, compareToId: earlier, period: 'full' }).expect(200);
+  });
+});
+
 describe('sample data', () => {
   const uploads = () => path.join(dataDir, 'uploads');
 

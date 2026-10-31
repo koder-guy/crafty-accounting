@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import {
   buildMtdPeriodSummary,
   buildSelfAssessmentSummary,
+  compareSections,
+  comparisonCutoff,
   estimateTax,
   expenseInputSchema,
   formatGBP,
@@ -18,6 +20,9 @@ import {
   photoEncodeAttempts,
   photoFilename,
   penceToPounds,
+  percentChange,
+  profitMargin,
+  sameDateInTaxYear,
   selfAssessmentDeadline,
   startYearFromLabel,
   taxMonthIndex,
@@ -30,6 +35,7 @@ import {
   shortCategoryName,
   useOfHomeClaim,
   useOfHomeNextBand,
+  type BreakdownFlatRate,
 } from './index';
 
 describe('tax years', () => {
@@ -417,5 +423,77 @@ describe('category short names', () => {
   it('shortens standard categories and leaves custom ones alone', () => {
     expect(shortCategoryName('Turnover – takings, fees, sales or money earned')).toBe('Turnover');
     expect(shortCategoryName('Stall fees')).toBe('Stall fees');
+  });
+});
+
+describe('comparing tax years', () => {
+  it('finds the same date in another tax year, across new year and leap years', () => {
+    expect(sameDateInTaxYear('2026-10-31', 2025)).toBe('2025-10-31');
+    expect(sameDateInTaxYear('2027-01-15', 2023)).toBe('2024-01-15');
+    expect(sameDateInTaxYear('2024-02-29', 2024)).toBe('2025-02-28');
+    expect(sameDateInTaxYear('2025-02-28', 2023)).toBe('2024-02-28');
+  });
+
+  it('stops at the last date recorded, never after today and always inside the year', () => {
+    const year = taxYearFromStartYear(2026);
+    expect(comparisonCutoff(year, '2026-09-20', '2026-10-31')).toBe('2026-09-20');
+    expect(comparisonCutoff(year, '2026-12-01', '2026-10-31')).toBe('2026-10-31');
+    expect(comparisonCutoff(year, null, '2026-10-31')).toBe('2026-10-31');
+    expect(comparisonCutoff(year, null, '2026-01-01')).toBe('2026-04-06');
+    expect(comparisonCutoff(year, null, '2030-01-01')).toBe('2027-04-05');
+  });
+
+  it('gives no percentage when there is nothing or a loss to compare with', () => {
+    expect(percentChange(120, 100)).toBeCloseTo(0.2);
+    expect(percentChange(0, 100)).toBe(-1);
+    expect(percentChange(100, 0)).toBeNull();
+    expect(percentChange(100, -50)).toBeNull();
+    expect(profitMargin(200, 50)).toBe(0.25);
+    expect(profitMargin(0, -50)).toBeNull();
+  });
+
+  it('lines up categories, including those used in only one year', () => {
+    const category = (categoryId: number, name: string, totalPence: number, disallowablePence = 0) => ({
+      categoryId,
+      name,
+      isCustom: false,
+      totalPence,
+      disallowablePence,
+      count: totalPence > 0 ? 1 : 0,
+    });
+    const group = (hmrcCode: string, standard: ReturnType<typeof category>, custom: ReturnType<typeof category>[] = [], flatRates: BreakdownFlatRate[] = []) => ({
+      hmrcCode,
+      standard,
+      custom,
+      flatRates,
+      totalPence: [standard, ...custom, ...flatRates].reduce((acc, c) => acc + c.totalPence, 0),
+      disallowablePence: [standard, ...custom].reduce((acc, c) => acc + c.disallowablePence, 0),
+      count: 1,
+    });
+    const section = (groups: ReturnType<typeof group>[]) => ({
+      totalPence: groups.reduce((acc, g) => acc + g.totalPence, 0),
+      disallowablePence: groups.reduce((acc, g) => acc + g.disallowablePence, 0),
+      groups,
+    });
+    const mileage: BreakdownFlatRate = { kind: 'mileage', name: 'Mileage', totalPence: 450, count: 2 };
+
+    const rows = compareSections(
+      section([group('adminCosts', category(2, 'Admin', 300, 100), [category(9, 'Stamps', 200)]), group('travel', category(3, 'Travel', 0), [], [mileage])]),
+      section([group('adminCosts', category(2, 'Admin', 100)), group('costOfGoods', category(1, 'Goods', 800))]),
+    );
+
+    expect(rows.map((r) => [r.show, r.totalsPence])).toEqual([
+      ['group:2', [500, 100]],
+      ['group:3', [450, 0]],
+      ['group:1', [0, 800]],
+    ]);
+    expect(rows[0].disallowablePence).toEqual([100, 0]);
+    expect(rows[0].children.map((c) => [c.show, c.totalsPence, c.note])).toEqual([
+      ['cat:9', [200, 0], undefined],
+      ['cat:2', [300, 100], 'not in a custom category'],
+    ]);
+    // Only the flat rate was used in this category, so there's no "recorded in Outgoing" row.
+    expect(rows[1].children.map((c) => c.show)).toEqual(['flat:mileage']);
+    expect(rows[2].children).toEqual([]);
   });
 });

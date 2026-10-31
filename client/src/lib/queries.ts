@@ -5,6 +5,8 @@ import type {
   AutoBackupStatus,
   BreakdownItem,
   BreakdownResponse,
+  ComparisonPeriod,
+  YearComparisonResponse,
   Category,
   DashboardData,
   ExpenseWithLineItems,
@@ -537,7 +539,15 @@ export const useBreakdown = (from: string, to: string) =>
     placeholderData: (prev) => prev,
   });
 
-export type BreakdownSelection = { categoryId: number; group: boolean } | { payee: string } | { flatRate: FlatRateKind };
+export const useYearComparison = (taxYearId: number | undefined, compareToId: number | undefined, period: ComparisonPeriod) =>
+  useQuery({
+    queryKey: ['reports', 'year-comparison', taxYearId, compareToId, period],
+    queryFn: () => api.get<YearComparisonResponse>(`/reports/year-comparison${toQuery({ taxYearId, compareToId, period })}`),
+    enabled: taxYearId !== undefined && compareToId !== undefined,
+    placeholderData: (prev) => prev,
+  });
+
+export type BreakdownSelection ={ categoryId: number; group: boolean } | { payee: string } | { flatRate: FlatRateKind };
 
 export const useBreakdownItems = (from: string, to: string, selection: BreakdownSelection | null) =>
   useQuery({

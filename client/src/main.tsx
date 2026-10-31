@@ -25,6 +25,7 @@ import { MtdQuarterly } from './pages/mtd/MtdQuarterly';
 import { FinalDeclaration } from './pages/mtd/FinalDeclaration';
 import { ReportsLayout } from './pages/reports/ReportsLayout';
 import { Breakdown } from './pages/reports/Breakdown';
+import { CompareYears } from './pages/reports/CompareYears';
 import { TaxEstimate } from './pages/reports/TaxEstimate';
 import { SelfAssessmentLayout } from './pages/selfAssessment/SelfAssessmentLayout';
 import { YearEndSummary } from './pages/selfAssessment/YearEndSummary';
@@ -112,6 +113,7 @@ function App() {
           <Route index element={<Navigate to="tax-estimate" replace />} />
           <Route path="tax-estimate" element={<TaxEstimate />} />
           <Route path="breakdown" element={<Breakdown />} />
+          <Route path="compare-years" element={<CompareYears />} />
           <Route path="year-end" element={<Navigate to="/self-assessment/year-end" replace />} />
         </Route>
         <Route path="year-end" element={<Navigate to="/self-assessment/year-end" replace />} />

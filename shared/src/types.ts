@@ -6,6 +6,7 @@ import type { SelfAssessmentSummary } from './selfAssessment';
 import type { Vehicle } from './mileage';
 import type { TaxEstimate } from './taxEstimate';
 import type { Role } from './schemas';
+import type { TaxMonth } from './taxYear';
 
 export interface TaxYear {
   id: number;
@@ -354,6 +355,40 @@ export interface TaxEstimateResponse {
   dueDates: { balancing: string; secondPaymentOnAccount: string };
   /** Last date with any transaction or trip, so the page can say the figures are "so far". */
   recordedTo: string | null;
+}
+
+export type ComparisonPeriod = 'same' | 'full';
+
+export interface YearComparisonMonth extends TaxMonth {
+  incomePence: number;
+  /** Allowable outgoing only, to match the profit. */
+  expensesPence: number;
+  profitPence: number;
+}
+
+/** One year's figures in a comparison, from its first day up to `to`. */
+export interface YearComparisonYear {
+  taxYear: TaxYear;
+  from: string;
+  to: string;
+  totals: {
+    incomePence: number;
+    allowableExpensesPence: number;
+    disallowablePence: number;
+    profitPence: number;
+  };
+  /** Tax months up to `to`. */
+  monthly: YearComparisonMonth[];
+  income: BreakdownSection;
+  expenses: BreakdownSection;
+  /** Only when comparing full years: tax on part of a year's profit would mislead. */
+  tax: TaxEstimateResponse | null;
+}
+
+export interface YearComparisonResponse {
+  period: ComparisonPeriod;
+  /** The chosen year, then the year it's compared with. */
+  years: [YearComparisonYear, YearComparisonYear];
 }
 
 export interface UseOfHomeMonth {

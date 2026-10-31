@@ -4,11 +4,18 @@ import {
   breakdownItemsSchema,
   buildMtdPeriodSummary,
   buildSelfAssessmentSummary,
+  comparisonCutoff,
   reportRangeSchema,
   estimateTax,
+  sameDateInTaxYear,
   selfAssessmentDeadline,
   startYearFromLabel,
+  taxMonthIndex,
+  taxMonths,
   taxPaymentDates,
+  todayIso,
+  yearComparisonSchema,
+  type ComparisonPeriod,
   type TaxEstimateResponse,
   type TaxYear,
   type BreakdownCategory,
@@ -20,6 +27,8 @@ import {
   type Category,
   type CategoryType,
   type FlatRateKind,
+  type YearComparisonResponse,
+  type YearComparisonYear,
   type YearEndSummaryResponse,
 } from '@crafty/shared';
 import type { AppContext } from '../context';
@@ -117,14 +126,6 @@ export function buildTaxEstimate(db: Db, taxYear: TaxYear): TaxEstimateResponse 
   const summary = buildSelfAssessmentSummary(buildMtdPeriodSummary(incomes, lines));
   const usesTradingAllowance = summary.tradingAllowance.better === 'allowance';
   const profitPence = usesTradingAllowance ? summary.tradingAllowance.profitWithAllowancePence : summary.netProfitPence;
-  const recordedTo = db
-    .prepare(
-      `SELECT MAX(date) AS last FROM (
-         SELECT date FROM incomes WHERE tax_year_id = @id UNION ALL
-         SELECT date FROM expenses WHERE tax_year_id = @id UNION ALL
-         SELECT date FROM mileage_trips WHERE tax_year_id = @id)`,
-    )
-    .get({ id: taxYear.id }) as { last: string | null };
   return {
     taxYear,
     estimate: estimateTax({ label: taxYear.label, profitPence, otherIncomePence: taxYear.otherIncomePence }),
@@ -132,7 +133,80 @@ export function buildTaxEstimate(db: Db, taxYear: TaxYear): TaxEstimateResponse 
     profitWithExpensesPence: summary.netProfitPence,
     netLossPence: summary.netLossPence,
     dueDates: taxPaymentDates(startYearFromLabel(taxYear.label)!),
-    recordedTo: recordedTo.last,
+    recordedTo: lastRecordedDate(db, taxYear.id),
+  };
+}
+
+/** The last date in a tax year with any transaction or trip. */
+function lastRecordedDate(db: Db, taxYearId: number): string | null {
+  const row = db
+    .prepare(
+      `SELECT MAX(date) AS last FROM (
+         SELECT date FROM incomes WHERE tax_year_id = @id UNION ALL
+         SELECT date FROM expenses WHERE tax_year_id = @id UNION ALL
+         SELECT date FROM mileage_trips WHERE tax_year_id = @id)`,
+    )
+    .get({ id: taxYearId }) as { last: string | null };
+  return row.last;
+}
+
+/** Income and expenses by category for a date range, with mileage and use of home claims. */
+function breakdownSections(db: Db, from: string, to: string): Pick<BreakdownResponse, 'income' | 'expenses'> {
+  const incomes = db
+    .prepare('SELECT category_id AS categoryId, amount_pence AS amountPence FROM incomes WHERE date BETWEEN ? AND ?')
+    .all(from, to) as { categoryId: number; amountPence: number }[];
+  const lines = db
+    .prepare(
+      `SELECT li.category_id AS categoryId, li.amount_pence AS amountPence, li.disallowable
+       FROM expense_line_items li JOIN expenses e ON e.id = li.expense_id WHERE e.date BETWEEN ? AND ?`,
+    )
+    .all(from, to) as { categoryId: number; amountPence: number; disallowable: number }[];
+  const inRange = (c: { date: string }) => c.date >= from && c.date <= to;
+  const claims: Entry[] = [
+    ...mileageClaimLines(db)
+      .filter(inRange)
+      .map((c) => ({ ...c, flatRate: 'mileage' as const })),
+    ...useOfHomeClaimLines(db)
+      .filter(inRange)
+      .map((c) => ({ ...c, flatRate: 'home' as const })),
+  ];
+  const categories = listCategories(db);
+  return {
+    income: buildSection(categories, 'INCOME', incomes.map((i) => ({ ...i, disallowable: false }))),
+    expenses: buildSection(categories, 'EXPENSE', [...lines.map((l) => ({ ...l, disallowable: l.disallowable === 1 })), ...claims]),
+  };
+}
+
+/** One year's side of a comparison, from its first day up to `to`. */
+function comparisonYear(db: Db, taxYear: TaxYear, to: string, period: ComparisonPeriod): YearComparisonYear {
+  const startYear = startYearFromLabel(taxYear.label)!;
+  const entries = yearEntries(db, taxYear.id);
+  const incomes = entries.incomes.filter((i) => i.date <= to);
+  const lines = entries.lines.filter((l) => l.date <= to);
+  const { totals } = buildMtdPeriodSummary(incomes, lines);
+
+  const monthly = taxMonths(startYear)
+    .slice(0, taxMonthIndex(to, startYear) + 1)
+    .map((m) => ({ ...m, incomePence: 0, expensesPence: 0, profitPence: 0 }));
+  for (const income of incomes) monthly[taxMonthIndex(income.date, startYear)].incomePence += income.amountPence;
+  for (const line of lines) {
+    if (!line.disallowable) monthly[taxMonthIndex(line.date, startYear)].expensesPence += line.amountPence;
+  }
+  for (const month of monthly) month.profitPence = month.incomePence - month.expensesPence;
+
+  return {
+    taxYear,
+    from: taxYear.startDate,
+    to,
+    totals: {
+      incomePence: totals.incomePence,
+      allowableExpensesPence: totals.allowableExpensesPence,
+      disallowablePence: totals.disallowablePence,
+      profitPence: totals.netProfitPence,
+    },
+    monthly,
+    ...breakdownSections(db, taxYear.startDate, to),
+    tax: period === 'full' ? buildTaxEstimate(db, taxYear) : null,
   };
 }
 
@@ -168,24 +242,6 @@ export function reportsRouter(ctx: AppContext): Router {
   router.get('/breakdown', (req, res) => {
     const { from, to } = parseWith(reportRangeSchema, req.query);
     const db = ctx.db;
-    const incomes = db
-      .prepare('SELECT category_id AS categoryId, amount_pence AS amountPence FROM incomes WHERE date BETWEEN ? AND ?')
-      .all(from, to) as { categoryId: number; amountPence: number }[];
-    const lines = db
-      .prepare(
-        `SELECT li.category_id AS categoryId, li.amount_pence AS amountPence, li.disallowable
-         FROM expense_line_items li JOIN expenses e ON e.id = li.expense_id WHERE e.date BETWEEN ? AND ?`,
-      )
-      .all(from, to) as { categoryId: number; amountPence: number; disallowable: number }[];
-    const inRange = (c: { date: string }) => c.date >= from && c.date <= to;
-    const claims: Entry[] = [
-      ...mileageClaimLines(db)
-        .filter(inRange)
-        .map((c) => ({ ...c, flatRate: 'mileage' as const })),
-      ...useOfHomeClaimLines(db)
-        .filter(inRange)
-        .map((c) => ({ ...c, flatRate: 'home' as const })),
-    ];
     const payees = db
       .prepare(
         `SELECT MIN(payee) AS payee, SUM(total_pence) AS totalPence, COUNT(*) AS count
@@ -193,13 +249,24 @@ export function reportsRouter(ctx: AppContext): Router {
       )
       .all(from, to) as BreakdownResponse['payees'];
 
-    const categories = listCategories(db);
-    const response: BreakdownResponse = {
-      from,
-      to,
-      income: buildSection(categories, 'INCOME', incomes.map((i) => ({ ...i, disallowable: false }))),
-      expenses: buildSection(categories, 'EXPENSE', [...lines.map((l) => ({ ...l, disallowable: l.disallowable === 1 })), ...claims]),
-      payees,
+    const response: BreakdownResponse = { from, to, ...breakdownSections(db, from, to), payees };
+    res.json(response);
+  });
+
+  /** Two tax years side by side: the same stretch of each, or both in full. */
+  router.get('/year-comparison', (req, res) => {
+    const { taxYearId, compareToId, period } = parseWith(yearComparisonSchema, req.query);
+    const db = ctx.db;
+    const taxYear = getTaxYear(db, taxYearId);
+    const compareTo = getTaxYear(db, compareToId);
+    if (!taxYear || !compareTo) throw new HttpError(404, 'Tax year not found');
+
+    const later = taxYear.startDate > compareTo.startDate ? taxYear : compareTo;
+    const cutoff = comparisonCutoff(later, lastRecordedDate(db, later.id), todayIso());
+    const toFor = (year: TaxYear) => (period === 'full' ? year.endDate : sameDateInTaxYear(cutoff, startYearFromLabel(year.label)!));
+    const response: YearComparisonResponse = {
+      period,
+      years: [comparisonYear(db, taxYear, toFor(taxYear), period), comparisonYear(db, compareTo, toFor(compareTo), period)],
     };
     res.json(response);
   });
