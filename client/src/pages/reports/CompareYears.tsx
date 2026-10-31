@@ -115,9 +115,9 @@ function Headlines({ a, b }: { a: YearComparisonYear; b: YearComparisonYear }) {
 
 // ---- Month by month ----
 
-// Colour follows the year, whichever figure is showing. Checked with the dataviz palette validator against the dark surface.
-const CHOSEN_YEAR = '#8559f4';
-const OTHER_YEAR = '#1aa59a';
+// The dashboard chart's bars. Colour follows the year here, whichever figure is showing.
+const CHOSEN_YEAR = { id: 'compare-chosen-year', fill: 'url(#compare-chosen-year)', swatch: '#8559f4', glow: '#8559f480' };
+const OTHER_YEAR = { id: 'compare-other-year', fill: 'url(#compare-other-year)', swatch: '#6ea0f5', glow: '#6ea0f580' };
 
 const METRICS = {
   incomePence: { label: 'Incoming', good: 'up' },
@@ -142,7 +142,7 @@ function MonthTooltip({ active, payload, metric, names }: { active?: boolean; pa
       {row.months.map((m, i) => (
         <div key={i} className="tabular flex justify-between gap-6 text-ink">
           <span className="flex items-center gap-1.5 text-muted">
-            <span className="size-2 rounded-sm" style={{ backgroundColor: i === 0 ? CHOSEN_YEAR : OTHER_YEAR }} />
+            <span className="size-2 rounded-sm" style={{ backgroundColor: i === 0 ? CHOSEN_YEAR.swatch : OTHER_YEAR.swatch }} />
             {names[i]}
           </span>
           <span>{formatGBP(m[metric])}</span>
@@ -178,7 +178,18 @@ function MonthByMonth({ a, b }: { a: YearComparisonYear; b: YearComparisonYear }
       />
       <div className="h-[260px] px-2 pb-4 sm:px-4">
         <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={rows} margin={{ top: 10, right: 16, left: 4, bottom: 0 }} barGap={2}>
+          <BarChart data={rows} margin={{ top: 10, right: 16, left: 4, bottom: 0 }} barGap="11%">
+            <defs>
+              <linearGradient id={CHOSEN_YEAR.id} x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0" stopColor="#a065f7" />
+                <stop offset="1" stopColor="#6d4ff0" />
+              </linearGradient>
+              <linearGradient id={OTHER_YEAR.id} x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0" stopColor="#86d6f8" />
+                <stop offset="0.45" stopColor="#6ea0f5" />
+                <stop offset="1" stopColor="#5b62ee" />
+              </linearGradient>
+            </defs>
             <CartesianGrid strokeDasharray="3 3" stroke="#2a2d3a" vertical={false} />
             <XAxis dataKey="label" tick={{ fill: '#8b90a3', fontSize: 12 }} axisLine={{ stroke: '#323648' }} tickLine={false} />
             <YAxis
@@ -196,8 +207,8 @@ function MonthByMonth({ a, b }: { a: YearComparisonYear; b: YearComparisonYear }
               wrapperStyle={{ fontSize: 13, paddingTop: 12 }}
               formatter={(value: string) => <span className="text-muted">{value === 'a' ? names[0] : names[1]}</span>}
             />
-            <Bar dataKey="a" fill={CHOSEN_YEAR} radius={4} maxBarSize={28} />
-            <Bar dataKey="b" fill={OTHER_YEAR} radius={4} maxBarSize={28} />
+            <Bar dataKey="a" fill={CHOSEN_YEAR.fill} radius={5} maxBarSize={36} style={{ filter: `drop-shadow(0 0 3px ${CHOSEN_YEAR.glow})` }} />
+            <Bar dataKey="b" fill={OTHER_YEAR.fill} radius={5} maxBarSize={36} style={{ filter: `drop-shadow(0 0 3px ${OTHER_YEAR.glow})` }} />
           </BarChart>
         </ResponsiveContainer>
       </div>
