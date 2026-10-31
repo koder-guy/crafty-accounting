@@ -40,7 +40,6 @@ interface Values {
   payee: string;
   invoiceNumber: string;
   orderNumber: string;
-  description: string;
   paymentMethod: PaymentMethod | '';
   notes: string;
   lineItems: LineValues[];
@@ -97,7 +96,6 @@ export function ExpenseForm() {
       payee: '',
       invoiceNumber: '',
       orderNumber: '',
-      description: '',
       paymentMethod: '',
       notes: '',
       lineItems: [emptyLine()],
@@ -114,7 +112,6 @@ export function ExpenseForm() {
       payee: record.payee,
       invoiceNumber: record.invoiceNumber ?? '',
       orderNumber: record.orderNumber ?? '',
-      description: record.description ?? '',
       paymentMethod: record.paymentMethod,
       notes: record.notes ?? '',
       lineItems: record.lineItems.map((li) => ({
@@ -145,7 +142,6 @@ export function ExpenseForm() {
         payee: original.payee,
         invoiceNumber: '',
         orderNumber: '',
-        description: original.description ?? '',
         paymentMethod: original.paymentMethod,
         notes: original.notes ?? '',
         lineItems: original.lineItems.map((li) => ({
@@ -163,7 +159,6 @@ export function ExpenseForm() {
         payee: '',
         invoiceNumber: '',
         orderNumber: '',
-        description: '',
         paymentMethod: '',
         notes: '',
         lineItems: [emptyLine(defaultCategory)],
@@ -189,7 +184,6 @@ export function ExpenseForm() {
       payee: values.payee,
       invoiceNumber: values.invoiceNumber,
       orderNumber: values.orderNumber,
-      description: values.description,
       paymentMethod: values.paymentMethod,
       notes: values.notes,
       removeDocumentIds: removeIds,
@@ -310,12 +304,9 @@ export function ExpenseForm() {
                 label="Payment method"
                 htmlFor="paymentMethod"
                 error={errors.paymentMethod?.message}
-                className="sm:col-span-2 xl:col-span-1"
+                className="sm:col-span-2"
               >
                 <PaymentMethodPicker registration={register('paymentMethod', { required: 'Choose a payment method' })} />
-              </Field>
-              <Field label="Description" htmlFor="description" hint="Optional" className="sm:col-span-2 xl:col-span-3">
-                <input id="description" className="field" {...register('description', { maxLength: 500 })} />
               </Field>
             </div>
           </Card>

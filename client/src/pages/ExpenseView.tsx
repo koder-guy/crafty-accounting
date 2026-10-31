@@ -68,7 +68,6 @@ export function ExpenseView() {
                 <DetailRow label="Payee">{expense.payee}</DetailRow>
                 <DetailRow label="Invoice number">{expense.invoiceNumber}</DetailRow>
                 <DetailRow label="Order number">{expense.orderNumber}</DetailRow>
-                <DetailRow label="Description">{expense.description}</DetailRow>
                 <DetailRow label="Tax year">{year ? displayTaxYear(year.label) : null}</DetailRow>
                 <DetailRow label={expense.documents.length > 1 ? 'Documents' : 'Document'}>
                   <DocumentLinks documents={expense.documents} />

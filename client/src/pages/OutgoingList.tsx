@@ -153,7 +153,7 @@ export function OutgoingList() {
                                 <DocDownloadLink documents={row.documents} />
                               </div>
                               <div className="truncate text-xs text-muted">
-                                {[row.invoiceNumber, row.orderNumber, row.description].filter(Boolean).join(' · ') ||
+                                {[row.invoiceNumber, row.orderNumber].filter(Boolean).join(' · ') ||
                                   `${row.lineItemCount} line ${row.lineItemCount === 1 ? 'item' : 'items'}`}
                               </div>
                             </td>

@@ -241,7 +241,6 @@ function mapExpense(row: Row, categoryNames: Map<number, string>): Expense {
     payee: row.payee,
     invoiceNumber: row.invoice_number,
     orderNumber: row.order_number,
-    description: row.description,
     paymentMethod: row.payment_method,
     totalPence: row.total_pence,
     disallowablePence: row.disallowable_pence,
@@ -265,7 +264,7 @@ export function listExpenses(db: Db, filters: TransactionFilters, limit?: number
     'e',
     'total_pence',
     filters,
-    ['e.payee', 'e.invoice_number', 'e.order_number', 'e.description', 'e.notes'],
+    ['e.payee', 'e.invoice_number', 'e.order_number', 'e.notes'],
     [
       { sql: lineSearch, termCount: 2 },
       { sql: documentSearch('expense_id', 'e'), termCount: 1 },

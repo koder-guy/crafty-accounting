@@ -231,7 +231,6 @@ export function expensesRouter(ctx: AppContext): Router {
       e.payee,
       e.invoiceNumber,
       e.orderNumber,
-      e.description,
       PAYMENT_METHOD_LABELS[e.paymentMethod],
       penceToPounds(e.totalPence),
       penceToPounds(e.disallowablePence),
@@ -239,7 +238,7 @@ export function expensesRouter(ctx: AppContext): Router {
       e.notes,
     ]);
     const csv = toCsv(
-      ['Date', 'Payee', 'Invoice number', 'Order number', 'Description', 'Payment method', 'Amount (GBP)', 'Disallowable (GBP)', 'Documents', 'Notes'],
+      ['Date', 'Payee', 'Invoice number', 'Order number', 'Payment method', 'Amount (GBP)', 'Disallowable (GBP)', 'Documents', 'Notes'],
       rows,
     );
     res.attachment(csvFilename('outgoing', getTaxYear(ctx.db, filters.taxYearId))).type('text/csv').send(csv);
@@ -277,9 +276,9 @@ export function expensesRouter(ctx: AppContext): Router {
       ctx.db.transaction(() => {
         const result = ctx.db
           .prepare(
-            `INSERT INTO expenses (tax_year_id, date, payee, invoice_number, order_number, description,
+            `INSERT INTO expenses (tax_year_id, date, payee, invoice_number, order_number,
                payment_method, total_pence, notes, created_by, updated_by)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           )
           .run(
             input.taxYearId,
@@ -287,7 +286,6 @@ export function expensesRouter(ctx: AppContext): Router {
             input.payee,
             input.invoiceNumber,
             input.orderNumber,
-            input.description,
             input.paymentMethod,
             lineItemsTotal(input.lineItems),
             input.notes,
@@ -326,7 +324,7 @@ export function expensesRouter(ctx: AppContext): Router {
       ctx.db.transaction(() => {
         ctx.db
           .prepare(
-            `UPDATE expenses SET date = ?, payee = ?, invoice_number = ?, order_number = ?, description = ?,
+            `UPDATE expenses SET date = ?, payee = ?, invoice_number = ?, order_number = ?,
                payment_method = ?, total_pence = ?, notes = ?, updated_by = ?,
                updated_at = ${NEXT_UPDATED_AT}
              WHERE id = ?`,
@@ -336,7 +334,6 @@ export function expensesRouter(ctx: AppContext): Router {
             input.payee,
             input.invoiceNumber,
             input.orderNumber,
-            input.description,
             input.paymentMethod,
             lineItemsTotal(input.lineItems),
             input.notes,

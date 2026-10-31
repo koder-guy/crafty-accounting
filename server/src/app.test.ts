@@ -1132,6 +1132,36 @@ describe('MTD quarters', () => {
     expect(body.lineItems.map((l: { disallowable: boolean }) => l.disallowable)).toEqual([true, false]);
   });
 
+  it('moves outgoing descriptions to the notes in an older backup', async () => {
+    const old = new Database(':memory:');
+    old.exec('CREATE TABLE schema_migrations (version INTEGER PRIMARY KEY, applied_at TEXT)');
+    for (const migration of MIGRATIONS.filter((m) => m.version <= 15)) {
+      old.exec(migration.sql);
+      old.prepare('INSERT INTO schema_migrations (version) VALUES (?)').run(migration.version);
+    }
+    seedCategories(old);
+    old.prepare("INSERT INTO tax_years (label, start_date, end_date) VALUES ('2025-26', '2025-04-06', '2026-04-05')").run();
+    const row = old.prepare(
+      "INSERT INTO expenses (tax_year_id, date, payee, payment_method, total_pence, description, notes) VALUES (1, '2025-05-02', 'Cafe', 'card', 300, ?, ?)",
+    );
+    row.run('Described', null);
+    row.run('Described', 'Noted');
+    row.run(null, 'Noted');
+    row.run(null, null);
+    row.run('D'.repeat(100), 'N'.repeat(1950));
+    const dump = dumpSql(old);
+    old.close();
+
+    await agent.post('/api/restore').attach('file', Buffer.from(dump), 'backup.sql').expect(200);
+    const notes = async (id: number) => (await agent.get(`/api/expenses/${id}`).expect(200)).body;
+    expect((await notes(1)).notes).toBe('Described');
+    expect((await notes(2)).notes).toBe('Noted\nDescribed');
+    expect((await notes(3)).notes).toBe('Noted');
+    expect((await notes(4)).notes).toBeNull();
+    expect((await notes(5)).notes).toHaveLength(2000);
+    expect(await notes(1)).not.toHaveProperty('description');
+  });
+
   it('exports just the income and one expenses total when the year sends one total', async () => {
     const yearId = await createYear(2025, 'mtd');
     await agent.post('/api/incomes').send(income(yearId, { date: '2025-06-14', amountPence: 38000 })).expect(201);

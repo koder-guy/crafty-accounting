@@ -293,6 +293,16 @@ UPDATE expense_line_items SET disallowable = 1
 WHERE category_id IN (SELECT id FROM categories WHERE type = 'EXPENSE' AND hmrc_code IN ('businessEntertainmentCosts', 'depreciation'));
 `,
   },
+  // Outgoings no longer have a description of their own (line items still do). Any written so far
+  // move to the notes, which stay within their 2000 character limit.
+  {
+    version: 16,
+    sql: `
+UPDATE expenses SET notes = substr(CASE WHEN notes IS NULL OR notes = '' THEN description ELSE notes || char(10) || description END, 1, 2000)
+WHERE description IS NOT NULL AND description <> '';
+ALTER TABLE expenses DROP COLUMN description;
+`,
+  },
 ];
 
 export const CURRENT_SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;

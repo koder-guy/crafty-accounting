@@ -110,7 +110,6 @@ export interface Expense {
   payee: string;
   invoiceNumber: string | null;
   orderNumber: string | null;
-  description: string | null;
   paymentMethod: PaymentMethod;
   totalPence: number;
   disallowablePence: number;

@@ -90,7 +90,6 @@ export const expenseInputSchema = z.object({
   payee: z.string().trim().min(1, 'Payee is required').max(200),
   invoiceNumber: optionalText(100),
   orderNumber: optionalText(100),
-  description: optionalText(500),
   paymentMethod: z.enum(PAYMENT_METHODS, 'Choose a payment method'),
   notes: optionalText(2000),
   lineItems: z.array(lineItemInputSchema).min(1, 'Add at least one line item'),

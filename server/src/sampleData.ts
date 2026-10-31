@@ -237,8 +237,8 @@ export function generateSampleData(db: Db, uploadsDir: string, today = todayIso(
      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
   );
   const expenseRow = db.prepare(
-    `INSERT INTO expenses (tax_year_id, date, payee, invoice_number, order_number, description, payment_method, total_pence, notes)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO expenses (tax_year_id, date, payee, invoice_number, order_number, payment_method, total_pence, notes)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
   );
   const documentRow = db.prepare('INSERT INTO documents (filename, income_id, expense_id) VALUES (?, ?, ?)');
   // The last argument lists the attached documents' filenames (nulls are skipped).
@@ -295,7 +295,6 @@ export function generateSampleData(db: Db, uploadsDir: string, today = todayIso(
       purchase.payee,
       invoice,
       order,
-      null,
       purchase.payment ?? 'card',
       total,
       null,
