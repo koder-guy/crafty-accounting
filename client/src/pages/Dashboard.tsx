@@ -382,7 +382,7 @@ export function Dashboard() {
               <MonthlyChart data={data.monthly} />
             </Card>
 
-            <div className="grid gap-5 xl:grid-cols-2">
+            <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
               <RecentList
                 title="Recent incoming sales"
                 icon={<ArrowDownRight className="size-5 text-in-soft" />}
