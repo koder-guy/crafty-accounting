@@ -49,11 +49,6 @@ export const submissionMethodSchema = z.object({ submissionMethod: z.enum(SUBMIS
 export const MTD_EXPENSES = ['itemised', 'consolidated'] as const;
 export type MtdExpenses = (typeof MTD_EXPENSES)[number];
 
-export const MTD_EXPENSES_LABELS: Record<MtdExpenses, string> = {
-  itemised: 'By category',
-  consolidated: 'One total',
-};
-
 export const mtdExpensesSchema = z.object({ mtdExpenses: z.enum(MTD_EXPENSES) });
 
 export const setActiveTaxYearSchema = z.object({ taxYearId: id });

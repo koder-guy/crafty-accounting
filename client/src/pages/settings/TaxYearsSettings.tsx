@@ -4,8 +4,6 @@ import {
   displayTaxYear,
   formatDisplayDate,
   formatGBP,
-  MTD_EXPENSES,
-  MTD_EXPENSES_LABELS,
   SUBMISSION_METHOD_LABELS,
   SUBMISSION_METHODS,
   taxYearFromStartYear,
@@ -276,7 +274,7 @@ function YearMethod({
   );
 }
 
-/** How an MTD year's expenses go to HMRC: a choice for editors. */
+/** Whether an MTD year's expenses go to HMRC as one total or by category: a choice for editors. */
 function YearMtdExpenses({
   year,
   canEdit,
@@ -288,38 +286,30 @@ function YearMtdExpenses({
   busy: boolean;
   onChange: (mtdExpenses: MtdExpenses) => void;
 }) {
-  const id = `mtd-expenses-${year.id}`;
+  const consolidated = year.mtdExpenses === 'consolidated';
   return (
-    <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-sm">
+    <div className="mt-3 text-sm">
       {canEdit ? (
-        <>
-          <label htmlFor={id} className="whitespace-nowrap text-muted">
-            Expenses sent as
-          </label>
-          <select
-            id={id}
-            className="field sm:w-60"
-            value={year.mtdExpenses}
+        <label className="flex items-center gap-3 text-ink">
+          <input
+            type="checkbox"
+            className="size-4 accent-[var(--color-accent)]"
+            checked={consolidated}
             disabled={busy}
-            onChange={(e) => onChange(e.target.value as MtdExpenses)}
-          >
-            {MTD_EXPENSES.map((m) => (
-              <option key={m} value={m}>
-                {MTD_EXPENSES_LABELS[m]}
-              </option>
-            ))}
-          </select>
-        </>
+            onChange={(e) => onChange(e.target.checked ? 'consolidated' : 'itemised')}
+          />
+          Consolidate expenses into one total
+        </label>
       ) : (
-        <>
-          <span className="whitespace-nowrap text-muted">Expenses sent as</span>
-          <span className="font-medium whitespace-nowrap text-ink">{MTD_EXPENSES_LABELS[year.mtdExpenses]}</span>
-        </>
+        <div className="flex flex-wrap items-center gap-x-3">
+          <span className="whitespace-nowrap text-muted">Consolidate expenses into one total</span>
+          <span className="font-medium whitespace-nowrap text-ink">{consolidated ? 'Yes' : 'No'}</span>
+        </div>
       )}
-      <p className="w-full text-xs text-faint">
-        One total is for annual turnover below the VAT registration threshold ({formatGBP(VAT_REGISTRATION_THRESHOLD_PENCE).replace(/\.00$/, '')}). It’s
-        allowable expenses only, with no categories or disallowable amounts.
-        {year.mtdExpenses === 'consolidated' && year.mtdExpensesSent === 'itemised' && (
+      <p className="mt-1.5 text-xs text-faint">
+        For annual turnover below the VAT registration threshold ({formatGBP(VAT_REGISTRATION_THRESHOLD_PENCE).replace(/\.00$/, '')}). Only allowable
+        expenses are sent, with no categories or disallowable amounts.
+        {consolidated && year.mtdExpensesSent === 'itemised' && (
           <span className="text-ink"> This year’s turnover has reached it, so expenses go by category for the whole year.</span>
         )}
       </p>
