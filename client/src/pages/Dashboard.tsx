@@ -97,13 +97,13 @@ function ChartTooltipRow({ label, colour, pence }: { label: string; colour: stri
   );
 }
 
-/** Rounds the largest bar up to a value that divides into four tidy steps. */
+/** Rounds the largest bar up to a value that divides into four tidy steps, so it fills at least 75% of the chart. */
 function niceMax(rows: { incoming: number; outgoing: number }[]): number {
   const max = Math.max(...rows.flatMap((r) => [r.incoming, r.outgoing]));
   if (max <= 0) return 100;
   const step = max / 4;
   const magnitude = 10 ** Math.floor(Math.log10(step));
-  const nice = [1, 2, 2.5, 5, 10].find((m) => m * magnitude >= step)! * magnitude;
+  const nice = [1, 1.2, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10].find((m) => m * magnitude >= step)! * magnitude;
   return nice * 4;
 }
 
