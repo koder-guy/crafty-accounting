@@ -104,11 +104,13 @@ function NavItem({
     >
       {({ isActive }) => (
         <>
-          <Icon
-            className={`size-5 transition-colors ${isActive ? 'text-accent-soft' : 'text-muted group-hover:text-ink'}`}
-            aria-hidden
-          />
-          <span className="flex-1">{label}</span>
+          <span className="flex flex-1 items-center gap-3 transition-transform group-hover:translate-x-1">
+            <Icon
+              className={`size-5 transition-colors ${isActive ? 'text-accent-soft' : 'text-muted group-hover:text-ink'}`}
+              aria-hidden
+            />
+            <span>{label}</span>
+          </span>
           {count !== undefined && (
             <span className="tabular min-w-7 rounded-full bg-surface-2 px-2 py-0.5 text-center text-xs text-muted">{count}</span>
           )}
