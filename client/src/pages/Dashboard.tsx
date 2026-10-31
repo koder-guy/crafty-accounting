@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { Link } from 'react-router';
+import { Link, useNavigate } from 'react-router';
 import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { ArrowDownRight, ArrowUpRight, CalendarClock, PieChart, PoundSterling, TrendingDown, TrendingUp } from 'lucide-react';
 import {
@@ -108,6 +108,7 @@ function niceMax(rows: { incoming: number; outgoing: number }[]): number {
 }
 
 function MonthlyChart({ data }: { data: DashboardData['monthly'] }) {
+  const navigate = useNavigate();
   const rows = data.map((m) => ({ ...m, incoming: m.incomePence / 100, outgoing: m.expensesPence / 100 }));
   return (
     <div className="h-[228px] px-2 pb-4 sm:px-4">
@@ -142,8 +143,22 @@ function MonthlyChart({ data }: { data: DashboardData['monthly'] }) {
             wrapperStyle={{ fontSize: 13, paddingTop: 12 }}
             formatter={(value: string) => <span className="text-muted">{value === 'incoming' ? 'Incoming (£)' : 'Outgoing (£)'}</span>}
           />
-          <Bar dataKey="incoming" fill={CHART_IN.fill} radius={5} maxBarSize={36} style={{ filter: `drop-shadow(0 0 3px ${CHART_IN.glow})` }} />
-          <Bar dataKey="outgoing" fill={CHART_OUT.fill} radius={5} maxBarSize={36} style={{ filter: `drop-shadow(0 0 3px ${CHART_OUT.glow})` }} />
+          <Bar
+            dataKey="incoming"
+            fill={CHART_IN.fill}
+            radius={5}
+            maxBarSize={36}
+            style={{ cursor: 'pointer', filter: `drop-shadow(0 0 3px ${CHART_IN.glow})` }}
+            onClick={(bar) => navigate(`/incoming?taxMonth=${bar.payload.index}`)}
+          />
+          <Bar
+            dataKey="outgoing"
+            fill={CHART_OUT.fill}
+            radius={5}
+            maxBarSize={36}
+            style={{ cursor: 'pointer', filter: `drop-shadow(0 0 3px ${CHART_OUT.glow})` }}
+            onClick={(bar) => navigate(`/outgoing?taxMonth=${bar.payload.index}`)}
+          />
         </BarChart>
       </ResponsiveContainer>
     </div>
