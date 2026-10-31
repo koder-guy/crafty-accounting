@@ -23,8 +23,8 @@ import { DocIndicator } from '../components/transactions';
 import { Alert, Card, CardHeader, Spinner } from '../components/ui';
 import { useActiveTaxYear, useCanEdit, useDashboard, useMtdQuarters } from '../lib/queries';
 
-const CHART_IN = '#10b981';
-const CHART_OUT = '#dc2626';
+const CHART_IN = { id: 'chart-incoming', fill: 'url(#chart-incoming)', swatch: '#8559f4', glow: '#8559f480' };
+const CHART_OUT = { id: 'chart-outgoing', fill: 'url(#chart-outgoing)', swatch: '#6ea0f5', glow: '#6ea0f580' };
 
 function StatCard({
   label,
@@ -79,14 +79,20 @@ function ChartTooltip({ active, payload }: ChartTooltipProps) {
   return (
     <div className="rounded-lg border border-line-strong bg-surface-2 px-3 py-2 text-xs shadow-xl">
       <div className="mb-1.5 font-medium text-ink">{month.range}</div>
-      <div className="tabular flex justify-between gap-6 text-in-soft">
-        <span>Incoming</span>
-        <span>{formatGBP(month.incomePence)}</span>
-      </div>
-      <div className="tabular flex justify-between gap-6 text-out-soft">
-        <span>Outgoing</span>
-        <span>{formatGBP(month.expensesPence)}</span>
-      </div>
+      <ChartTooltipRow label="Incoming" colour={CHART_IN.swatch} pence={month.incomePence} />
+      <ChartTooltipRow label="Outgoing" colour={CHART_OUT.swatch} pence={month.expensesPence} />
+    </div>
+  );
+}
+
+function ChartTooltipRow({ label, colour, pence }: { label: string; colour: string; pence: number }) {
+  return (
+    <div className="tabular flex justify-between gap-6 text-ink">
+      <span className="flex items-center gap-1.5 text-muted">
+        <span className="size-2 rounded-sm" style={{ backgroundColor: colour }} />
+        {label}
+      </span>
+      <span>{formatGBP(pence)}</span>
     </div>
   );
 }
@@ -106,7 +112,18 @@ function MonthlyChart({ data }: { data: DashboardData['monthly'] }) {
   return (
     <div className="h-[228px] px-2 pb-4 sm:px-4">
       <ResponsiveContainer width="100%" height="100%">
-        <BarChart data={rows} margin={{ top: 10, right: 16, left: 4, bottom: 0 }} barGap={4}>
+        <BarChart data={rows} margin={{ top: 10, right: 16, left: 4, bottom: 0 }} barGap="11%">
+          <defs>
+            <linearGradient id={CHART_IN.id} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stopColor="#a065f7" />
+              <stop offset="1" stopColor="#6d4ff0" />
+            </linearGradient>
+            <linearGradient id={CHART_OUT.id} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stopColor="#86d6f8" />
+              <stop offset="0.45" stopColor="#6ea0f5" />
+              <stop offset="1" stopColor="#5b62ee" />
+            </linearGradient>
+          </defs>
           <CartesianGrid strokeDasharray="3 3" stroke="#2a2d3a" vertical={false} />
           <XAxis dataKey="label" tick={{ fill: '#8b90a3', fontSize: 12 }} axisLine={{ stroke: '#323648' }} tickLine={false} />
           <YAxis
@@ -123,10 +140,10 @@ function MonthlyChart({ data }: { data: DashboardData['monthly'] }) {
           <Legend
             iconType="square"
             wrapperStyle={{ fontSize: 13, paddingTop: 12 }}
-            formatter={(value: string) => <span style={{ color: value === 'incoming' ? '#34d399' : '#f87171' }}>{value === 'incoming' ? 'Incoming (£)' : 'Outgoing (£)'}</span>}
+            formatter={(value: string) => <span className="text-muted">{value === 'incoming' ? 'Incoming (£)' : 'Outgoing (£)'}</span>}
           />
-          <Bar dataKey="incoming" fill={CHART_IN} radius={[3, 3, 0, 0]} maxBarSize={36} />
-          <Bar dataKey="outgoing" fill={CHART_OUT} radius={[3, 3, 0, 0]} maxBarSize={36} />
+          <Bar dataKey="incoming" fill={CHART_IN.fill} radius={5} maxBarSize={36} style={{ filter: `drop-shadow(0 0 3px ${CHART_IN.glow})` }} />
+          <Bar dataKey="outgoing" fill={CHART_OUT.fill} radius={5} maxBarSize={36} style={{ filter: `drop-shadow(0 0 3px ${CHART_OUT.glow})` }} />
         </BarChart>
       </ResponsiveContainer>
     </div>
