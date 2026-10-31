@@ -667,7 +667,7 @@ export function MtdQuarterly() {
                       {' '}
                       You can change this in{' '}
                       <Link className="text-accent-soft hover:underline" to="/settings/tax-years">
-                        Settings → Tax years
+                        Settings → Tax Years
                       </Link>
                       .
                     </>

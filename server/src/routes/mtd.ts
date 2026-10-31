@@ -121,7 +121,7 @@ export function refuseUnlessMtd(taxYear: TaxYear): void {
   if (taxYear.submissionMethod !== 'mtd') {
     throw new HttpError(
       409,
-      `${displayTaxYear(taxYear.label)} is set to a Self Assessment return. Switch it to Making Tax Digital in Settings → Tax years first.`,
+      `${displayTaxYear(taxYear.label)} is set to a Self Assessment return. Switch it to Making Tax Digital in Settings → Tax Years first.`,
     );
   }
 }

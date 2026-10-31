@@ -58,7 +58,7 @@ export function BackupSettings() {
     <>
       <div className="space-y-6">
         <SettingsHeading
-          title="Backup and restore"
+          title="Backup and Restore"
           description="Download a copy of your books, restore from an earlier backup, or start again with an empty database."
         />
         <AutoBackupCard />

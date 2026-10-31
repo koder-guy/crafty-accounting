@@ -67,7 +67,7 @@ export function Welcome() {
           Fill the app with two tax years of made-up craft fair sales, purchases, documents and custom categories, so you can try
           everything out. Clear it afterwards from{' '}
           <Link to="/settings/backup" className="text-accent-soft hover:underline">
-            Settings → Backup and restore
+            Settings → Backup and Restore
           </Link>
           .
         </Option>
@@ -100,7 +100,7 @@ export function SampleDataNotice() {
       <Link to="/settings/backup" className="font-medium underline">
         Start again with an empty database
       </Link>{' '}
-      in Settings → Backup and restore.
+      in Settings → Backup and Restore.
     </Alert>
   );
 }

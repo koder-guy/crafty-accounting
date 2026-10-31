@@ -116,7 +116,7 @@ function App() {
         </Route>
         <Route path="year-end" element={<Navigate to="/self-assessment/year-end" replace />} />
         <Route path="settings" element={<SettingsLayout />}>
-          <Route index element={<Navigate to="tax-years" replace />} />
+          <Route index element={<Navigate to="people" replace />} />
           <Route path="tax-years" element={<TaxYearsSettings />} />
           <Route path="categories" element={<CustomCategories />} />
           <Route path="people" element={<People />} />
@@ -124,7 +124,7 @@ function App() {
           <Route
             path="backup"
             element={
-              <EditorOnly title="Backup and restore">
+              <EditorOnly title="Backup and Restore">
                 <BackupSettings />
               </EditorOnly>
             }

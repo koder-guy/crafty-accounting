@@ -121,9 +121,9 @@ Settings go in a `.env` file next to the app (the installers write one). Only in
 
 ## Backups
 
-**Automatic:** every day at 02:00 the app writes a full `.zip` backup to the backup folder (`BACKUP_HOST_DIR` with Docker). Days without changes are skipped, the newest 30 are kept, and a missed backup runs when the app next starts. Change this, or use **Back up now**, in **Settings → Backup and restore**, which also says if the folder can't be written to (usually its permissions). The folder is outside the Docker volume; keep it on another disk or a NAS, or copy it elsewhere regularly.
+**Automatic:** every day at 02:00 the app writes a full `.zip` backup to the backup folder (`BACKUP_HOST_DIR` with Docker). Days without changes are skipped, the newest 30 are kept, and a missed backup runs when the app next starts. Change this, or use **Back up now**, in **Settings → Backup and Restore**, which also says if the folder can't be written to (usually its permissions). The folder is outside the Docker volume; keep it on another disk or a NAS, or copy it elsewhere regularly.
 
-**Manual**, in **Settings → Backup and restore**:
+**Manual**, in **Settings → Backup and Restore**:
 - **Full backup (.zip)**: the database and every document. Restoring it replaces both.
 - **Database only (.sql)**: restoring it replaces the database and leaves documents alone.
 - **Start again with an empty database** deletes the books after you type `RESET`; the old database and documents are kept until the next reset.
@@ -134,7 +134,7 @@ A restore is checked in a separate database before anything is replaced, and old
 
 From the 2025/26 tax year, an MTD year goes to HMRC like this. Without a connection to HMRC, you can still export each quarter's figures as a CSV for bridging software and record the submission. It has a row of HMRC's field names and a row of values, always the same columns. Bridging tools each have their own import format, so you may need to map the columns. Disallowable amounts are in the expense columns and in their own, so don't add them all up.
 
-- **Expenses** go by category, or as one total if your annual turnover is below the VAT registration threshold (set per year in Settings → Tax years). One total is allowable expenses only, with no disallowable amounts. Once the year's turnover reaches the threshold, expenses go by category for the whole year.
+- **Expenses** go by category, or as one total if your annual turnover is below the VAT registration threshold (set per year in Settings → Tax Years). One total is allowable expenses only, with no disallowable amounts. Once the year's turnover reaches the threshold, expenses go by category for the whole year.
 - **Quarterly updates** cover 6 Apr–5 Jul, 6 Jul–5 Oct, 6 Oct–5 Jan and 6 Jan–5 Apr, each due by the 7th of the next month. They're cumulative, so each sends the year to date. **Send to HMRC** shows the figures to confirm first, and HMRC takes an update from 10 days before its quarter ends. The page shows what HMRC expects and has received, and warns when a later change affects a quarter already sent.
 - **HMRC's tax calculation** for the year so far appears on the Quarterly updates page, next to the app's own estimate.
 - **Final declaration**: after the tax year ends and once HMRC has all four updates, ask HMRC to calculate. Check its figures, including the band-by-band workings, and agree to HMRC's declaration. This replaces the Self Assessment return and is due by 31 January. Report any other income in your HMRC online account first, because the app only covers the business.

@@ -63,7 +63,7 @@ export function TaxYearsSettings() {
     <>
       <div className="space-y-6">
         <SettingsHeading
-          title="Tax years"
+          title="Tax Years"
           description="Create UK tax years (6 April to 5 April), choose how each one goes to HMRC and which is active, or delete a year and everything in it."
         />
         {canEdit && (

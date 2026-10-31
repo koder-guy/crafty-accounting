@@ -1159,7 +1159,7 @@ describe('MTD quarters', () => {
       mtdUpdates: { recorded: 0, sent: 0 },
     });
     const refused = await agent.put(`/api/mtd/quarters/${yearId}/1/submission`).send({ submittedOn: '2025-08-01' }).expect(409);
-    expect(refused.body.error).toMatch(/Settings → Tax years/);
+    expect(refused.body.error).toMatch(/Settings → Tax Years/);
 
     await agent.put(`/api/tax-years/${yearId}/submission-method`).send({ submissionMethod: 'mtd' }).expect(200);
     await agent.put(`/api/mtd/quarters/${yearId}/1/submission`).send({ submittedOn: '2025-08-01' }).expect(200);

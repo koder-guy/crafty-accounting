@@ -113,7 +113,7 @@ export function CustomCategories() {
   return (
     <div className="space-y-6">
       <SettingsHeading
-        title="Custom categories"
+        title="Custom Categories"
         description="Create your own categories, like “Packaging”. Each one maps to a standard MTD category, so your MTD figures stay the same."
       />
 
