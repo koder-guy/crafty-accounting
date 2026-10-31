@@ -106,18 +106,12 @@ describe('expense schema', () => {
     ],
   };
 
-  it('accepts a total equal to the line items', () => {
-    expect(expenseInputSchema.safeParse({ ...base, totalPence: 1550 }).success).toBe(true);
-  });
-
-  it('rejects a total that does not match the line items', () => {
-    const result = expenseInputSchema.safeParse({ ...base, totalPence: 1500 });
-    expect(result.success).toBe(false);
-    expect(result.error?.issues[0].path).toEqual(['totalPence']);
+  it('accepts line items without a total', () => {
+    expect(expenseInputSchema.safeParse(base).success).toBe(true);
   });
 
   it('requires at least one line item', () => {
-    expect(expenseInputSchema.safeParse({ ...base, totalPence: 0, lineItems: [] }).success).toBe(false);
+    expect(expenseInputSchema.safeParse({ ...base, lineItems: [] }).success).toBe(false);
   });
 });
 

@@ -89,31 +89,19 @@ export const lineItemInputSchema = z.object({
 });
 export type LineItemInput = z.infer<typeof lineItemInputSchema>;
 
-export const expenseInputSchema = z
-  .object({
-    taxYearId: id,
-    date: isoDate,
-    payee: z.string().trim().min(1, 'Payee is required').max(200),
-    invoiceNumber: optionalText(100),
-    orderNumber: optionalText(100),
-    description: optionalText(500),
-    paymentMethod: z.enum(PAYMENT_METHODS, 'Choose a payment method'),
-    totalPence: pence,
-    notes: optionalText(2000),
-    lineItems: z.array(lineItemInputSchema).min(1, 'Add at least one line item'),
-    removeDocumentIds,
-    expectedUpdatedAt: z.string().optional(),
-  })
-  .superRefine((value, ctx) => {
-    const sum = value.lineItems.reduce((acc, item) => acc + item.amountPence, 0);
-    if (sum !== value.totalPence) {
-      ctx.addIssue({
-        code: 'custom',
-        path: ['totalPence'],
-        message: 'The transaction amount must equal the sum of its line items',
-      });
-    }
-  });
+export const expenseInputSchema = z.object({
+  taxYearId: id,
+  date: isoDate,
+  payee: z.string().trim().min(1, 'Payee is required').max(200),
+  invoiceNumber: optionalText(100),
+  orderNumber: optionalText(100),
+  description: optionalText(500),
+  paymentMethod: z.enum(PAYMENT_METHODS, 'Choose a payment method'),
+  notes: optionalText(2000),
+  lineItems: z.array(lineItemInputSchema).min(1, 'Add at least one line item'),
+  removeDocumentIds,
+  expectedUpdatedAt: z.string().optional(),
+});
 export type ExpenseInput = z.infer<typeof expenseInputSchema>;
 
 const optionalQueryText = z

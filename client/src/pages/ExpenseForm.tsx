@@ -41,7 +41,6 @@ interface Values {
   orderNumber: string;
   description: string;
   paymentMethod: PaymentMethod | '';
-  total: string;
   notes: string;
   lineItems: LineValues[];
 }
@@ -90,8 +89,7 @@ export function ExpenseForm() {
     handleSubmit,
     reset,
     setError,
-    setValue,
-    formState: { errors, isSubmitted },
+    formState: { errors },
   } = useForm<Values>({
     defaultValues: {
       date: '',
@@ -100,7 +98,6 @@ export function ExpenseForm() {
       orderNumber: '',
       description: '',
       paymentMethod: '',
-      total: '',
       notes: '',
       lineItems: [emptyLine()],
     },
@@ -118,7 +115,6 @@ export function ExpenseForm() {
       orderNumber: record.orderNumber ?? '',
       description: record.description ?? '',
       paymentMethod: record.paymentMethod,
-      total: penceToPounds(record.totalPence),
       notes: record.notes ?? '',
       lineItems: record.lineItems.map((li) => ({
         lineId: li.id,
@@ -150,7 +146,6 @@ export function ExpenseForm() {
         orderNumber: '',
         description: original.description ?? '',
         paymentMethod: original.paymentMethod,
-        total: penceToPounds(original.totalPence),
         notes: original.notes ?? '',
         lineItems: original.lineItems.map((li) => ({
           description: li.description,
@@ -169,7 +164,6 @@ export function ExpenseForm() {
         orderNumber: '',
         description: '',
         paymentMethod: '',
-        total: '',
         notes: '',
         lineItems: [emptyLine(defaultCategory)],
       });
@@ -179,20 +173,15 @@ export function ExpenseForm() {
 
   const watchedLines = useWatch({ control, name: 'lineItems' });
   const watchedDate = useWatch({ control, name: 'date' });
-  const watchedTotal = useWatch({ control, name: 'total' });
   const linePence = (watchedLines ?? []).map((li) => parsePoundsToPence(li?.amount ?? ''));
-  const linesValid = linePence.every((p) => p !== null && p > 0);
   const lineSum = linePence.reduce<number>((acc, p) => acc + (p ?? 0), 0);
-  const totalPence = parsePoundsToPence(watchedTotal ?? '');
   const disallowableSum = (watchedLines ?? []).reduce(
     (acc, li, i) => acc + (li?.disallowable || neverAllowable(li?.categoryId) ? (linePence[i] ?? 0) : 0),
     0,
   );
-  const difference = totalPence !== null ? totalPence - lineSum : null;
-  const matches = difference === 0 && linesValid;
 
   const onSubmit = handleSubmit((values) => {
-    if (!taxYear || !matches) return;
+    if (!taxYear) return;
     const payload = {
       taxYearId: taxYear.id,
       date: values.date,
@@ -201,7 +190,6 @@ export function ExpenseForm() {
       orderNumber: values.orderNumber,
       description: values.description,
       paymentMethod: values.paymentMethod,
-      totalPence: parsePoundsToPence(values.total),
       notes: values.notes,
       removeDocumentIds: removeIds,
       expectedUpdatedAt: id ? loaded?.updatedAt : undefined,
@@ -317,19 +305,15 @@ export function ExpenseForm() {
               <Field label="Order number" htmlFor="orderNumber" hint="Optional">
                 <input id="orderNumber" className="field" {...register('orderNumber', { maxLength: 100 })} />
               </Field>
-              <Field label="Transaction amount (£)" htmlFor="total" error={errors.total?.message} hint="The invoice total">
-                <input
-                  id="total"
-                  inputMode="decimal"
-                  placeholder="0.00"
-                  className="field tabular"
-                  {...register('total', { validate: validAmount })}
-                />
-              </Field>
-              <Field label="Payment method" htmlFor="paymentMethod" error={errors.paymentMethod?.message}>
+              <Field
+                label="Payment method"
+                htmlFor="paymentMethod"
+                error={errors.paymentMethod?.message}
+                className="sm:col-span-2 xl:col-span-1"
+              >
                 <PaymentMethodPicker registration={register('paymentMethod', { required: 'Choose a payment method' })} />
               </Field>
-              <Field label="Description" htmlFor="description" hint="Optional" className="sm:col-span-2">
+              <Field label="Description" htmlFor="description" hint="Optional" className="sm:col-span-2 xl:col-span-3">
                 <input id="description" className="field" {...register('description', { maxLength: 500 })} />
               </Field>
             </div>
@@ -436,42 +420,14 @@ export function ExpenseForm() {
                     );
                   })}
                 </tbody>
-                <tfoot>
-                  <tr className="border-t border-line-strong">
-                    <td colSpan={2} className="px-4 py-3 text-right text-muted">
-                      Line items total
-                      {disallowableSum > 0 && <span className="text-faint"> (incl. {formatGBP(disallowableSum)} disallowable)</span>}
-                    </td>
-                    <td className="tabular px-4 py-3 text-right font-semibold text-ink">{formatGBP(lineSum)}</td>
-                    <td colSpan={2} />
-                  </tr>
-                </tfoot>
               </table>
             </div>
-            <div className="border-t border-line px-5 py-4 sm:px-6">
-              {matches ? (
-                <p className="text-sm text-ok">The line items add up to the transaction amount.</p>
-              ) : (
-                <div className="flex flex-wrap items-center gap-3">
-                  <p className={`text-sm ${isSubmitted ? 'text-out-soft' : 'text-warn'}`}>
-                    {totalPence === null || totalPence <= 0
-                      ? 'Enter the transaction amount above.'
-                      : !linesValid
-                        ? 'Enter an amount for every line item.'
-                        : `The line items are ${formatGBP(Math.abs(difference!))} ${difference! > 0 ? 'less' : 'more'} than the transaction amount of ${formatGBP(totalPence)}.`}
-                  </p>
-                  {linesValid && lineSum > 0 && (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      className="px-2 py-1 text-accent-soft"
-                      onClick={() => setValue('total', penceToPounds(lineSum), { shouldValidate: isSubmitted })}
-                    >
-                      Set amount to {formatGBP(lineSum)}
-                    </Button>
-                  )}
-                </div>
-              )}
+            <div className="flex flex-wrap items-baseline justify-end gap-x-3 border-t border-line-strong px-5 py-4 text-sm sm:px-6">
+              <p className="text-muted">
+                Transaction total
+                {disallowableSum > 0 && <span className="text-faint"> (incl. {formatGBP(disallowableSum)} disallowable)</span>}
+              </p>
+              <p className="tabular font-semibold text-ink">{formatGBP(lineSum)}</p>
             </div>
           </Card>
 

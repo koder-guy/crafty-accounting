@@ -265,6 +265,9 @@ export function expensesRouter(ctx: AppContext): Router {
     sortOrder,
   });
 
+  // A transaction's total is always the sum of its line items.
+  const lineItemsTotal = (items: { amountPence: number }[]) => items.reduce((acc, item) => acc + item.amountPence, 0);
+
   router.post('/', upload.array('documents', MAX_DOCUMENTS), (req, res) => {
     const input = parseWith(expenseInputSchema, readPayload(req));
     checkTaxYearAndDate(ctx, input.taxYearId, input.date);
@@ -286,7 +289,7 @@ export function expensesRouter(ctx: AppContext): Router {
             input.orderNumber,
             input.description,
             input.paymentMethod,
-            input.totalPence,
+            lineItemsTotal(input.lineItems),
             input.notes,
             req.user!.name,
             req.user!.name,
@@ -335,7 +338,7 @@ export function expensesRouter(ctx: AppContext): Router {
             input.orderNumber,
             input.description,
             input.paymentMethod,
-            input.totalPence,
+            lineItemsTotal(input.lineItems),
             input.notes,
             req.user!.name,
             id,

@@ -68,7 +68,6 @@ function expense(taxYearId: number, overrides: Record<string, unknown> = {}) {
     payee: 'Bead World',
     invoiceNumber: 'INV-100',
     paymentMethod: 'card',
-    totalPence: 4550,
     lineItems: [
       { description: 'Glass beads', amountPence: 3000, categoryId: cat('costOfGoods') },
       { description: 'Postage', amountPence: 550, categoryId: cat('adminCosts') },
@@ -217,7 +216,7 @@ describe('custom categories', () => {
     await agent.post('/api/incomes').send(income(yearId, { amountPence: 1000 })).expect(201);
     await agent
       .post('/api/expenses')
-      .send(expense(yearId, { totalPence: 2500, lineItems: [{ description: 'PLA', amountPence: 2500, categoryId: filament.id }] }))
+      .send(expense(yearId, { lineItems: [{ description: 'PLA', amountPence: 2500, categoryId: filament.id }] }))
       .expect(201);
     await agent.post('/api/incomes').send(income(yearId, { categoryId: filament.id })).expect(422);
 
@@ -235,7 +234,7 @@ describe('custom categories', () => {
     await agent.put(`/api/categories/${filament.id}`).send({ name: 'Printer filament', mapsToCategoryId: cat('costOfGoods') }).expect(200);
     await agent
       .post('/api/expenses')
-      .send(expense(yearId, { totalPence: 2500, lineItems: [{ description: 'PLA', amountPence: 2500, categoryId: filament.id }] }))
+      .send(expense(yearId, { lineItems: [{ description: 'PLA', amountPence: 2500, categoryId: filament.id }] }))
       .expect(201);
     await agent.put(`/api/categories/${filament.id}`).send({ name: 'Filament (PLA)', mapsToCategoryId: cat('costOfGoods') }).expect(200);
     await agent.put(`/api/categories/${filament.id}`).send({ name: 'Filament (PLA)', mapsToCategoryId: cat('adminCosts') }).expect(409);
@@ -249,7 +248,7 @@ describe('custom categories', () => {
     const exp = (
       await agent
         .post('/api/expenses')
-        .send(expense(yearId, { totalPence: 2500, lineItems: [{ description: 'PLA', amountPence: 2500, categoryId: filament.id }] }))
+        .send(expense(yearId, { lineItems: [{ description: 'PLA', amountPence: 2500, categoryId: filament.id }] }))
         .expect(201)
     ).body;
     const before = (await agent.get('/api/mtd/quarters').query({ taxYearId: yearId })).body.quarters[0].period;
@@ -651,10 +650,10 @@ describe('incomes', () => {
 });
 
 describe('expenses', () => {
-  it('rejects a total that does not equal the line items', async () => {
+  it('works out the total from the line items, ignoring any total sent', async () => {
     const yearId = await createYear();
-    const res = await agent.post('/api/expenses').send(expense(yearId, { totalPence: 4000 })).expect(400);
-    expect(res.body.error).toMatch(/sum of its line items/);
+    const created = (await agent.post('/api/expenses').send(expense(yearId, { totalPence: 1 })).expect(201)).body;
+    expect(created.totalPence).toBe(4550);
   });
 
   it('rejects an income category on a line item', async () => {
@@ -676,7 +675,6 @@ describe('expenses', () => {
         .put(`/api/expenses/${created.id}`)
         .send(
           expense(yearId, {
-            totalPence: 4200,
             lineItems: [
               { id: beads.id, description: 'Glass beads (large)', amountPence: 3200, categoryId: cat('costOfGoods') },
               { id: postage.id, description: 'Postage', amountPence: 550, categoryId: cat('adminCosts') },
@@ -721,7 +719,7 @@ describe('expenses', () => {
     await agent.post('/api/expenses').send(expense(yearId)).expect(201);
     await agent
       .post('/api/expenses')
-      .send(expense(yearId, { totalPence: 700, lineItems: [{ description: 'Glue', amountPence: 700, categoryId: cat('costOfGoods') }] }))
+      .send(expense(yearId, { lineItems: [{ description: 'Glue', amountPence: 700, categoryId: cat('costOfGoods') }] }))
       .expect(201);
     const { body } = await agent.get('/api/expenses').query({ taxYearId: yearId }).expect(200);
     const byTotal = Object.fromEntries(body.map((e: { totalPence: number; lineItems: unknown[] }) => [e.totalPence, e.lineItems]));
@@ -749,7 +747,6 @@ describe('expenses', () => {
     await agent.post('/api/expenses').send(expense(yearId)).expect(201);
     await agent.post('/api/expenses').send(expense(yearId, {
       payee: 'Fuel Co',
-      totalPence: 2000,
       lineItems: [{ description: 'Diesel', amountPence: 2000, categoryId: cat('carVanTravelExpenses') }],
     })).expect(201);
     const byLine = await agent.get('/api/expenses').query({ taxYearId: yearId, search: 'glass', from: '2025-04-06' }).expect(200);
@@ -844,7 +841,6 @@ describe('mileage', () => {
     const fuel = (disallowable = false) =>
       expense(yearId, {
         payee: 'Shell',
-        totalPence: 4000,
         lineItems: [{ description: 'Fuel', amountPence: 4000, categoryId: cat('carVanTravelExpenses'), disallowable }],
       });
     // Fuel alone is fine: no mileage, so the actual-costs method is being used.
@@ -939,7 +935,7 @@ describe('tax estimate', () => {
     const yearId = await createYear();
     await agent.post('/api/incomes').send(income(yearId, { amountPence: 3_000_000 })).expect(201);
     const stock = [{ description: 'Stock', amountPence: 200_000, categoryId: cat('costOfGoods') }];
-    await agent.post('/api/expenses').send(expense(yearId, { totalPence: 200_000, lineItems: stock })).expect(201);
+    await agent.post('/api/expenses').send(expense(yearId, { lineItems: stock })).expect(201);
     let { body } = await agent.get('/api/reports/tax-estimate').query({ taxYearId: yearId }).expect(200);
     // £28,000 profit: (28,000 − 12,570) at 20% Income Tax and 6% Class 4.
     expect(body.estimate).toMatchObject({ profitPence: 2_800_000, incomeTaxPence: 308_600, class4Pence: 92_580 });
@@ -1054,7 +1050,7 @@ describe('MTD quarters', () => {
     ];
     const created = await agent
       .post('/api/expenses')
-      .send(expense(yearId, { date: '2026-05-02', totalPence: 2800, lineItems: lines }))
+      .send(expense(yearId, { date: '2026-05-02', lineItems: lines }))
       .expect(201);
     expect(created.body.lineItems.map((l: { disallowable: boolean }) => l.disallowable)).toEqual([true, true, false]);
     expect(created.body.disallowablePence).toBe(2500);
@@ -1072,7 +1068,6 @@ describe('MTD quarters', () => {
       .send(
         expense(yearId, {
           date: '2026-05-02',
-          totalPence: 2800,
           lineItems: created.body.lineItems.map((l: { id: number; description: string; amountPence: number; categoryId: number }) => ({
             id: l.id,
             description: l.description,
@@ -1267,7 +1262,7 @@ describe('breakdown report', () => {
     const exp = (taxYearId: number, date: string, payee: string, lines: ReturnType<typeof line>[]) =>
       agent
         .post('/api/expenses')
-        .send(expense(taxYearId, { date, payee, totalPence: lines.reduce((a, l) => a + l.amountPence, 0), lineItems: lines }))
+        .send(expense(taxYearId, { date, payee, lineItems: lines }))
         .expect(201);
     await exp(y1, '2026-03-10', 'Bead World', [line('Beads', 3000, cat('costOfGoods')), line('Boxes', 500, packaging.id)]);
     await exp(y1, '2026-03-20', 'bead world', [line('Gift bags', 700, packaging.id), line('Lunch', 900, cat('otherExpenses'), true)]);
@@ -1341,7 +1336,7 @@ describe('year-end summary', () => {
     await agent.post('/api/expenses').send(expense(yearId)).expect(201);
     await agent
       .post('/api/expenses')
-      .send(expense(yearId, { totalPence: 2500, lineItems: [{ description: 'PLA', amountPence: 2500, categoryId: filament.id }] }))
+      .send(expense(yearId, { lineItems: [{ description: 'PLA', amountPence: 2500, categoryId: filament.id }] }))
       .expect(201);
 
     const { body } = await agent.get('/api/reports/year-end').query({ taxYearId: yearId }).expect(200);
