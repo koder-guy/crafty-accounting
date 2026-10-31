@@ -329,7 +329,8 @@ export function ExpenseForm() {
                 </Button>
               }
             />
-            <div className="overflow-x-auto">
+            {/* relative: keeps the table's hidden Delete label inside the scroll area, or the page scrolls sideways. */}
+            <div className="relative overflow-x-auto">
               <table className="w-full min-w-[760px] text-sm">
                 <thead className="text-xs tracking-wide text-muted uppercase">
                   <tr className="border-y border-line">
