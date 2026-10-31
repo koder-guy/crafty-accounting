@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from 'react';
+import { createContext, useContext, useMemo, useState, type ReactNode } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import { Bar, BarChart, CartesianGrid, Legend, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { ArrowDownRight, ArrowUpRight, Calculator, GitCompareArrows, Printer, TrendingUp, Wallet } from 'lucide-react';
@@ -40,24 +40,31 @@ function toneOf(change: number, good: Good): string {
 
 const signed = (change: number, text: string) => `${change > 0 ? '+' : change < 0 ? '−' : ''}${text}`;
 
-/** "+£120.00 (+15%)", or "new" when there was nothing to compare with. */
-function Change({ current, previous, good }: { current: number; previous: number; good: Good }) {
-  const change = current - previous;
+/** Whether the first column is the earlier year. Changes always run from the earlier year to the later, whichever way round the columns are. */
+const FirstIsEarlier = createContext(false);
+
+const startsEarlier = (x: YearComparisonYear, y: YearComparisonYear) => x.from < y.from;
+
+/** "+£120.00 (+15%)", or "new" when there was nothing to compare with. `first` and `second` are the two columns. */
+function Change({ first, second, good }: { first: number; second: number; good: Good }) {
+  const [earlier, later] = useContext(FirstIsEarlier) ? [first, second] : [second, first];
+  const change = later - earlier;
   if (change === 0) return <span className="text-muted">No change</span>;
-  const pct = percentChange(current, previous);
+  const pct = percentChange(later, earlier);
   return (
     <span className={toneOf(change, good)}>
       {signed(change, formatGBP(Math.abs(change)))}
-      {pct !== null ? ` (${signed(change, `${Math.round(Math.abs(pct) * 100)}%`)})` : previous === 0 ? ' (new)' : ''}
+      {pct !== null ? ` (${signed(change, `${Math.round(Math.abs(pct) * 100)}%`)})` : earlier === 0 ? ' (new)' : ''}
     </span>
   );
 }
 
 /** A change between two rates, in percentage points. */
-function PointsChange({ current, previous, good }: { current: number | null; previous: number | null; good: Good }) {
-  if (current === null || previous === null) return <span className="text-muted">–</span>;
+function PointsChange({ first, second, good }: { first: number | null; second: number | null; good: Good }) {
+  const [earlier, later] = useContext(FirstIsEarlier) ? [first, second] : [second, first];
+  if (later === null || earlier === null) return <span className="text-muted">–</span>;
   // From the rounded rates, so the change agrees with the two figures beside it.
-  const change = (Math.round(current * 1000) - Math.round(previous * 1000)) / 10;
+  const change = (Math.round(later * 1000) - Math.round(earlier * 1000)) / 10;
   if (change === 0) return <span className="text-muted">No change</span>;
   return <span className={toneOf(change, good)}>{signed(change, `${Math.abs(change)} points`)}</span>;
 }
@@ -86,28 +93,28 @@ function Headlines({ a, b }: { a: YearComparisonYear; b: YearComparisonYear }) {
         value={formatGBP(a.totals.incomePence)}
         valueClass="text-in-soft"
         compared={`${was}: ${formatGBP(b.totals.incomePence)}`}
-        change={<Change current={a.totals.incomePence} previous={b.totals.incomePence} good="up" />}
+        change={<Change first={a.totals.incomePence} second={b.totals.incomePence} good="up" />}
       />
       <StatBox
         label="Allowable outgoing"
         value={formatGBP(a.totals.allowableExpensesPence)}
         valueClass="text-out-soft"
         compared={`${was}: ${formatGBP(b.totals.allowableExpensesPence)}`}
-        change={<Change current={a.totals.allowableExpensesPence} previous={b.totals.allowableExpensesPence} good="down" />}
+        change={<Change first={a.totals.allowableExpensesPence} second={b.totals.allowableExpensesPence} good="down" />}
       />
       <StatBox
         label="Profit"
         value={formatGBP(a.totals.profitPence)}
         valueClass={a.totals.profitPence < 0 ? 'text-out-soft' : 'text-white'}
         compared={`${was}: ${formatGBP(b.totals.profitPence)}`}
-        change={<Change current={a.totals.profitPence} previous={b.totals.profitPence} good="up" />}
+        change={<Change first={a.totals.profitPence} second={b.totals.profitPence} good="up" />}
       />
       <StatBox
         label="Profit margin"
         value={marginA === null ? '–' : percent(marginA)}
         valueClass="text-white"
         compared={`${was}: ${marginB === null ? '–' : percent(marginB)}`}
-        change={<PointsChange current={marginA} previous={marginB} good="up" />}
+        change={<PointsChange first={marginA} second={marginB} good="up" />}
       />
     </div>
   );
@@ -231,7 +238,7 @@ function MonthByMonth({ a, b }: { a: YearComparisonYear; b: YearComparisonYear }
                   <td className="tabular px-3 py-2 text-right">{formatGBP(ma[metric])}</td>
                   <td className="tabular px-3 py-2 text-right text-muted">{formatGBP(mb[metric])}</td>
                   <td className="tabular py-2 pr-5 pl-3 text-right whitespace-nowrap sm:pr-6">
-                    <Change current={ma[metric]} previous={mb[metric]} good={METRICS[metric].good} />
+                    <Change first={ma[metric]} second={mb[metric]} good={METRICS[metric].good} />
                   </td>
                 </tr>
               ))}
@@ -294,7 +301,7 @@ function CategoryRow({
         <AmountLink year={b} line={line} index={1} />
       </td>
       <td className="tabular px-3 py-2.5 text-right align-top font-normal whitespace-nowrap">
-        <Change current={line.totalsPence[0]} previous={line.totalsPence[1]} good={good} />
+        <Change first={line.totalsPence[0]} second={line.totalsPence[1]} good={good} />
       </td>
       <td className={`tabular py-2.5 pr-5 pl-3 text-right align-top font-normal whitespace-nowrap text-muted sm:pr-6 ${showShare ? 'max-sm:hidden' : 'hidden'}`}>
         {share(0, a)} · {share(1, b)}
@@ -333,7 +340,7 @@ function CategoryTable({ a, b, pick, good, showShare }: { a: YearComparisonYear;
             <td className={cells}>{formatGBP(sa.totalPence)}</td>
             <td className={cells}>{formatGBP(sb.totalPence)}</td>
             <td className={`${cells} font-normal`}>
-              <Change current={sa.totalPence} previous={sb.totalPence} good={good} />
+              <Change first={sa.totalPence} second={sb.totalPence} good={good} />
             </td>
             <td className={lastCell} />
           </tr>
@@ -343,7 +350,7 @@ function CategoryTable({ a, b, pick, good, showShare }: { a: YearComparisonYear;
               <td className={cells}>{formatGBP(sa.totalPence - sa.disallowablePence)}</td>
               <td className={cells}>{formatGBP(sb.totalPence - sb.disallowablePence)}</td>
               <td className={`${cells} font-normal`}>
-                <Change current={sa.totalPence - sa.disallowablePence} previous={sb.totalPence - sb.disallowablePence} good={good} />
+                <Change first={sa.totalPence - sa.disallowablePence} second={sb.totalPence - sb.disallowablePence} good={good} />
               </td>
               <td className={lastCell} />
             </tr>
@@ -379,13 +386,14 @@ function TaxComparison({ a, b }: { a: YearComparisonYear; b: YearComparisonYear 
       detail={detail}
       a={formatGBP(pick(ea))}
       b={formatGBP(pick(eb))}
-      change={<Change current={pick(ea)} previous={pick(eb)} good="down" />}
+      change={<Change first={pick(ea)} second={pick(eb)} good="down" />}
       strong={strong}
     />
   );
-  // This year's profit at the other year's rates: what's left of the change is down to the rates.
-  const atOtherRates = estimateTax({ label: b.taxYear.label, profitPence: ea.profitPence, otherIncomePence: ea.otherIncomePence });
-  const rateEffect = ea.totalPence - atOtherRates.totalPence;
+  // The later year's profit at the earlier year's rates: what's left of the change is down to the rates.
+  const [earlierYear, laterEstimate] = startsEarlier(a, b) ? [a, eb] : [b, ea];
+  const atEarlierRates = estimateTax({ label: earlierYear.taxYear.label, profitPence: laterEstimate.profitPence, otherIncomePence: laterEstimate.otherIncomePence });
+  const rateEffect = laterEstimate.totalPence - atEarlierRates.totalPence;
   const allowance = [a, b].filter((y) => y.tax!.usesTradingAllowance).map(shortYear);
 
   return (
@@ -416,7 +424,7 @@ function TaxComparison({ a, b }: { a: YearComparisonYear; b: YearComparisonYear 
               detail={allowance.length ? `${allowance.join(' and ')} ${allowance.length === 1 ? 'uses' : 'use'} the trading allowance` : undefined}
               a={formatGBP(ea.profitPence)}
               b={formatGBP(eb.profitPence)}
-              change={<Change current={ea.profitPence} previous={eb.profitPence} good="up" />}
+              change={<Change first={ea.profitPence} second={eb.profitPence} good="up" />}
             />
             {(ea.otherIncomePence > 0 || eb.otherIncomePence > 0) && money('Other taxable income', (e) => e.otherIncomePence, 'A salary or pension: it affects the rate your profit is taxed at')}
             {money('Income Tax on the profit', (e) => e.incomeTaxPence)}
@@ -426,7 +434,7 @@ function TaxComparison({ a, b }: { a: YearComparisonYear; b: YearComparisonYear 
               label="Share of profit to put aside"
               a={percent(ea.setAsideRate)}
               b={percent(eb.setAsideRate)}
-              change={<PointsChange current={ea.setAsideRate} previous={eb.setAsideRate} good="down" />}
+              change={<PointsChange first={ea.setAsideRate} second={eb.setAsideRate} good="down" />}
             />
           </tbody>
         </table>
@@ -458,7 +466,7 @@ function nearestOther(years: TaxYear[], year: TaxYear): TaxYear | undefined {
 function Comparison({ data, inProgress }: { data: YearComparisonResponse; inProgress: YearComparisonYear | undefined }) {
   const [a, b] = data.years;
   return (
-    <>
+    <FirstIsEarlier.Provider value={startsEarlier(a, b)}>
       {data.period === 'full' && inProgress && (
         <Alert tone="warning">
           {shortYear(inProgress)} hasn't finished, so this compares its figures so far with a whole year. Choose Same period for a fairer comparison.
@@ -487,7 +495,7 @@ function Comparison({ data, inProgress }: { data: YearComparisonResponse; inProg
       ) : (
         <p className="text-sm text-muted print:hidden">Tax is compared for full years only, because the tax on part of a year's profit would mislead.</p>
       )}
-    </>
+    </FirstIsEarlier.Provider>
   );
 }
 
@@ -595,7 +603,8 @@ export function CompareYears() {
             {a && b && (
               <p className="mt-4 text-sm text-muted print:mt-0">
                 {formatDisplayDate(a.from)} to {formatDisplayDate(a.to)} compared with {formatDisplayDate(b.from)} to {formatDisplayDate(b.to)}
-                {data?.period === 'same' && later ? `: up to the last date recorded in ${displayTaxYear(later.label)}.` : '.'}
+                {data?.period === 'same' && later ? `: up to the last date recorded in ${displayTaxYear(later.label)}.` : '.'}{' '}
+                Changes run from {shortYear(startsEarlier(a, b) ? a : b)} to {shortYear(startsEarlier(a, b) ? b : a)}.
               </p>
             )}
           </Card>
