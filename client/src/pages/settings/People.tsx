@@ -242,7 +242,7 @@ export function People() {
                           )}
                         </td>
                         <td className="px-4 py-3 whitespace-nowrap">
-                          <Badge tone={u.role === 'viewer' ? 'warn' : 'neutral'}>{ROLE_LABELS[u.role]}</Badge>
+                          <Badge tone={u.role === 'viewer' ? 'warn' : 'ok'}>{ROLE_LABELS[u.role]}</Badge>
                         </td>
                         <td className="px-4 py-3 whitespace-nowrap text-muted">{formatDisplayDate(u.createdAt.slice(0, 10))}</td>
                         {canEdit && (

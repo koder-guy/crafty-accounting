@@ -93,7 +93,7 @@ export function UserMenu({ compact = false }: { compact?: boolean }) {
             <div className="min-w-0">
               <div className="truncate text-sm font-semibold text-white">{user.name}</div>
               <div className="mt-0.5">
-                <Badge tone={user.role === 'viewer' ? 'warn' : 'neutral'}>{ROLE_LABELS[user.role]}</Badge>
+                <Badge tone={user.role === 'viewer' ? 'warn' : 'ok'}>{ROLE_LABELS[user.role]}</Badge>
               </div>
             </div>
           </div>
