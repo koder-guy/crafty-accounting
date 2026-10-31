@@ -1,5 +1,5 @@
 // Building blocks shared by the Incoming and Outgoing pages.
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type DragEvent as ReactDragEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import type { UseFormRegisterReturn } from 'react-hook-form';
 import { Link, useSearchParams } from 'react-router';
@@ -550,6 +550,9 @@ export function DocumentField({
   const [preparing, setPreparing] = useState(false);
   // What's in each new document's name box, once edited; a file takes the name when all of them are valid.
   const [drafts, setDrafts] = useState<Record<number, string>>({});
+  const [dragging, setDragging] = useState(false);
+  // Dragging over a row inside the box leaves the box's own element, so count rather than trust each leave.
+  const dragDepth = useRef(0);
   const cameraOption = useCameraOption();
   const kept = current.length - removeIds.length;
   const room = MAX_DOCUMENTS - kept - files.length;
@@ -610,9 +613,53 @@ export function DocumentField({
   const toggleRemove = (docId: number) =>
     onRemoveIds(removeIds.includes(docId) ? removeIds.filter((x) => x !== docId) : [...removeIds, docId]);
 
+  // A file dropped just outside the box would otherwise open in the tab, losing the form.
+  useEffect(() => {
+    const refuse = (e: DragEvent) => {
+      if (e.defaultPrevented || !e.dataTransfer?.types.includes('Files')) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'none';
+    };
+    window.addEventListener('dragover', refuse);
+    window.addEventListener('drop', refuse);
+    return () => {
+      window.removeEventListener('dragover', refuse);
+      window.removeEventListener('drop', refuse);
+    };
+  }, []);
+
+  const takesDrag = (e: ReactDragEvent) => e.dataTransfer.types.includes('Files') && !preparing;
+
   return (
     <div>
-      <ul className="divide-y divide-line rounded-lg border border-dashed border-line-strong bg-surface-2/60">
+      <ul
+        className={`divide-y divide-line rounded-lg border border-dashed transition-colors ${
+          dragging ? 'border-accent-soft bg-accent-bg' : 'border-line-strong bg-surface-2/60'
+        }`}
+        onDragEnter={(e) => {
+          if (!takesDrag(e)) return;
+          e.preventDefault();
+          dragDepth.current += 1;
+          setDragging(true);
+        }}
+        onDragOver={(e) => {
+          if (!takesDrag(e)) return;
+          e.preventDefault();
+          e.dataTransfer.dropEffect = 'copy';
+        }}
+        onDragLeave={(e) => {
+          if (!takesDrag(e)) return;
+          dragDepth.current -= 1;
+          if (dragDepth.current <= 0) setDragging(false);
+        }}
+        onDrop={(e) => {
+          dragDepth.current = 0;
+          setDragging(false);
+          if (!takesDrag(e)) return;
+          e.preventDefault();
+          void add([...e.dataTransfer.files], (f) => CAMERA_DEFAULT_NAME.test(f.name));
+        }}
+      >
         {current.map((doc) => {
           const removing = removeIds.includes(doc.id);
           return (
@@ -681,8 +728,12 @@ export function DocumentField({
           <span className="min-w-max flex-1 text-sm text-muted">
             {preparing
               ? 'Preparing photo…'
+              : dragging
+              ? 'Drop to add'
               : current.length === 0 && files.length === 0
-              ? 'No documents attached'
+              ? cameraOption === 'phone'
+                ? 'No documents attached'
+                : 'No documents attached: drag files here'
               : `${kept + files.length} of ${MAX_DOCUMENTS} documents`}
           </span>
           {cameraOption === 'phone' && (
