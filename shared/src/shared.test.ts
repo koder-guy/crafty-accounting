@@ -372,8 +372,8 @@ describe('use of home', () => {
 
   it('gives each tax month its dates, from the 6th to the 5th', () => {
     const months = taxMonths(2025);
-    expect(months[0]).toMatchObject({ startDate: '2025-04-06', endDate: '2025-05-05' });
-    expect(months[8]).toMatchObject({ startDate: '2025-12-06', endDate: '2026-01-05' });
+    expect(months[0]).toMatchObject({ name: 'April', startDate: '2025-04-06', endDate: '2025-05-05' });
+    expect(months[8]).toMatchObject({ name: 'December', startDate: '2025-12-06', endDate: '2026-01-05' });
     expect(months[11]).toMatchObject({ startDate: '2026-03-06', endDate: '2026-04-05' });
   });
 });

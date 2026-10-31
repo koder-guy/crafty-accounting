@@ -93,11 +93,11 @@ export function FilterBar({
 
   return (
     <div className="grid gap-3 border-b border-line px-5 pb-5 sm:grid-cols-2 sm:px-6 xl:flex xl:justify-end">
-      <FilterSelect label="Tax month" className="xl:w-60" value={get('taxMonth')} onChange={(v) => set('taxMonth', v)}>
+      <FilterSelect label="Tax month" className="xl:w-44" value={get('taxMonth')} onChange={(v) => set('taxMonth', v)}>
         <option value="">All tax months</option>
         {months.map((m) => (
           <option key={m.index} value={m.index}>
-            {m.range}
+            {m.name}
           </option>
         ))}
       </FilterSelect>

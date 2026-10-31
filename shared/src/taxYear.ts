@@ -8,6 +8,7 @@ export interface TaxYearDates {
 }
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
 const pad2 = (n: number) => String(n).padStart(2, '0');
 
@@ -65,6 +66,8 @@ export function taxMonthIndex(isoDate: string, startYear: number): number {
 export interface TaxMonth {
   index: number;
   label: string;
+  /** The month it starts in, in full: "April" runs 6 April to 5 May. */
+  name: string;
   range: string;
   /** The 6th of the month. */
   startDate: string;
@@ -81,6 +84,7 @@ export function taxMonths(startYear: number): TaxMonth[] {
     return {
       index,
       label: `${MONTHS[monthIdx]} ${pad2(year % 100)}`,
+      name: MONTH_NAMES[monthIdx],
       range: `6 ${MONTHS[monthIdx]} ${year} – 5 ${MONTHS[nextIdx]} ${nextYear}`,
       startDate: `${year}-${pad2(monthIdx + 1)}-06`,
       endDate: `${nextYear}-${pad2(nextIdx + 1)}-05`,
