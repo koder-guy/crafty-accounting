@@ -152,10 +152,6 @@ export function OutgoingList() {
                                 <span className="truncate">{row.payee}</span>
                                 <DocDownloadLink documents={row.documents} />
                               </div>
-                              <div className="truncate text-xs text-muted">
-                                {[row.invoiceNumber, row.orderNumber].filter(Boolean).join(' · ') ||
-                                  `${row.lineItemCount} line ${row.lineItemCount === 1 ? 'item' : 'items'}`}
-                              </div>
                             </td>
                             <td className="w-2/5 max-w-0 px-4 py-3 text-muted">
                               <div className="truncate" title={row.categoryNames.join('\n')}>
