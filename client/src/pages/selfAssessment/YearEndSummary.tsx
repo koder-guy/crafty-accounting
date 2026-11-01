@@ -6,7 +6,6 @@ import {
   formatDisplayDate,
   formatGBP,
   todayIso,
-  TRADING_ALLOWANCE_PENCE,
   type Category,
   type Sa103sBox,
   type YearEndSummaryResponse,
@@ -17,6 +16,8 @@ import { SectionHeading } from '../../components/SectionLayout';
 import { Alert, Button, Card, CardHeader, Spinner } from '../../components/ui';
 import { useActiveTaxYear, useCategories, useYearEndSummary } from '../../lib/queries';
 import { printPage } from '../../lib/liveUpdates';
+
+const whole = (pence: number) => formatGBP(pence).replace(/\.00$/, '');
 
 function BoxRow({ box, label, amount, strong = false }: { box: string; label: ReactNode; amount: number; strong?: boolean }) {
   return (
@@ -41,6 +42,10 @@ function SectionRow({ children }: { children: ReactNode }) {
     </tr>
   );
 }
+
+/** The range of expense boxes on this year's form, such as "boxes 11 to 19". */
+const expenseBoxRange = ({ expenseBoxes }: YearEndSummaryResponse['summary']) =>
+  `boxes ${expenseBoxes[0].box} to ${expenseBoxes[expenseBoxes.length - 1].box}`;
 
 function Fact({ label, children }: { label: string; children: ReactNode }) {
   return (
@@ -69,12 +74,12 @@ function Sa103sTable({ data }: { data: YearEndSummaryResponse }) {
           {rows(s.incomeBoxes)}
           <SectionRow>Allowable business expenses</SectionRow>
           {rows(s.expenseBoxes)}
-          <BoxRow box="20" label="Total allowable expenses – total of boxes 11 to 19" amount={s.totalAllowableExpensesPence} strong />
+          <BoxRow box={s.form.totalExpenses.box} label={s.form.totalExpenses.label} amount={s.totalAllowableExpensesPence} strong />
           <SectionRow>Net profit or loss</SectionRow>
           {s.netLossPence > 0 ? (
-            <BoxRow box="22" label="Net loss – your expenses exceed your business income" amount={s.netLossPence} strong />
+            <BoxRow box={s.form.netLoss.box} label={s.form.netLoss.label} amount={s.netLossPence} strong />
           ) : (
-            <BoxRow box="21" label="Net profit – box 9 + box 10 minus box 20" amount={s.netProfitPence} strong />
+            <BoxRow box={s.form.netProfit.box} label={s.form.netProfit.label} amount={s.netProfitPence} strong />
           )}
         </tbody>
       </table>
@@ -92,7 +97,7 @@ function NotOnForm({ data, names }: { data: YearEndSummaryResponse; names: Map<s
       <div className="space-y-5 px-5 pb-6 text-sm sm:px-6">
         {s.disallowable.length > 0 && (
           <div>
-            <p className="mb-2 text-muted">Disallowable parts of expenses (left out of boxes 11 to 19):</p>
+            <p className="mb-2 text-muted">Disallowable parts of expenses (left out of {expenseBoxRange(s)}):</p>
             <ul className="divide-y divide-line rounded-lg border border-line">
               {s.disallowable.map((d) => (
                 <li key={d.hmrcCode} className="flex justify-between gap-4 px-4 py-2">
@@ -110,7 +115,7 @@ function NotOnForm({ data, names }: { data: YearEndSummaryResponse; names: Map<s
         ))}
         {s.checks.map((e) => (
           <Alert key={e.hmrcCode} tone="warning">
-            <strong>{name(e.hmrcCode)}</strong>: {formatGBP(e.amountPence)} is included in box 19. {e.reason}
+            <strong>{name(e.hmrcCode)}</strong>: {formatGBP(e.amountPence)} is included in box {e.box}. {e.reason}
           </Alert>
         ))}
       </div>
@@ -119,14 +124,14 @@ function NotOnForm({ data, names }: { data: YearEndSummaryResponse; names: Map<s
 }
 
 function TradingAllowance({ data }: { data: YearEndSummaryResponse }) {
-  const t = data.summary.tradingAllowance;
-  const allowance = formatGBP(TRADING_ALLOWANCE_PENCE).replace(/\.00$/, '');
+  const { form, tradingAllowance: t, expenseBoxes } = data.summary;
+  const allowance = whole(form.tradingAllowancePence);
   return (
     <Card className="print:break-inside-avoid">
       <CardHeader icon={<Scale className="size-5 text-accent-soft" />} title="Trading allowance check" />
       <div className="space-y-4 px-5 pb-6 text-sm sm:px-6">
         <p className="text-muted">
-          Instead of claiming expenses you can deduct the {allowance} trading allowance from your income (box 10.1). You can't do both.
+          Instead of claiming expenses you can deduct the {allowance} trading allowance from your income (box {form.tradingAllowanceBox}). You can't do both.
         </p>
         <div className="grid gap-3 sm:grid-cols-2">
           <div className={`rounded-lg border p-4 ${t.better === 'expenses' ? 'border-ok/50 bg-ok/10' : 'border-line'}`}>
@@ -144,7 +149,7 @@ function TradingAllowance({ data }: { data: YearEndSummaryResponse }) {
           {t.incomeWithinAllowance
             ? `Your business income is ${allowance} or less, so you may not need to report it at all. Check GOV.UK if you have to fill in a return for other reasons.`
             : t.better === 'allowance'
-              ? `The trading allowance gives a lower profit by ${formatGBP(t.profitWithExpensesPence - t.profitWithAllowancePence)}. Enter ${allowance} in box 10.1 and leave boxes 11 to 20 blank.`
+              ? `The trading allowance gives a lower profit by ${formatGBP(t.profitWithExpensesPence - t.profitWithAllowancePence)}. Enter ${allowance} in box ${form.tradingAllowanceBox} and leave boxes ${expenseBoxes[0].box} to ${form.totalExpenses.box} blank.`
               : t.better === 'expenses'
                 ? `Claiming your expenses gives a lower profit by ${formatGBP(t.profitWithAllowancePence - t.profitWithExpensesPence)}, so use the figures above.`
                 : 'Both give the same profit.'}
@@ -205,7 +210,14 @@ export function YearEndSummary() {
             )}
             {data.summary.turnoverOverShortFormLimit && (
               <Alert tone="warning">
-                Your turnover is £90,000 or more, so you'll need the full self-employment pages (SA103F) rather than the short ones.
+                Your turnover is {whole(data.summary.form.turnoverLimitPence)} or more, so you'll need the full self-employment pages (SA103F) rather than the short ones.
+              </Alert>
+            )}
+
+            {data.summary.form.assumed && (
+              <Alert tone="warning">
+                The app hasn't been checked against HMRC's {displayTaxYear(data.taxYear.label)} form yet, so this uses the box numbers from the{' '}
+                {displayTaxYear(data.summary.form.label)} form.
               </Alert>
             )}
 
@@ -220,7 +232,7 @@ export function YearEndSummary() {
             <TradingAllowance data={data} />
 
             <p className="text-xs text-faint">
-              A summary of the transactions in this app, laid out like HMRC's SA103S (box numbers from the 2024–25 form). It isn't tax
+              A summary of the transactions in this app, laid out like HMRC's SA103S (box numbers from the {displayTaxYear(data.summary.form.label)} form). It isn't tax
               advice and doesn't cover the rest of your return or the tax due. Check the box numbers against the {displayTaxYear(data.taxYear.label)}{' '}
               form and notes on GOV.UK when you file.
             </p>

@@ -1,37 +1,74 @@
 // Year-end figures for the Self Assessment 'Self-employment (short)' pages
 // (SA103S), worked out from the same MTD period summary used elsewhere.
 //
-// Box numbers and wording follow HMRC's SA103S for 2024-25. If HMRC changes
-// the form, update SA103S_BOXES (the mapping from MTD categories to boxes).
+// Box numbers and wording follow HMRC's form for each tax year, in SA103S_FORMS.
+// Each year, compare HMRC's new form with the latest entry and add the year,
+// reusing the same form if the boxes this app fills in haven't changed.
 import type { MtdPeriodSummary } from './mtd';
 
-export interface Sa103sBoxDefinition {
+export interface Sa103sLine {
   box: string;
   label: string;
+}
+
+export interface Sa103sBoxDefinition extends Sa103sLine {
   /** MTD category codes whose allowable amounts go in this box. */
   codes: string[];
 }
 
-export const SA103S_INCOME_BOXES: Sa103sBoxDefinition[] = [
-  { box: '9', label: 'Your turnover – the takings, fees, sales or money earned by your business', codes: ['turnover'] },
-  { box: '10', label: 'Any other business income not included in box 9', codes: ['other'] },
-];
+export interface Sa103sForm {
+  incomeBoxes: Sa103sBoxDefinition[];
+  expenseBoxes: Sa103sBoxDefinition[];
+  totalExpenses: Sa103sLine;
+  netProfit: Sa103sLine;
+  netLoss: Sa103sLine;
+  tradingAllowanceBox: string;
+  tradingAllowancePence: number;
+  /** Turnover at or above this means the full SA103F form is needed. */
+  turnoverLimitPence: number;
+}
 
-export const SA103S_EXPENSE_BOXES: Sa103sBoxDefinition[] = [
-  { box: '11', label: 'Costs of goods bought for resale or goods used', codes: ['costOfGoods'] },
-  { box: '12', label: 'Car, van and travel expenses – after private use proportion', codes: ['carVanTravelExpenses'] },
-  { box: '13', label: 'Wages, salaries and other staff costs', codes: ['wagesAndStaffCosts'] },
-  { box: '14', label: 'Rent, rates, power and insurance costs', codes: ['premisesRunningCosts'] },
-  { box: '15', label: 'Repairs and maintenance of property and equipment', codes: ['maintenanceCosts'] },
-  { box: '16', label: 'Accountancy, legal and other professional fees', codes: ['professionalFees'] },
-  { box: '17', label: 'Interest and bank and credit card financial charges', codes: ['interestOnBankOtherLoans', 'financeCharges'] },
-  { box: '18', label: 'Phone, fax, stationery and other office costs', codes: ['adminCosts'] },
-  {
-    box: '19',
-    label: 'Other allowable business expenses',
-    codes: ['advertisingCosts', 'otherExpenses', 'paymentsToSubcontractors', 'irrecoverableDebts'],
-  },
-];
+const FORM_2024_25: Sa103sForm = {
+  incomeBoxes: [
+    { box: '9', label: 'Your turnover – the takings, fees, sales or money earned by your business', codes: ['turnover'] },
+    { box: '10', label: 'Any other business income not included in box 9', codes: ['other'] },
+  ],
+  expenseBoxes: [
+    { box: '11', label: 'Costs of goods bought for resale or goods used', codes: ['costOfGoods'] },
+    { box: '12', label: 'Car, van and travel expenses – after private use proportion', codes: ['carVanTravelExpenses'] },
+    { box: '13', label: 'Wages, salaries and other staff costs', codes: ['wagesAndStaffCosts'] },
+    { box: '14', label: 'Rent, rates, power and insurance costs', codes: ['premisesRunningCosts'] },
+    { box: '15', label: 'Repairs and maintenance of property and equipment', codes: ['maintenanceCosts'] },
+    { box: '16', label: 'Accountancy, legal and other professional fees', codes: ['professionalFees'] },
+    { box: '17', label: 'Interest and bank and credit card financial charges', codes: ['interestOnBankOtherLoans', 'financeCharges'] },
+    { box: '18', label: 'Phone, fax, stationery and other office costs', codes: ['adminCosts'] },
+    {
+      box: '19',
+      label: 'Other allowable business expenses – client entertaining costs are not an allowable expense',
+      codes: ['advertisingCosts', 'otherExpenses', 'paymentsToSubcontractors', 'irrecoverableDebts'],
+    },
+  ],
+  totalExpenses: { box: '20', label: 'Total allowable expenses – total of boxes 11 to 19' },
+  netProfit: { box: '21', label: 'Net profit – if your business income is more than your expenses (if box 9 + box 10 minus box 20 is positive)' },
+  netLoss: { box: '22', label: 'Net loss – if your expenses exceed your business income (if box 20 minus (box 9 + box 10) is positive)' },
+  tradingAllowanceBox: '10.1',
+  tradingAllowancePence: 100_000,
+  turnoverLimitPence: 9_000_000,
+};
+
+/** Forms by tax year label, each checked against HMRC's. 2025-26 only changed the business details boxes, which this app doesn't fill in. */
+export const SA103S_FORMS: Record<string, Sa103sForm> = {
+  '2024-25': FORM_2024_25,
+  '2025-26': FORM_2024_25,
+};
+
+/** The form for a tax year, or the nearest known one (flagged as assumed) for a year not in the table. */
+export function sa103sFormFor(label: string): { form: Sa103sForm; formLabel: string; assumed: boolean } {
+  if (SA103S_FORMS[label]) return { form: SA103S_FORMS[label], formLabel: label, assumed: false };
+  const known = Object.keys(SA103S_FORMS).sort();
+  const formLabel = label < known[0] ? known[0] : known[known.length - 1];
+  return { form: SA103S_FORMS[formLabel], formLabel, assumed: true };
+}
 
 /** MTD categories that can never be claimed, so they never go in a box. */
 /** Always disallowable: lines in these categories are saved that way, whatever the form sends. */
@@ -49,11 +86,8 @@ export const SA103S_NOT_ALLOWABLE: Record<string, string> = {
 /** Categories that need a second look before filing, if they have amounts. */
 export const SA103S_CHECK: Record<string, string> = {
   irrecoverableDebts: 'Under the cash basis, income is only recorded when received, so bad debts are not usually claimed.',
-  paymentsToSubcontractors: 'Construction Industry Scheme payments are included in box 19 on the short form.',
+  paymentsToSubcontractors: 'Construction Industry Scheme payments go in this box on the short form.',
 };
-
-export const TRADING_ALLOWANCE_PENCE = 100_000;
-export const SA103S_TURNOVER_LIMIT_PENCE = 9_000_000;
 
 export interface Sa103sBox {
   box: string;
@@ -68,21 +102,22 @@ export interface ExcludedAmount {
 }
 
 export interface SelfAssessmentSummary {
+  /** The form these boxes come from; assumed if the tax year's own form hasn't been checked. */
+  form: Omit<Sa103sForm, 'incomeBoxes' | 'expenseBoxes'> & { label: string; assumed: boolean };
   incomeBoxes: Sa103sBox[];
   expenseBoxes: Sa103sBox[];
   totalIncomePence: number;
-  /** Box 20. */
   totalAllowableExpensesPence: number;
-  /** Box 21 (zero if there is a loss). */
+  /** Zero if there is a loss. */
   netProfitPence: number;
-  /** Box 22 (zero if there is a profit). */
+  /** Zero if there is a profit. */
   netLossPence: number;
   /** Amounts recorded as disallowable on line items, by MTD category. */
   disallowable: { hmrcCode: string; amountPence: number }[];
   /** Whole categories that can't be claimed (entertaining, depreciation). */
   notAllowable: ExcludedAmount[];
   /** Categories with amounts that are worth checking. */
-  checks: ExcludedAmount[];
+  checks: (ExcludedAmount & { box: string })[];
   tradingAllowance: {
     profitWithExpensesPence: number;
     profitWithAllowancePence: number;
@@ -95,17 +130,19 @@ export interface SelfAssessmentSummary {
   turnoverOverShortFormLimit: boolean;
 }
 
-export function buildSelfAssessmentSummary(mtd: MtdPeriodSummary): SelfAssessmentSummary {
+export function buildSelfAssessmentSummary(mtd: MtdPeriodSummary, taxYearLabel: string): SelfAssessmentSummary {
+  const { form, formLabel, assumed } = sa103sFormFor(taxYearLabel);
+  const { incomeBoxes: incomeDefinitions, expenseBoxes: expenseDefinitions, ...formDetails } = form;
   const allowable = (code: string) =>
     (mtd.periodExpenses[code] ?? 0) - (mtd.periodDisallowableExpenses[`${code}Disallowable`] ?? 0);
   const sum = (codes: string[], value: (code: string) => number) => codes.reduce((acc, code) => acc + value(code), 0);
 
-  const incomeBoxes = SA103S_INCOME_BOXES.map((b) => ({
+  const incomeBoxes = incomeDefinitions.map((b) => ({
     box: b.box,
     label: b.label,
     amountPence: sum(b.codes, (c) => mtd.periodIncome[c] ?? 0),
   }));
-  const expenseBoxes = SA103S_EXPENSE_BOXES.map((b) => ({ box: b.box, label: b.label, amountPence: sum(b.codes, allowable) }));
+  const expenseBoxes = expenseDefinitions.map((b) => ({ box: b.box, label: b.label, amountPence: sum(b.codes, allowable) }));
   const totalIncomePence = incomeBoxes.reduce((acc, b) => acc + b.amountPence, 0);
   const totalAllowableExpensesPence = expenseBoxes.reduce((acc, b) => acc + b.amountPence, 0);
   const net = totalIncomePence - totalAllowableExpensesPence;
@@ -117,13 +154,19 @@ export function buildSelfAssessmentSummary(mtd: MtdPeriodSummary): SelfAssessmen
     .map(([hmrcCode, reason]) => ({ hmrcCode, amountPence: mtd.periodExpenses[hmrcCode] ?? 0, reason }))
     .filter((e) => e.amountPence > 0);
   const checks = Object.entries(SA103S_CHECK)
-    .map(([hmrcCode, reason]) => ({ hmrcCode, amountPence: allowable(hmrcCode), reason }))
+    .map(([hmrcCode, reason]) => ({
+      hmrcCode,
+      amountPence: allowable(hmrcCode),
+      reason,
+      box: expenseDefinitions.find((b) => b.codes.includes(hmrcCode))!.box,
+    }))
     .filter((e) => e.amountPence > 0);
 
   const profitWithExpensesPence = Math.max(0, net);
-  const profitWithAllowancePence = Math.max(0, totalIncomePence - TRADING_ALLOWANCE_PENCE);
+  const profitWithAllowancePence = Math.max(0, totalIncomePence - form.tradingAllowancePence);
 
   return {
+    form: { ...formDetails, label: formLabel, assumed },
     incomeBoxes,
     expenseBoxes,
     totalIncomePence,
@@ -142,8 +185,8 @@ export function buildSelfAssessmentSummary(mtd: MtdPeriodSummary): SelfAssessmen
           : profitWithAllowancePence > profitWithExpensesPence
             ? 'expenses'
             : 'same',
-      incomeWithinAllowance: totalIncomePence <= TRADING_ALLOWANCE_PENCE,
+      incomeWithinAllowance: totalIncomePence <= form.tradingAllowancePence,
     },
-    turnoverOverShortFormLimit: (mtd.periodIncome.turnover ?? 0) >= SA103S_TURNOVER_LIMIT_PENCE,
+    turnoverOverShortFormLimit: (mtd.periodIncome.turnover ?? 0) >= form.turnoverLimitPence,
   };
 }

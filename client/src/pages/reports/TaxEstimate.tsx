@@ -14,7 +14,6 @@ import {
   taxRatesFor,
   taxYearFromStartYear,
   todayIso,
-  TRADING_ALLOWANCE_PENCE,
   type TaxEstimateResponse,
 } from '@crafty/shared';
 import { NoTaxYear } from '../../components/NoTaxYear';
@@ -158,7 +157,7 @@ function EstimateBody({ data, today }: { data: TaxEstimateResponse; today: strin
             {data.netLossPence > 0
               ? `A loss of ${formatGBP(data.netLossPence)}, so no tax`
               : data.usesTradingAllowance
-                ? `Using the ${whole(TRADING_ALLOWANCE_PENCE)} trading allowance, which beats your expenses`
+                ? `Using the ${whole(data.tradingAllowancePence)} trading allowance, which beats your expenses`
                 : data.taxYear.submissionMethod === 'mtd'
                   ? 'Income less allowable expenses'
                   : 'From the Year-end summary'}

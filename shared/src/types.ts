@@ -348,6 +348,7 @@ export interface TaxEstimateResponse {
   estimate: TaxEstimate;
   /** Whether the trading allowance gave a lower profit than expenses, so the estimate uses it. */
   usesTradingAllowance: boolean;
+  tradingAllowancePence: number;
   /** Profit before choosing the trading allowance, and the loss if there is one. */
   profitWithExpensesPence: number;
   netLossPence: number;

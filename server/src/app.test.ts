@@ -1398,6 +1398,7 @@ describe('year-end summary', () => {
 
     const { body } = await agent.get('/api/reports/year-end').query({ taxYearId: yearId }).expect(200);
     expect(body.filingDeadline).toBe('2027-01-31');
+    expect(body.summary.form).toMatchObject({ label: '2025-26', assumed: false, netProfit: { box: '21' } });
     const boxes = Object.fromEntries(
       [...body.summary.incomeBoxes, ...body.summary.expenseBoxes].map((b: { box: string; amountPence: number }) => [b.box, b.amountPence]),
     );
@@ -1407,6 +1408,12 @@ describe('year-end summary', () => {
 
     const quarters = (await agent.get('/api/mtd/quarters').query({ taxYearId: yearId })).body.quarters;
     expect(body.summary.netProfitPence).toBe(quarters[3].cumulative.totals.netProfitPence);
+  });
+
+  it('says when a year uses a form that has not been checked', async () => {
+    const yearId = await createYear(2099);
+    const { body } = await agent.get('/api/reports/year-end').query({ taxYearId: yearId }).expect(200);
+    expect(body.summary.form).toMatchObject({ label: '2025-26', assumed: true });
   });
 });
 

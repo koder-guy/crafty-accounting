@@ -6,6 +6,11 @@ import {
   parseDateInput,
   buildMtdPeriodSummary,
   buildSelfAssessmentSummary,
+  isNeverAllowable,
+  SA103S_FORMS,
+  sa103sFormFor,
+  EXPENSE_CATEGORIES,
+  INCOME_CATEGORIES,
   compareSections,
   comparisonCutoff,
   estimateTax,
@@ -189,7 +194,7 @@ describe('MTD quarters', () => {
       periodIncome: { turnover: 518.05, other: 0 },
       periodExpenses: { consolidatedExpenses: 20 },
     });
-    expect(buildSelfAssessmentSummary(summary).totalAllowableExpensesPence).toBe(2000);
+    expect(buildSelfAssessmentSummary(summary, '2025-26').totalAllowableExpensesPence).toBe(2000);
   });
 
   it('goes by category once turnover reaches the VAT registration threshold', () => {
@@ -226,6 +231,7 @@ describe('Self Assessment (SA103S) summary', () => {
           { hmrcCode: 'depreciation', amountPence: 7_000, disallowable: false },
         ],
       ),
+      '2025-26',
     );
     expect(box(s, '9')).toBe(1_200_000);
     expect(box(s, '10')).toBe(20_000);
@@ -249,6 +255,7 @@ describe('Self Assessment (SA103S) summary', () => {
       buildMtdPeriodSummary([{ hmrcCode: 'turnover', amountPence: 50_000 }], [
         { hmrcCode: 'costOfGoods', amountPence: 80_000, disallowable: false },
       ]),
+      '2025-26',
     );
     expect(loss.netLossPence).toBe(30_000);
     expect(loss.tradingAllowance).toMatchObject({ better: 'same', incomeWithinAllowance: true });
@@ -257,6 +264,7 @@ describe('Self Assessment (SA103S) summary', () => {
       buildMtdPeriodSummary([{ hmrcCode: 'turnover', amountPence: 300_000 }], [
         { hmrcCode: 'costOfGoods', amountPence: 40_000, disallowable: false },
       ]),
+      '2025-26',
     );
     expect(small.tradingAllowance).toMatchObject({
       profitWithExpensesPence: 260_000,
@@ -267,8 +275,23 @@ describe('Self Assessment (SA103S) summary', () => {
   });
 
   it('flags turnover too high for the short form', () => {
-    const big = buildSelfAssessmentSummary(buildMtdPeriodSummary([{ hmrcCode: 'turnover', amountPence: 9_000_000 }], []));
+    const big = buildSelfAssessmentSummary(buildMtdPeriodSummary([{ hmrcCode: 'turnover', amountPence: 9_000_000 }], []), '2025-26');
     expect(big.turnoverOverShortFormLimit).toBe(true);
+  });
+
+  it('uses each year\'s form, and says when it has to assume one', () => {
+    expect(sa103sFormFor('2025-26')).toMatchObject({ formLabel: '2025-26', assumed: false });
+    expect(sa103sFormFor('2023-24')).toMatchObject({ formLabel: '2024-25', assumed: true });
+    const later = buildSelfAssessmentSummary(buildMtdPeriodSummary([], []), '2099-00');
+    expect(later.form).toMatchObject({ label: Object.keys(SA103S_FORMS).sort().at(-1), assumed: true });
+  });
+
+  it.each(Object.entries(SA103S_FORMS))('puts every category in exactly one box on the %s form', (_label, form) => {
+    const codesIn = (boxes: { codes: string[] }[]) => boxes.flatMap((b) => b.codes).sort();
+    const income = INCOME_CATEGORIES.map((c) => c.hmrcCode);
+    const expenses = EXPENSE_CATEGORIES.filter((c) => !isNeverAllowable(c.hmrcCode)).map((c) => c.hmrcCode);
+    expect(codesIn(form.incomeBoxes)).toEqual([...income].sort());
+    expect(codesIn(form.expenseBoxes)).toEqual([...expenses].sort());
   });
 });
 

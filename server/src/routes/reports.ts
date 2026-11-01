@@ -123,13 +123,14 @@ const querySchema = z.object({ taxYearId: z.coerce.number().int().positive() });
  */
 export function buildTaxEstimate(db: Db, taxYear: TaxYear): TaxEstimateResponse {
   const { incomes, lines } = yearEntries(db, taxYear.id);
-  const summary = buildSelfAssessmentSummary(buildMtdPeriodSummary(incomes, lines));
+  const summary = buildSelfAssessmentSummary(buildMtdPeriodSummary(incomes, lines), taxYear.label);
   const usesTradingAllowance = summary.tradingAllowance.better === 'allowance';
   const profitPence = usesTradingAllowance ? summary.tradingAllowance.profitWithAllowancePence : summary.netProfitPence;
   return {
     taxYear,
     estimate: estimateTax({ label: taxYear.label, profitPence, otherIncomePence: taxYear.otherIncomePence }),
     usesTradingAllowance,
+    tradingAllowancePence: summary.form.tradingAllowancePence,
     profitWithExpensesPence: summary.netProfitPence,
     netLossPence: summary.netLossPence,
     dueDates: taxPaymentDates(startYearFromLabel(taxYear.label)!),
@@ -233,7 +234,7 @@ export function reportsRouter(ctx: AppContext): Router {
       taxYear,
       mileageCheck: mileageCheck(db, taxYearId),
       filingDeadline: selfAssessmentDeadline(startYearFromLabel(taxYear.label)!),
-      summary: buildSelfAssessmentSummary(buildMtdPeriodSummary(incomes, lines)),
+      summary: buildSelfAssessmentSummary(buildMtdPeriodSummary(incomes, lines), taxYear.label),
     };
     res.json(response);
   });
