@@ -1,7 +1,8 @@
-import type { ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { ArrowLeft, RefreshCw } from 'lucide-react';
 import { Link } from 'react-router';
 import { displayTaxYear, formatDisplayDate, isDateInTaxYear, todayIso, type TaxYear } from '@crafty/shared';
+import { ConfirmDialog } from './ConfirmDialog';
 import { Alert, Button } from './ui';
 
 export function BackLink({ to, children }: { to: string; children: ReactNode }) {
@@ -10,6 +11,41 @@ export function BackLink({ to, children }: { to: string; children: ReactNode }) 
       <ArrowLeft className="size-4" aria-hidden />
       {children}
     </Link>
+  );
+}
+
+/**
+ * Makes Escape leave a form, as its Cancel button does, asking first if there are changes to lose. It listens on
+ * window so that what's open over the form gets the key first: a calendar or menu on document, which marks it
+ * handled, or a dialog.
+ */
+export function EscapeToCancel({ dirty, busy, onCancel }: { dirty: boolean; busy: boolean; onCancel: () => void }) {
+  const [asking, setAsking] = useState(false);
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || e.repeat || e.isComposing || e.defaultPrevented || busy) return;
+      if (document.querySelector('dialog[open]')) return;
+      // Otherwise the browser's own Escape handling closes the dialog this opens, straight away.
+      e.preventDefault();
+      if (dirty) setAsking(true);
+      else onCancel();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [dirty, busy, onCancel]);
+
+  return (
+    <ConfirmDialog
+      open={asking}
+      title="Discard your changes?"
+      confirmLabel="Discard changes"
+      cancelLabel="Keep editing"
+      onConfirm={onCancel}
+      onClose={() => setAsking(false)}
+    >
+      <p>What you’ve entered on this form hasn’t been saved.</p>
+    </ConfirmDialog>
   );
 }
 

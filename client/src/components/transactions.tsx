@@ -370,7 +370,10 @@ function DocumentMenu({ documents }: { documents: TransactionDocument[] }) {
       if (!menuRef.current?.contains(target) && !buttonRef.current?.contains(target)) dismissWithoutClicking(e, () => close());
     };
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') close(true);
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        close(true);
+      }
       if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
         e.preventDefault();
         const items = [...(menuRef.current?.querySelectorAll<HTMLElement>('[role=menuitem]') ?? [])];

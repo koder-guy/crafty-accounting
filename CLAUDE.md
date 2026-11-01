@@ -56,6 +56,7 @@ export PATH="/opt/homebrew/opt/node@22/bin:$PATH"
   - Sidebar icons are muted grey; only the current page's icon takes the accent colour.
   - Sub-pages use `SectionLayout`: `variant="tabs"` in Self Assessment (Year-end summary), Making Tax Digital (Quarterly updates), Simplified Expenses (Mileage, Use of Home) and Reports (Tax estimate, Breakdown, Compare years); a section with one page shows no tabs, the side menu in Settings.
   - Dialogs are centred `<dialog>` elements with a blurred backdrop.
+  - Escape leaves the transaction forms (`EscapeToCancel`), asking first if there are unsaved changes. It listens on window and skips a handled key, so a popup listening on document that closes on Escape must call `preventDefault`.
   - Date fields use `DateInput` (`components/DateInput.tsx`), not `<input type="date">`: dd/mm/yyyy text plus a calendar in the top layer, weeks starting Monday. `value` is still an ISO date. In react-hook-form it goes through `Controller`.
 
 ## Working in this repo

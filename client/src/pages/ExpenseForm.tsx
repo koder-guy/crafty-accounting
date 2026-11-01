@@ -16,7 +16,7 @@ import {
   type PaymentMethod,
 } from '@crafty/shared';
 import { CategoryOptions } from '../components/CategoryOptions';
-import { BackLink, ChangedElsewhere, CopiedFrom, dateInYear, duplicateDate, yearRangeHint } from '../components/FormShell';
+import { BackLink, ChangedElsewhere, CopiedFrom, EscapeToCancel, dateInYear, duplicateDate, yearRangeHint } from '../components/FormShell';
 import { NoTaxYear } from '../components/NoTaxYear';
 import { PageBody, PageHeader } from '../components/PageHeader';
 import { DateInput } from '../components/DateInput';
@@ -89,7 +89,7 @@ export function ExpenseForm() {
     handleSubmit,
     reset,
     setError,
-    formState: { errors },
+    formState: { errors, isDirty },
   } = useForm<Values>({
     defaultValues: {
       date: '',
@@ -257,6 +257,11 @@ export function ExpenseForm() {
       />
       <PageBody>
         <BackLink to={backTo}>Back</BackLink>
+        <EscapeToCancel
+          dirty={isDirty || files.length > 0 || removeIds.length > 0}
+          busy={save.isPending || preparingPhoto}
+          onCancel={() => navigate(backTo)}
+        />
         {original && (
           <CopiedFrom
             what={original.payee}

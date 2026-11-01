@@ -4,7 +4,7 @@ import { useNavigate, useParams, useSearchParams } from 'react-router';
 import { displayTaxYear, formatDisplayDate, isDateInTaxYear, parsePoundsToPence, penceToPounds, todayIso, type Income, type PaymentMethod } from '@crafty/shared';
 import { CategoryOptions } from '../components/CategoryOptions';
 import { DateInput } from '../components/DateInput';
-import { BackLink, ChangedElsewhere, CopiedFrom, dateInYear, duplicateDate, yearRangeHint } from '../components/FormShell';
+import { BackLink, ChangedElsewhere, CopiedFrom, EscapeToCancel, dateInYear, duplicateDate, yearRangeHint } from '../components/FormShell';
 import { NoTaxYear } from '../components/NoTaxYear';
 import { PageBody, PageHeader } from '../components/PageHeader';
 import { DocumentField, PaymentMethodPicker } from '../components/transactions';
@@ -52,7 +52,7 @@ export function IncomeForm() {
     reset,
     setError,
     control,
-    formState: { errors },
+    formState: { errors, isDirty },
   } = useForm<Values>({
     defaultValues: {
       date: '',
@@ -199,6 +199,11 @@ export function IncomeForm() {
       />
       <PageBody>
         <BackLink to={backTo}>Back</BackLink>
+        <EscapeToCancel
+          dirty={isDirty || files.length > 0 || removeIds.length > 0}
+          busy={save.isPending || preparingPhoto}
+          onCancel={() => navigate(backTo)}
+        />
         {original && (
           <div className="max-w-3xl">
             <CopiedFrom what={original.description} date={original.date} notCopied="The reference and any attached document aren't copied." />

@@ -7,6 +7,7 @@ interface Props {
   title: string;
   children: ReactNode;
   confirmLabel: string;
+  cancelLabel?: string;
   /** If set, the user must type this text before the confirm button enables. */
   requireText?: string;
   onConfirm: () => Promise<unknown> | void;
@@ -17,7 +18,7 @@ interface Props {
 }
 
 /** A modal warning shown before destructive actions. */
-export function ConfirmDialog({ open, title, children, confirmLabel, requireText, onConfirm, onClose, tone = 'danger', wide }: Props) {
+export function ConfirmDialog({ open, title, children, confirmLabel, cancelLabel = 'Cancel', requireText, onConfirm, onClose, tone = 'danger', wide }: Props) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const [typed, setTyped] = useState('');
@@ -105,7 +106,7 @@ export function ConfirmDialog({ open, title, children, confirmLabel, requireText
 
         <div className="mt-6 flex justify-end gap-3">
           <Button type="button" variant="ghost" onClick={onClose} disabled={busy}>
-            Cancel
+            {cancelLabel}
           </Button>
           <Button type="button" variant={tone === 'send' ? 'primary' : 'danger'} onClick={confirm} busy={busy} disabled={blocked}>
             {confirmLabel}

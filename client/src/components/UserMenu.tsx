@@ -45,6 +45,7 @@ export function UserMenu({ compact = false }: { compact?: boolean }) {
     };
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
+        e.preventDefault();
         setOpen(false);
         buttonRef.current?.focus();
       }
