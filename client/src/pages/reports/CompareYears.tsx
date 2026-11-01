@@ -19,6 +19,7 @@ import {
   type YearComparisonResponse,
   type YearComparisonYear,
 } from '@crafty/shared';
+import { DrillDown, parseSelection } from './Breakdown';
 import { NoTaxYear } from '../../components/NoTaxYear';
 import { SectionHeading } from '../../components/SectionLayout';
 import { Alert, Button, ButtonLink, Card, CardHeader, EmptyState, Spinner } from '../../components/ui';
@@ -252,17 +253,20 @@ function MonthByMonth({ a, b }: { a: YearComparisonYear; b: YearComparisonYear }
 
 // ---- Categories ----
 
-/** An amount that opens Breakdown for that year, with this row's transactions showing. */
+/** An amount that opens a window over this page, with that year's transactions for this row. */
 function AmountLink({ year, line, index }: { year: YearComparisonYear; line: ComparisonLine; index: 0 | 1 }) {
+  const [params] = useSearchParams();
   const amount = line.totalsPence[index];
   const disallowable = line.disallowablePence[index];
-  const query = new URLSearchParams({ from: year.from, to: year.to, show: line.show });
+  const query = new URLSearchParams(params);
+  query.set('show', line.show);
+  query.set('showYear', String(year.taxYear.id));
   return (
     <>
       {amount === 0 ? (
         <span className="text-faint">{formatGBP(0)}</span>
       ) : (
-        <Link to={`/reports/breakdown?${query}`} className="hover:text-accent-soft hover:underline">
+        <Link to={{ search: `?${query}` }} replace preventScrollReset className="hover:text-accent-soft hover:underline">
           {formatGBP(amount)}
         </Link>
       )}
@@ -463,10 +467,37 @@ function nearestOther(years: TaxYear[], year: TaxYear): TaxYear | undefined {
   return others.filter((y) => y.startDate < year.startDate).at(-1) ?? others[0];
 }
 
+/** The transactions behind an amount, while the URL's `show` and `showYear` name one. */
+function AmountDrillDown({ a, b }: { a: YearComparisonYear; b: YearComparisonYear }) {
+  const [params, setParams] = useSearchParams();
+  const show = params.get('show');
+  const selection = parseSelection(show);
+  const year = [a, b].find((y) => String(y.taxYear.id) === params.get('showYear'));
+  if (!selection || !year) return null;
+
+  const line = [...compareSections(a.income, b.income), ...compareSections(a.expenses, b.expenses)]
+    .flatMap((row): ComparisonLine[] => [row, ...row.children])
+    .find((l) => l.show === show);
+  const name = line ? `${line.name}${line.note ? ` (${line.note})` : ''}` : 'Selected items';
+
+  const close = () =>
+    setParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.delete('show');
+        next.delete('showYear');
+        return next;
+      },
+      { replace: true, preventScrollReset: true },
+    );
+  return <DrillDown key={`${show}-${year.taxYear.id}`} from={year.from} to={year.to} selection={selection} title={`${name}, ${shortYear(year)}`} onClose={close} />;
+}
+
 function Comparison({ data, inProgress }: { data: YearComparisonResponse; inProgress: YearComparisonYear | undefined }) {
   const [a, b] = data.years;
   return (
     <FirstIsEarlier.Provider value={startsEarlier(a, b)}>
+      <AmountDrillDown a={a} b={b} />
       {data.period === 'full' && inProgress && (
         <Alert tone="warning">
           {shortYear(inProgress)} hasn't finished, so this compares its figures so far with a whole year. Choose Same period for a fairer comparison.

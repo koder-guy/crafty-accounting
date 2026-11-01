@@ -45,7 +45,7 @@ function presets(today: string) {
 
 // ---- Selection (kept in the URL as e.g. "group:3", "cat:21", "payee:Bead World", "flat:mileage") ----
 
-function parseSelection(value: string | null): BreakdownSelection | null {
+export function parseSelection(value: string | null): BreakdownSelection | null {
   if (!value) return null;
   const [kind, ...rest] = value.split(':');
   const arg = rest.join(':');
@@ -226,7 +226,7 @@ function CategoryTable({
   );
 }
 
-function DrillDown({
+export function DrillDown({
   from,
   to,
   selection,
