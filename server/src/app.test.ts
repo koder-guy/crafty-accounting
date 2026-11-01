@@ -2624,6 +2624,25 @@ describe('comparing tax years', () => {
 describe('sample data', () => {
   const uploads = () => path.join(dataDir, 'uploads');
 
+  it('gives the current year disallowable items, up to today', () => {
+    const descriptions = (today: string) => {
+      generateSampleData(ctx.db, uploads(), today);
+      const rows = ctx.db
+        .prepare(
+          `SELECT l.description FROM expense_line_items l
+           JOIN expenses e ON e.id = l.expense_id JOIN tax_years t ON t.id = e.tax_year_id
+           WHERE l.disallowable = 1 AND t.label = '2026-27' ORDER BY e.date`,
+        )
+        .all() as { description: string }[];
+      clearData(ctx.db, uploads());
+      return rows.map((r) => r.description);
+    };
+    expect(descriptions('2026-10-26')).toEqual(
+      expect.arrayContaining(['Phone bill – personal use', 'Personal craft kit', 'Lunch with a stockist', 'Drill for home use']),
+    );
+    expect(descriptions('2026-06-01')).not.toContain('Lunch with a stockist');
+  });
+
   it('generates consistent data that the API and backups accept', async () => {
     const result = generateSampleData(ctx.db, uploads(), '2026-10-26');
     expect(result.taxYears).toBe(5);

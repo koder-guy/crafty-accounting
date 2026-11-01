@@ -138,6 +138,39 @@ const YEARLY: Purchase[] = [
   },
 ];
 
+/** Bought in the current year, each `days` after it starts, so that year always has disallowable amounts to show. */
+const CURRENT_YEAR_DISALLOWABLE: { days: number; purchase: Purchase; extraLine?: Line }[] = [
+  {
+    days: 30,
+    purchase: {
+      payee: 'EE Mobile',
+      payment: 'bank_transfer',
+      lines: [{ description: 'Phone bill – business use', code: 'adminCosts', min: 1200, max: 1800 }],
+    },
+    extraLine: { description: 'Phone bill – personal use', code: 'adminCosts', min: 800, max: 1200, disallowable: true },
+  },
+  {
+    days: 78,
+    purchase: { payee: 'Hobbycraft', lines: [{ description: 'Yarn', code: 'costOfGoods', min: 900, max: 4800 }] },
+    extraLine: { description: 'Personal craft kit', code: 'otherExpenses', min: 1500, max: 2500, disallowable: true },
+  },
+  {
+    days: 125,
+    purchase: {
+      payee: 'The Swan Inn',
+      lines: [{ description: 'Lunch with a stockist', code: 'businessEntertainmentCosts', min: 3500, max: 6500, disallowable: true }],
+    },
+  },
+  {
+    days: 170,
+    purchase: {
+      payee: 'Screwfix',
+      lines: [{ description: 'Display stand repair parts', code: 'maintenanceCosts', min: 800, max: 3000 }],
+    },
+    extraLine: { description: 'Drill for home use', code: 'otherExpenses', min: 3000, max: 6000, disallowable: true },
+  },
+];
+
 /** Small deterministic PRNG (mulberry32). */
 function random(seed: number) {
   let a = seed >>> 0;
@@ -393,6 +426,13 @@ export function generateSampleData(db: Db, uploadsDir: string, today = todayIso(
         const submittedOn = addDays(q.deadline, -rnd.int(2, 25));
         insertSubmission.run(yearId, q.quarter, submittedOn, `MTD-${year.label}-Q${q.quarter}`);
         result.submissions++;
+      }
+
+      if (startYear === currentStart) {
+        for (const { days, purchase, extraLine } of CURRENT_YEAR_DISALLOWABLE) {
+          const date = addDays(year.startDate, days);
+          if (date <= end) addExpense(yearId, date, purchase, extraLine);
+        }
       }
     }
     // Everyone starts on the current year.
