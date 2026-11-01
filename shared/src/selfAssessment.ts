@@ -154,6 +154,10 @@ export interface SelfAssessmentSummary {
   turnoverOverShortFormLimit: boolean;
 }
 
+/** What a filed return said, box by box, to compare with the figures now. */
+export const sa103sFigures = ({ incomeBoxes, expenseBoxes }: SelfAssessmentSummary): Record<string, number> =>
+  Object.fromEntries([...incomeBoxes, ...expenseBoxes].map((b) => [b.box, b.amountPence]));
+
 export function buildSelfAssessmentSummary(mtd: MtdPeriodSummary, taxYearLabel: string): SelfAssessmentSummary {
   const { form, formLabel, assumed } = sa103sFormFor(taxYearLabel);
   const { incomeBoxes: incomeDefinitions, expenseBoxes: expenseDefinitions, ...formDetails } = form;

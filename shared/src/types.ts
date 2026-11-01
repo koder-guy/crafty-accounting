@@ -21,6 +21,8 @@ export interface TaxYear {
   otherIncomePence: number;
   submissionMethod: SubmissionMethod;
   mtdExpenses: MtdExpenses;
+  /** When the year's Self Assessment return was filed, as recorded by hand. */
+  saFiledOn: string | null;
 }
 
 /** A tax year as Settings lists it, with what stops it leaving MTD. */
@@ -176,6 +178,8 @@ export interface MtdQuarterSubmission {
     /** Exactly what was sent. */
     payload: MtdPayload;
   } | null;
+  /** The figures when it was recorded by hand. Missing from records older than this field. */
+  recordedPayload: MtdPayload | null;
 }
 
 export interface MtdQuarterSummary extends MtdQuarter {
@@ -215,6 +219,8 @@ export interface YearEndSummaryResponse {
   /** Online filing and payment deadline (31 January after the tax year). */
   filingDeadline: string;
   summary: SelfAssessmentSummary;
+  /** The boxes differ from when the return was recorded as filed. */
+  filedFiguresChanged: boolean;
 }
 
 export interface BreakdownCategory {

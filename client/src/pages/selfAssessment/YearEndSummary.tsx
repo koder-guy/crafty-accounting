@@ -1,20 +1,23 @@
-import type { ReactNode } from 'react';
-import { CircleAlert, FileText, Printer, Scale } from 'lucide-react';
+import { useEffect, useState, type ReactNode } from 'react';
+import { CalendarCheck, CircleAlert, FileText, Printer, Scale } from 'lucide-react';
 import {
   APP_NAME,
   displayTaxYear,
   formatDisplayDate,
   formatGBP,
+  selfAssessmentAmendmentDeadline,
+  startYearFromLabel,
   todayIso,
   type Category,
   type Sa103sBox,
   type YearEndSummaryResponse,
 } from '@crafty/shared';
+import { DateInput } from '../../components/DateInput';
 import { MileageCheckAlert } from '../../components/MileageCheckAlert';
 import { NoTaxYear } from '../../components/NoTaxYear';
 import { SectionHeading } from '../../components/SectionLayout';
-import { Alert, Button, Card, CardHeader, Spinner } from '../../components/ui';
-import { useActiveTaxYear, useCategories, useYearEndSummary } from '../../lib/queries';
+import { Alert, Button, Card, CardHeader, Field, Spinner } from '../../components/ui';
+import { useActiveTaxYear, useCanEdit, useCategories, useTaxYearMutations, useYearEndSummary } from '../../lib/queries';
 import { printPage } from '../../lib/liveUpdates';
 
 const whole = (pence: number) => formatGBP(pence).replace(/\.00$/, '');
@@ -159,6 +162,70 @@ function TradingAllowance({ data }: { data: YearEndSummaryResponse }) {
   );
 }
 
+/** A record that the return has been filed, which is done outside the app. */
+function FiledCard({ data }: { data: YearEndSummaryResponse }) {
+  const year = data.taxYear;
+  const canEdit = useCanEdit();
+  const { setFiled, clearFiled } = useTaxYearMutations();
+  const [editing, setEditing] = useState(false);
+  const [filedOn, setFiledOn] = useState(year.saFiledOn ?? todayIso());
+
+  useEffect(() => {
+    setEditing(false);
+    setFiledOn(year.saFiledOn ?? todayIso());
+  }, [year.id, year.saFiledOn]);
+
+  const ended = todayIso() > year.endDate;
+  if (!year.saFiledOn && (!canEdit || !ended)) return null;
+  const error = setFiled.error ?? clearFiled.error;
+
+  return (
+    <Card className="print:hidden">
+      <CardHeader icon={<CalendarCheck className="size-5 text-accent-soft" />} title="Filing your return" />
+      <div className="space-y-4 px-5 pb-6 sm:px-6">
+        {year.saFiledOn && !editing ? (
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm text-ink">
+              Filed with HMRC on <strong>{formatDisplayDate(year.saFiledOn)}</strong>
+            </p>
+            {canEdit && (
+              <div className="flex gap-2">
+                <Button onClick={() => setEditing(true)}>Edit</Button>
+                <Button busy={clearFiled.isPending} onClick={() => clearFiled.mutate(year.id)}>
+                  Mark as not filed
+                </Button>
+              </div>
+            )}
+          </div>
+        ) : (
+          <form
+            className="flex flex-col gap-4 sm:flex-row sm:items-end"
+            onSubmit={(e) => {
+              e.preventDefault();
+              setFiled.mutate({ id: year.id, filedOn });
+            }}
+          >
+            <Field label="Date filed" htmlFor="filed-on" className="sm:w-48">
+              <DateInput id="filed-on" required value={filedOn} onChange={setFiledOn} />
+            </Field>
+            <div className="flex gap-2">
+              <Button type="submit" variant="primary" busy={setFiled.isPending}>
+                Mark as filed
+              </Button>
+              {editing && (
+                <Button type="button" variant="ghost" onClick={() => setEditing(false)}>
+                  Cancel
+                </Button>
+              )}
+            </div>
+          </form>
+        )}
+        {error && <Alert>{error.message}</Alert>}
+      </div>
+    </Card>
+  );
+}
+
 export function YearEndSummary() {
   const { taxYear, isLoading: yearLoading } = useActiveTaxYear();
   const { data, isLoading, error } = useYearEndSummary(taxYear?.id);
@@ -204,6 +271,17 @@ export function YearEndSummary() {
                 </span>
               </Fact>
             </Card>
+
+            <FiledCard data={data} />
+
+            {data.filedFiguresChanged && (
+              <Alert tone="warning">
+                These figures have changed since you filed your return on {formatDisplayDate(data.taxYear.saFiledOn!)}.{' '}
+                {today <= selfAssessmentAmendmentDeadline(startYearFromLabel(data.taxYear.label)!)
+                  ? `To correct what HMRC has, amend your return by ${formatDisplayDate(selfAssessmentAmendmentDeadline(startYearFromLabel(data.taxYear.label)!))}, then change the date filed here.`
+                  : 'The time to amend your return online has passed, so contact HMRC if this changes what you owe.'}
+              </Alert>
+            )}
 
             {today <= data.taxYear.endDate && (
               <Alert tone="warning">This tax year hasn't finished yet, so these are the figures so far, not final ones.</Alert>

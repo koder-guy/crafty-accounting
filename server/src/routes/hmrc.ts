@@ -368,7 +368,7 @@ export function hmrcRouter(ctx: AppContext): Router {
          VALUES (@taxYearId, @quarter, @submittedOn, @by, @sentAt, @environment, @correlationId, @payload)
          ON CONFLICT (tax_year_id, quarter) DO UPDATE SET submitted_on = excluded.submitted_on, sent_by = excluded.sent_by,
            sent_at = excluded.sent_at, sent_environment = excluded.sent_environment, correlation_id = excluded.correlation_id,
-           sent_payload = excluded.sent_payload`,
+           sent_payload = excluded.sent_payload, recorded_payload = NULL`,
       )
       .run({
         taxYearId,

@@ -147,6 +147,15 @@ export function useTaxYearMutations() {
         api.put<TaxYearsResponse>(`/tax-years/${id}/mtd-expenses`, { mtdExpenses }),
       onSuccess,
     }),
+    setFiled: useMutation({
+      mutationFn: ({ id, filedOn }: { id: number; filedOn: string }) =>
+        api.put<TaxYearsResponse>(`/tax-years/${id}/self-assessment-filed`, { filedOn }),
+      onSuccess,
+    }),
+    clearFiled: useMutation({
+      mutationFn: (id: number) => api.delete<TaxYearsResponse>(`/tax-years/${id}/self-assessment-filed`),
+      onSuccess,
+    }),
     setActive: useMutation({
       mutationFn: (taxYearId: number) => api.put<TaxYearsResponse>('/tax-years/active', { taxYearId }),
       onSuccess,

@@ -106,6 +106,9 @@ export function mtdAmendmentDeadline(startYear: number): string {
   return `${startYear + 3}-01-31`;
 }
 
+/** The last day to amend a filed Self Assessment return online: the same 12 months after the filing deadline. */
+export const selfAssessmentAmendmentDeadline = mtdAmendmentDeadline;
+
 /** Today's date as an ISO string in local time. */
 export function todayIso(now: Date = new Date()): string {
   return `${now.getFullYear()}-${pad2(now.getMonth() + 1)}-${pad2(now.getDate())}`;

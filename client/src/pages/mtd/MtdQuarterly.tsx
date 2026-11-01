@@ -506,6 +506,16 @@ export function MtdQuarterly() {
   const summary = q ? q[view] : null;
   const oneTotal = data?.mtdExpenses === 'consolidated';
   const overThreshold = taxYear?.mtdExpenses === 'consolidated' && data?.mtdExpenses === 'itemised';
+  // Updates are cumulative, so only the latest one matters. One the app sent says so in its own panel.
+  const latestHeld = quarters.filter((x) => x.submission).at(-1);
+  const recorded = latestHeld?.submission?.recordedPayload;
+  const recordedChanged =
+    !declared &&
+    !!data &&
+    !!taxYear &&
+    !!latestHeld &&
+    !!recorded &&
+    !sameFigures(recorded, mtdPayload(latestHeld.cumulative, taxYear.startDate, latestHeld.endDate, data.mtdExpenses));
 
   return (
     <>
@@ -566,6 +576,15 @@ export function MtdQuarterly() {
                 This year’s turnover has reached the VAT registration threshold of {formatGBP(VAT_REGISTRATION_THRESHOLD_PENCE).replace(/\.00$/, '')}. One total
                 for expenses is only for turnover below it, so expenses now go by category for the whole year. Your next update sends the year
                 to date that way.
+              </Alert>
+            )}
+
+            {recordedChanged && (
+              <Alert tone="warning">
+                The figures up to {formatDisplayDate(latestHeld.endDate)} have changed since you recorded Q{latestHeld.quarter} as submitted.{' '}
+                {latestHeld.quarter === 4
+                  ? 'Submit Q4 again to bring HMRC up to date, then change its date here.'
+                  : `Updates are cumulative, so your next one brings HMRC up to date. If you submit Q${latestHeld.quarter} again instead, change its date here.`}
               </Alert>
             )}
 

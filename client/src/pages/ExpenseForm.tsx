@@ -21,7 +21,7 @@ import { NoTaxYear } from '../components/NoTaxYear';
 import { PageBody, PageHeader } from '../components/PageHeader';
 import { DateInput } from '../components/DateInput';
 import { DocumentField, PaymentMethodPicker } from '../components/transactions';
-import { SentQuarterNotice } from '../components/SentQuarterNotice';
+import { SubmittedFiguresNotice } from '../components/SubmittedFiguresNotice';
 import { Alert, Button, Card, CardHeader, Field, IconButton, Spinner } from '../components/ui';
 import { ApiError, transactionForm } from '../lib/api';
 import { useActiveTaxYear, useCategories, useExpense, useSaveTransaction, useTaxYears } from '../lib/queries';
@@ -442,7 +442,7 @@ export function ExpenseForm() {
               </Field>
             </div>
 
-            <SentQuarterNotice className="mt-5" taxYearId={taxYear.id} dates={[watchedDate, existing?.date]} />
+            <SubmittedFiguresNotice className="mt-5" taxYearId={taxYear.id} dates={[watchedDate, existing?.date]} />
 
             {save.error && (
               <div className="mt-5">

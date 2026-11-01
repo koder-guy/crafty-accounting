@@ -23,7 +23,7 @@ import { DateInput } from '../../components/DateInput';
 import { ChangedElsewhere, dateInYear, duplicateDate, recordedBy, yearRangeHint } from '../../components/FormShell';
 import { NoTaxYear } from '../../components/NoTaxYear';
 import { SectionHeading } from '../../components/SectionLayout';
-import { SentQuarterNotice } from '../../components/SentQuarterNotice';
+import { SubmittedFiguresNotice } from '../../components/SubmittedFiguresNotice';
 import { Alert, Button, Card, CardHeader, EmptyState, Field, IconButton, Spinner } from '../../components/ui';
 import { useActiveTaxYear, useCanEdit, useMileage, useMileageMutations } from '../../lib/queries';
 
@@ -126,7 +126,7 @@ function TripForm({
           <input id="trip-notes" className="field" maxLength={2000} value={notes} onChange={(e) => setNotes(e.target.value)} />
         </Field>
       </div>
-      <SentQuarterNotice taxYearId={taxYear.id} dates={[date, editing?.date]} />
+      <SubmittedFiguresNotice taxYearId={taxYear.id} dates={[date, editing?.date]} />
       {save.error && <Alert>{save.error.message}</Alert>}
       <div className="flex gap-2">
         <Button type="submit" variant="primary" busy={save.isPending}>
@@ -354,7 +354,7 @@ export function Mileage() {
             This can't be undone.
           </p>
         )}
-        <SentQuarterNotice taxYearId={toDelete?.taxYearId} dates={[toDelete?.date]} />
+        <SubmittedFiguresNotice taxYearId={toDelete?.taxYearId} dates={[toDelete?.date]} />
       </ConfirmDialog>
     </>
   );

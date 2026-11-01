@@ -8,7 +8,7 @@ import { BackLink, ChangedElsewhere, CopiedFrom, dateInYear, duplicateDate, year
 import { NoTaxYear } from '../components/NoTaxYear';
 import { PageBody, PageHeader } from '../components/PageHeader';
 import { DocumentField, PaymentMethodPicker } from '../components/transactions';
-import { SentQuarterNotice } from '../components/SentQuarterNotice';
+import { SubmittedFiguresNotice } from '../components/SubmittedFiguresNotice';
 import { Alert, Button, Card, Field, Spinner } from '../components/ui';
 import { ApiError, transactionForm } from '../lib/api';
 import { useActiveTaxYear, useCategories, useIncome, useSaveTransaction, useTaxYears } from '../lib/queries';
@@ -277,7 +277,7 @@ export function IncomeForm() {
               </Field>
             </div>
 
-            <SentQuarterNotice className="mt-5" taxYearId={taxYear.id} dates={[watchedDate, existing?.date]} />
+            <SubmittedFiguresNotice className="mt-5" taxYearId={taxYear.id} dates={[watchedDate, existing?.date]} />
 
             {save.error && (
               <div className="mt-5">

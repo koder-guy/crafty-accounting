@@ -11,6 +11,7 @@ import {
   formatDisplayDate,
   mtdEarliestSendDate,
   mtdExpensesToSend,
+  mtdPayload,
   mtdQuarters,
   mtdSubmissionSchema,
   penceToPounds,
@@ -38,6 +39,7 @@ interface SubmissionRow {
   sent_environment: HmrcEnvironment | null;
   correlation_id: string | null;
   sent_payload: string | null;
+  recorded_payload: string | null;
 }
 
 type QuarterSubmission = Pick<MtdQuarterSummary, 'submission' | 'otherServiceSend'>;
@@ -68,7 +70,8 @@ export function getSubmissions(
       if (sent && sent.environment !== environment) {
         return [row.quarter, { submission: null, otherServiceSend: { environment: sent.environment, at: sent.at, by: sent.by } }];
       }
-      return [row.quarter, { submission: { submittedOn: row.submitted_on, reference: row.reference, sent }, otherServiceSend: null }];
+      const recordedPayload = row.recorded_payload ? JSON.parse(row.recorded_payload) : null;
+      return [row.quarter, { submission: { submittedOn: row.submitted_on, reference: row.reference, sent, recordedPayload }, otherServiceSend: null }];
     }),
   );
 }
@@ -238,13 +241,25 @@ export function mtdRouter(ctx: AppContext): Router {
     if (input.submittedOn < earliest) {
       throw new HttpError(400, `HMRC doesn’t take this update until ${formatDisplayDate(earliest)}, 10 days before the quarter ends.`);
     }
+    // A new date means figures submitted again, so they're saved afresh. The same date is a correction to the record,
+    // such as its reference, and changing that doesn't say HMRC has the figures now.
+    const existing = ctx.db
+      .prepare('SELECT submitted_on, sent_environment, recorded_payload FROM mtd_submissions WHERE tax_year_id = ? AND quarter = ?')
+      .get(taxYearId, quarter) as Pick<SubmissionRow, 'submitted_on' | 'sent_environment' | 'recorded_payload'> | undefined;
+    const quarters = quarterSummaries(ctx.db, taxYear, ctx.config.hmrc.environment);
+    const q = quarters[quarter - 1];
+    const recordedPayload =
+      existing && !existing.sent_environment && existing.submitted_on === input.submittedOn
+        ? existing.recorded_payload
+        : JSON.stringify(mtdPayload(q.cumulative, taxYear.startDate, q.endDate, mtdExpensesSent(taxYear, quarters)));
     ctx.db
       .prepare(
-        `INSERT INTO mtd_submissions (tax_year_id, quarter, submitted_on, reference) VALUES (?, ?, ?, ?)
+        `INSERT INTO mtd_submissions (tax_year_id, quarter, submitted_on, reference, recorded_payload) VALUES (?, ?, ?, ?, ?)
          ON CONFLICT (tax_year_id, quarter) DO UPDATE SET submitted_on = excluded.submitted_on, reference = excluded.reference,
+           recorded_payload = excluded.recorded_payload,
            sent_by = NULL, sent_at = NULL, sent_environment = NULL, correlation_id = NULL, sent_payload = NULL`,
       )
-      .run(taxYearId, quarter, input.submittedOn, input.reference);
+      .run(taxYearId, quarter, input.submittedOn, input.reference, recordedPayload);
     res.json(getSubmissions(ctx.db, taxYearId, ctx.config.hmrc.environment).get(quarter)!.submission);
   });
 

@@ -303,6 +303,16 @@ WHERE description IS NOT NULL AND description <> '';
 ALTER TABLE expenses DROP COLUMN description;
 `,
   },
+  // The figures when a quarter was recorded by hand, and a year's Self Assessment return being filed
+  // with its figures then, so the app can tell when they've changed since.
+  {
+    version: 17,
+    sql: `
+ALTER TABLE mtd_submissions ADD COLUMN recorded_payload TEXT;
+ALTER TABLE tax_years ADD COLUMN sa_filed_on TEXT;
+ALTER TABLE tax_years ADD COLUMN sa_filed_figures TEXT;
+`,
+  },
 ];
 
 export const CURRENT_SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;

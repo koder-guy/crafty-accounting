@@ -1,3 +1,4 @@
+import { isDeepStrictEqual } from 'node:util';
 import { Router } from 'express';
 import { z } from 'zod';
 import {
@@ -7,6 +8,7 @@ import {
   comparisonCutoff,
   reportRangeSchema,
   estimateTax,
+  sa103sFigures,
   sameDateInTaxYear,
   selfAssessmentDeadline,
   startYearFromLabel,
@@ -45,6 +47,12 @@ import {
   yearEntries,
   type Db,
 } from '../repo';
+
+/** A tax year's figures for the Self Assessment short pages. */
+export function yearEndSummary(db: Db, taxYear: TaxYear) {
+  const { incomes, lines } = yearEntries(db, taxYear.id);
+  return buildSelfAssessmentSummary(buildMtdPeriodSummary(incomes, lines), taxYear.label);
+}
 
 interface Entry {
   categoryId: number;
@@ -228,13 +236,17 @@ export function reportsRouter(ctx: AppContext): Router {
     const taxYear = getTaxYear(db, taxYearId);
     if (!taxYear) throw new HttpError(404, 'Tax year not found');
 
-    const { incomes, lines } = yearEntries(db, taxYearId);
+    const summary = yearEndSummary(db, taxYear);
+    const { sa_filed_figures: filed } = db.prepare('SELECT sa_filed_figures FROM tax_years WHERE id = ?').get(taxYearId) as {
+      sa_filed_figures: string | null;
+    };
 
     const response: YearEndSummaryResponse = {
       taxYear,
       mileageCheck: mileageCheck(db, taxYearId),
       filingDeadline: selfAssessmentDeadline(startYearFromLabel(taxYear.label)!),
-      summary: buildSelfAssessmentSummary(buildMtdPeriodSummary(incomes, lines), taxYear.label),
+      summary,
+      filedFiguresChanged: filed !== null && !isDeepStrictEqual(JSON.parse(filed), sa103sFigures(summary)),
     };
     res.json(response);
   });

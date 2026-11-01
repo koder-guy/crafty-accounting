@@ -1190,7 +1190,7 @@ describe('MTD quarters', () => {
     await agent.put(`/api/mtd/quarters/${yearId}/1/submission`).send({ submittedOn: '2025-08-01', reference: 'ABC123' }).expect(200);
     await agent.put(`/api/mtd/quarters/${yearId}/1/submission`).send({ submittedOn: '2025-08-02' }).expect(200);
     let { body } = await agent.get('/api/mtd/quarters').query({ taxYearId: yearId });
-    expect(body.quarters[0].submission).toEqual({ submittedOn: '2025-08-02', reference: null, sent: null });
+    expect(body.quarters[0].submission).toMatchObject({ submittedOn: '2025-08-02', reference: null, sent: null });
 
     await agent.put(`/api/mtd/quarters/${yearId}/5/submission`).send({ submittedOn: '2025-08-02' }).expect(404);
     // Q2 ends 5 Oct, so HMRC takes it from 25 Sep at the earliest.
@@ -1230,6 +1230,94 @@ describe('MTD quarters', () => {
     await agent.delete(`/api/mtd/quarters/${yearId}/1/submission`).expect(204);
     expect((await back().expect(200)).body.taxYears[0].submissionMethod).toBe('self_assessment');
     await agent.put(`/api/tax-years/${yearId}/submission-method`).send({ submissionMethod: 'other' }).expect(400);
+  });
+
+  it('saves the figures when a quarter is recorded by hand, until a new date records them again', async () => {
+    const yearId = await createYear(2025, 'mtd');
+    await agent.post('/api/incomes').send(income(yearId, { date: '2025-06-14', amountPence: 10000 })).expect(201);
+    const recorded = async () => (await agent.get('/api/mtd/quarters').query({ taxYearId: yearId })).body.quarters[0].submission;
+    const put = (send: object) => agent.put(`/api/mtd/quarters/${yearId}/1/submission`).send(send).expect(200);
+
+    await put({ submittedOn: '2025-08-01' });
+    expect((await recorded()).recordedPayload.periodIncome.turnover).toBe(100);
+
+    await agent.post('/api/incomes').send(income(yearId, { date: '2025-06-15', amountPence: 5000 })).expect(201);
+    await put({ submittedOn: '2025-08-01', reference: 'ABC' });
+    expect((await recorded()).recordedPayload.periodIncome.turnover).toBe(100);
+
+    await put({ submittedOn: '2025-08-02', reference: 'ABC' });
+    expect((await recorded()).recordedPayload.periodIncome.turnover).toBe(150);
+  });
+
+  it('upgrades a backup made before figures were saved with records', async () => {
+    const old = new Database(':memory:');
+    old.exec('CREATE TABLE schema_migrations (version INTEGER PRIMARY KEY, applied_at TEXT)');
+    for (const migration of MIGRATIONS.filter((m) => m.version <= 16)) {
+      old.exec(migration.sql);
+      old.prepare('INSERT INTO schema_migrations (version) VALUES (?)').run(migration.version);
+    }
+    seedCategories(old);
+    old.prepare("INSERT INTO tax_years (label, start_date, end_date, submission_method) VALUES ('2025-26', '2025-04-06', '2026-04-05', 'mtd')").run();
+    old.prepare("INSERT INTO mtd_submissions (tax_year_id, quarter, submitted_on) VALUES (1, 1, '2025-08-01')").run();
+    const dump = dumpSql(old);
+    old.close();
+
+    await agent.post('/api/restore').attach('file', Buffer.from(dump), 'backup.sql').expect(200);
+    expect((await agent.get('/api/tax-years')).body.taxYears[0].saFiledOn).toBeNull();
+    const { body } = await agent.get('/api/mtd/quarters').query({ taxYearId: 1 });
+    expect(body.quarters[0].submission.recordedPayload).toBeNull();
+    expect((await agent.get('/api/reports/year-end').query({ taxYearId: 1 })).body.filedFiguresChanged).toBe(false);
+  });
+});
+
+describe('filing a Self Assessment return', () => {
+  const filed = (yearId: number, filedOn: string) => agent.put(`/api/tax-years/${yearId}/self-assessment-filed`).send({ filedOn });
+  const changed = async (yearId: number) => (await agent.get('/api/reports/year-end').query({ taxYearId: yearId })).body.filedFiguresChanged;
+
+  it('notices when the figures change after filing, until it is filed again', async () => {
+    const yearId = await createYear(2025);
+    await agent.post('/api/incomes').send(income(yearId, { date: '2025-06-14', amountPence: 10000 })).expect(201);
+    expect(await changed(yearId)).toBe(false);
+
+    const { body } = await filed(yearId, '2026-06-01').expect(200);
+    expect(body.taxYears[0].saFiledOn).toBe('2026-06-01');
+    expect(await changed(yearId)).toBe(false);
+
+    await agent.post('/api/incomes').send(income(yearId, { date: '2025-06-15', amountPence: 5000 })).expect(201);
+    expect(await changed(yearId)).toBe(true);
+
+    // The same date is no new filing; a new one is the amended return.
+    await filed(yearId, '2026-06-01').expect(200);
+    expect(await changed(yearId)).toBe(true);
+    await filed(yearId, '2026-07-01').expect(200);
+    expect(await changed(yearId)).toBe(false);
+
+    const cleared = await agent.delete(`/api/tax-years/${yearId}/self-assessment-filed`).expect(200);
+    expect(cleared.body.taxYears[0].saFiledOn).toBeNull();
+  });
+
+  it('refuses a return before the year ends, or for an MTD year', async () => {
+    const yearId = await createYear(2025);
+    expect((await filed(yearId, '2026-04-05').expect(400)).body.error).toMatch(/runs until 5 Apr 2026/);
+    const mtdYear = await createYear(2026, 'mtd');
+    expect((await filed(mtdYear, '2027-06-01').expect(409)).body.error).toMatch(/set to Making Tax Digital/);
+  });
+
+  it('keeps a year with a filed return on Self Assessment', async () => {
+    const yearId = await createYear(2025);
+    await filed(yearId, '2026-06-01').expect(200);
+    const to = () => agent.put(`/api/tax-years/${yearId}/submission-method`).send({ submissionMethod: 'mtd' });
+    expect((await to().expect(409)).body.error).toMatch(/recorded as filed/);
+    await agent.delete(`/api/tax-years/${yearId}/self-assessment-filed`).expect(200);
+    await to().expect(200);
+  });
+
+  it('is refused for a read-only person', async () => {
+    const yearId = await createYear(2025);
+    await agent.post('/api/users').send({ name: 'Viewer', password: 'viewer-password', role: 'viewer' }).expect(201);
+    const viewer = request.agent(createApp(ctx));
+    await viewer.post('/api/auth/login').send({ name: 'Viewer', password: 'viewer-password' }).expect(200);
+    await viewer.put(`/api/tax-years/${yearId}/self-assessment-filed`).send({ filedOn: '2026-06-01' }).expect(403);
   });
 });
 
@@ -2122,7 +2210,7 @@ describe('HMRC connection', () => {
 
       // Not a live record, so it can be replaced by hand.
       const res = await agent.put(`/api/mtd/quarters/${taxYearId}/2/submission`).send({ submittedOn: '2026-11-01' }).expect(200);
-      expect(res.body).toEqual({ submittedOn: '2026-11-01', reference: null, sent: null });
+      expect(res.body).toMatchObject({ submittedOn: '2026-11-01', reference: null, sent: null });
       const after = (await agent.get('/api/mtd/quarters').query({ taxYearId })).body.quarters[1];
       expect(after.otherServiceSend).toBeNull();
 
@@ -2454,7 +2542,7 @@ describe('HMRC connection', () => {
     ]);
     expect((await agent.get('/api/hmrc')).body.connection).toMatchObject({ connectedBy: NAME });
     const quarters = (await agent.get('/api/mtd/quarters').query({ taxYearId: 1 })).body;
-    expect(quarters.quarters[0].submission).toEqual({ submittedOn: '2025-08-01', reference: 'ABC', sent: null });
+    expect(quarters.quarters[0].submission).toEqual({ submittedOn: '2025-08-01', reference: 'ABC', sent: null, recordedPayload: null });
     expect(quarters.finalDeclaration).toBeNull();
     expect(quarters.amendments).toEqual([]);
   });

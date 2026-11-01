@@ -2,9 +2,12 @@ import { Router, type Request } from 'express';
 import {
   createTaxYearSchema,
   displayTaxYear,
+  formatDisplayDate,
   setActiveTaxYearSchema,
   mtdExpensesSchema,
   MTD_FIRST_SEND_YEAR,
+  sa103sFigures,
+  selfAssessmentFiledSchema,
   startYearFromLabel,
   submissionMethodSchema,
   taxSettingsSchema,
@@ -18,6 +21,7 @@ import { HttpError, parseId, parseWith } from '../http';
 import { getTaxYear, listTaxYears, resolveActiveTaxYearId } from '../repo';
 import { getUser } from '../users';
 import { mtdExpensesSent, mtdUpdateCounts, quarterSummaries } from './mtd';
+import { yearEndSummary } from './reports';
 
 export function taxYearsRouter(ctx: AppContext): Router {
   const router = Router();
@@ -87,7 +91,12 @@ export function taxYearsRouter(ctx: AppContext): Router {
     const year = getTaxYear(ctx.db, id);
     if (!year) throw new HttpError(404, 'Tax year not found');
     const { submissionMethod } = parseWith(submissionMethodSchema, req.body);
-    if (submissionMethod === 'mtd' && year.submissionMethod !== 'mtd') refuseMtdBeforeItStarted(startYearFromLabel(year.label)!);
+    if (submissionMethod === 'mtd' && year.submissionMethod !== 'mtd') {
+      refuseMtdBeforeItStarted(startYearFromLabel(year.label)!);
+      if (year.saFiledOn) {
+        throw new HttpError(409, `${displayTaxYear(year.label)} has its Self Assessment return recorded as filed, so it stays Self Assessment.`);
+      }
+    }
     if (submissionMethod === 'self_assessment' && year.submissionMethod === 'mtd') {
       const { recorded, sent } = updates(id);
       if (recorded + sent > 0) {
@@ -104,6 +113,35 @@ export function taxYearsRouter(ctx: AppContext): Router {
     if (!getTaxYear(ctx.db, id)) throw new HttpError(404, 'Tax year not found');
     const { mtdExpenses } = parseWith(mtdExpensesSchema, req.body);
     ctx.db.prepare('UPDATE tax_years SET mtd_expenses = ? WHERE id = ?').run(mtdExpenses, id);
+    res.json(respond(req));
+  });
+
+  /**
+   * Records that the year's return has been filed, outside the app. A new date means figures filed again (an amendment),
+   * so they're saved afresh; the same date keeps the figures already saved.
+   */
+  router.put('/:id/self-assessment-filed', (req, res) => {
+    const id = parseId(req.params.id);
+    const year = getTaxYear(ctx.db, id);
+    if (!year) throw new HttpError(404, 'Tax year not found');
+    if (year.submissionMethod !== 'self_assessment') {
+      throw new HttpError(409, `${displayTaxYear(year.label)} is set to Making Tax Digital, so it has no Self Assessment return to record.`);
+    }
+    const { filedOn } = parseWith(selfAssessmentFiledSchema, req.body);
+    if (filedOn <= year.endDate) {
+      throw new HttpError(400, `The ${displayTaxYear(year.label)} tax year runs until ${formatDisplayDate(year.endDate)}, so its return can’t be filed until after that.`);
+    }
+    if (filedOn !== year.saFiledOn) {
+      const figures = JSON.stringify(sa103sFigures(yearEndSummary(ctx.db, year)));
+      ctx.db.prepare('UPDATE tax_years SET sa_filed_on = ?, sa_filed_figures = ? WHERE id = ?').run(filedOn, figures, id);
+    }
+    res.json(respond(req));
+  });
+
+  router.delete('/:id/self-assessment-filed', (req, res) => {
+    const id = parseId(req.params.id);
+    if (!getTaxYear(ctx.db, id)) throw new HttpError(404, 'Tax year not found');
+    ctx.db.prepare('UPDATE tax_years SET sa_filed_on = NULL, sa_filed_figures = NULL WHERE id = ?').run(id);
     res.json(respond(req));
   });
 

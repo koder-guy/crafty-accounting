@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router';
 import { ArrowDownRight, Plus } from 'lucide-react';
 import { formatDisplayDate, formatGBP, shortCategoryName, type Income } from '@crafty/shared';
 import { ConfirmDialog } from '../components/ConfirmDialog';
-import { SentQuarterNotice } from '../components/SentQuarterNotice';
+import { SubmittedFiguresNotice } from '../components/SubmittedFiguresNotice';
 import { NoTaxYear } from '../components/NoTaxYear';
 import { PageBody, PageHeader } from '../components/PageHeader';
 import {
@@ -179,7 +179,7 @@ export function IncomingList() {
             <p>This can't be undone.</p>
           </>
         )}
-        <SentQuarterNotice taxYearId={toDelete?.taxYearId} dates={[toDelete?.date]} />
+        <SubmittedFiguresNotice taxYearId={toDelete?.taxYearId} dates={[toDelete?.date]} />
       </ConfirmDialog>
     </>
   );

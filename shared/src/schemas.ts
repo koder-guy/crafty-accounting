@@ -129,6 +129,8 @@ export const mtdSubmissionSchema = z.object({
   reference: optionalText(100),
 });
 
+export const selfAssessmentFiledSchema = z.object({ filedOn: isoDate });
+
 export const autoBackupSettingsSchema = z.object({
   enabled: z.boolean(),
   time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Enter a time like 02:00'),

@@ -13,7 +13,7 @@ import {
 import { ChangedElsewhere, recordedBy } from '../../components/FormShell';
 import { NoTaxYear } from '../../components/NoTaxYear';
 import { SectionHeading } from '../../components/SectionLayout';
-import { SentQuarterNotice } from '../../components/SentQuarterNotice';
+import { SubmittedFiguresNotice } from '../../components/SubmittedFiguresNotice';
 import { ExportCsvButton } from '../../components/transactions';
 import { Alert, Button, Card, CardHeader, Spinner } from '../../components/ui';
 import { useActiveTaxYear, useCanEdit, useSaveUseOfHome, useUseOfHome } from '../../lib/queries';
@@ -170,7 +170,7 @@ function HoursForm({ taxYearId, data }: { taxYearId: number; data: UseOfHomeResp
               </Button>
             </div>
           )}
-          <SentQuarterNotice className="px-5 pb-5 sm:px-6" taxYearId={taxYearId} dates={changedDates} />
+          <SubmittedFiguresNotice className="px-5 pb-5 sm:px-6" taxYearId={taxYearId} dates={changedDates} />
           {save.error && (
             <div className="px-5 pb-5 sm:px-6">
               <Alert>{save.error.message}</Alert>

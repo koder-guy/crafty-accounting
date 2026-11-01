@@ -250,7 +250,9 @@ function YearMethod({
 }) {
   const { recorded, sent } = year.mtdUpdates;
   // Recorded ones count too: they stand for updates sent to HMRC with other software.
-  const locked = year.submissionMethod === 'mtd' && recorded + sent > 0;
+  const hasUpdates = year.submissionMethod === 'mtd' && recorded + sent > 0;
+  const filed = year.saFiledOn !== null;
+  const locked = hasUpdates || filed;
   // A year from before MTD that's somehow already in it can still move back, so it keeps the choice.
   const beforeMtd = year.submissionMethod === 'self_assessment' && startYearFromLabel(year.label)! < MTD_FIRST_SEND_YEAR;
   const choice = canEdit && !locked && !beforeMtd;
@@ -279,8 +281,9 @@ function YearMethod({
           {SUBMISSION_METHOD_LABELS[year.submissionMethod]}
         </span>
       )}
-      {locked && <p className="w-full text-xs text-faint">It has quarterly updates, so it stays Making Tax Digital.</p>}
-      {beforeMtd && canEdit && <p className="w-full text-xs text-faint">{MTD_NOT_STARTED}</p>}
+      {hasUpdates && <p className="w-full text-xs text-faint">It has quarterly updates, so it stays Making Tax Digital.</p>}
+      {filed && <p className="w-full text-xs text-faint">Its return is recorded as filed, so it stays Self Assessment.</p>}
+      {beforeMtd && canEdit && !filed && <p className="w-full text-xs text-faint">{MTD_NOT_STARTED}</p>}
     </div>
   );
 }
