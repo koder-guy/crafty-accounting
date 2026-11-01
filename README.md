@@ -8,7 +8,7 @@ Self-hosted bookkeeping for UK sole traders on the cash basis. Keep your income 
 - **Incoming and outgoing**: income with a category and payment method (cash, card or bank transfer); purchases split into line items, each with a category and optionally marked disallowable, with the transaction total added up from them. Attach up to 10 documents (PDFs or images) to each, or take a photo with the device's camera (a computer's camera needs [HTTPS](#https); a phone's works either way). Photos are saved as JPEGs of 2 MB or less, and you can rename any new document before saving. **Duplicate** starts a new entry from an existing one, for things that repeat.
 - **Lists** can be searched, filtered, sorted and exported to CSV.
 - **Simplified expenses**:
-  - **Mileage** at HMRC's rates (cars and vans 45p a mile for the first 10,000 miles in a tax year and 25p after, motorcycles 24p, bicycles 20p). It warns if a year also has actual vehicle costs, which HMRC doesn't allow alongside mileage.
+  - **Mileage** at HMRC's rates (for each tax year; for 2026/27, cars and vans 55p a mile for the first 10,000 miles and 25p after, motorcycles 24p, bicycles 20p). It warns if a year also has actual vehicle costs, which HMRC doesn't allow alongside mileage.
   - **Use of Home** at HMRC's flat rate, from the hours worked at home each month: £10 for 25 to 50 hours, £18 for 51 to 100, £26 for 101 or more.
   - Both claims count in every total: dashboard, reports, MTD figures and the SA103S.
 - **Custom categories**, such as "Printer filament", each mapped to a standard MTD category and counted towards it.

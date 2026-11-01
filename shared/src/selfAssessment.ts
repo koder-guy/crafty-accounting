@@ -23,7 +23,6 @@ export interface Sa103sForm {
   netProfit: Sa103sLine;
   netLoss: Sa103sLine;
   tradingAllowanceBox: string;
-  tradingAllowancePence: number;
   /** Turnover at or above this means the full SA103F form is needed. */
   turnoverLimitPence: number;
 }
@@ -52,7 +51,6 @@ const FORM_2024_25: Sa103sForm = {
   netProfit: { box: '21', label: 'Net profit – if your business income is more than your expenses (if box 9 + box 10 minus box 20 is positive)' },
   netLoss: { box: '22', label: 'Net loss – if your expenses exceed your business income (if box 20 minus (box 9 + box 10) is positive)' },
   tradingAllowanceBox: '10.1',
-  tradingAllowancePence: 100_000,
   turnoverLimitPence: 9_000_000,
 };
 
@@ -68,6 +66,30 @@ export function sa103sFormFor(label: string): { form: Sa103sForm; formLabel: str
   const known = Object.keys(SA103S_FORMS).sort();
   const formLabel = label < known[0] ? known[0] : known[known.length - 1];
   return { form: SA103S_FORMS[formLabel], formLabel, assumed: true };
+}
+
+export interface TradingAllowance {
+  pence: number;
+  /** Shown beside the allowance while it has been announced but isn't law. */
+  provisional?: string;
+}
+
+/** The allowance by the tax year it starts from; each lasts until the next. It's a tax rule, so it changes before that year's form appears. */
+export const TRADING_ALLOWANCES: Record<string, TradingAllowance> = {
+  '2017-18': { pence: 100_000 },
+  '2027-28': {
+    pence: 300_000,
+    provisional: 'The £3,000 allowance from 6 April 2027 was announced in Budget 2026 and depends on Finance Bill 2026-27 becoming law.',
+  },
+};
+
+/** The trading allowance in force for a tax year. */
+export function tradingAllowanceFor(label: string): TradingAllowance {
+  const from = Object.keys(TRADING_ALLOWANCES)
+    .sort()
+    .filter((start) => start <= label)
+    .at(-1);
+  return TRADING_ALLOWANCES[from ?? '2017-18'];
 }
 
 /** MTD categories that can never be claimed, so they never go in a box. */
@@ -119,11 +141,13 @@ export interface SelfAssessmentSummary {
   /** Categories with amounts that are worth checking. */
   checks: (ExcludedAmount & { box: string })[];
   tradingAllowance: {
+    allowancePence: number;
+    provisional?: string;
     profitWithExpensesPence: number;
     profitWithAllowancePence: number;
     /** Which gives the lower taxable profit. */
     better: 'expenses' | 'allowance' | 'same';
-    /** Income of £1,000 or less may not need reporting at all. */
+    /** Income within the allowance may not need reporting at all. */
     incomeWithinAllowance: boolean;
   };
   /** Turnover at or above the limit means the full SA103F form is needed. */
@@ -163,7 +187,8 @@ export function buildSelfAssessmentSummary(mtd: MtdPeriodSummary, taxYearLabel: 
     .filter((e) => e.amountPence > 0);
 
   const profitWithExpensesPence = Math.max(0, net);
-  const profitWithAllowancePence = Math.max(0, totalIncomePence - form.tradingAllowancePence);
+  const allowance = tradingAllowanceFor(taxYearLabel);
+  const profitWithAllowancePence = Math.max(0, totalIncomePence - allowance.pence);
 
   return {
     form: { ...formDetails, label: formLabel, assumed },
@@ -177,6 +202,8 @@ export function buildSelfAssessmentSummary(mtd: MtdPeriodSummary, taxYearLabel: 
     notAllowable,
     checks,
     tradingAllowance: {
+      allowancePence: allowance.pence,
+      provisional: allowance.provisional,
       profitWithExpensesPence,
       profitWithAllowancePence,
       better:
@@ -185,7 +212,7 @@ export function buildSelfAssessmentSummary(mtd: MtdPeriodSummary, taxYearLabel: 
           : profitWithAllowancePence > profitWithExpensesPence
             ? 'expenses'
             : 'same',
-      incomeWithinAllowance: totalIncomePence <= form.tradingAllowancePence,
+      incomeWithinAllowance: totalIncomePence <= allowance.pence,
     },
     turnoverOverShortFormLimit: (mtd.periodIncome.turnover ?? 0) >= form.turnoverLimitPence,
   };

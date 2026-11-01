@@ -21,17 +21,50 @@ export const MILEAGE_HMRC_CODE = 'carVanTravelExpenses';
  * rate for the first 10,000 business miles in a tax year (all cars and vans
  * together), then the lower rate.
  */
-export const MILEAGE_RATES = {
+export interface MileageRates {
+  car: { firstPence: number; afterPence: number; thresholdMiles: number };
+  motorcycle: number;
+  bicycle: number;
+  /** Shown beside the rates while they've been announced but aren't in HMRC's published rates. */
+  provisional?: string;
+}
+
+const RATES_FROM_2011_12: MileageRates = {
   car: { firstPence: 45, afterPence: 25, thresholdMiles: 10_000 },
   motorcycle: 24,
   bicycle: 20,
-} as const;
-
-export const MILEAGE_RATE_LABELS: Record<Vehicle, string> = {
-  car: '45p a mile for the first 10,000 miles in the tax year, then 25p',
-  motorcycle: '24p a mile',
-  bicycle: '20p a mile',
 };
+
+const RATES_FROM_2026_27: MileageRates = {
+  ...RATES_FROM_2011_12,
+  car: { ...RATES_FROM_2011_12.car, firstPence: 55 },
+};
+
+/** Rates by the tax year they start from; each lasts until the next. If HMRC changes them, add the new tax year. */
+export const MILEAGE_RATES: Record<string, MileageRates> = {
+  '2011-12': RATES_FROM_2011_12,
+  '2026-27': RATES_FROM_2026_27,
+  '2027-28': {
+    ...RATES_FROM_2026_27,
+    car: { ...RATES_FROM_2026_27.car, afterPence: 35 },
+    provisional: "The 35p rate from 6 April 2027 was announced in Budget 2026 and isn't in HMRC's published rates yet.",
+  },
+};
+
+/** The rates in force for a tax year. */
+export function mileageRatesFor(label: string): MileageRates {
+  const from = Object.keys(MILEAGE_RATES)
+    .sort()
+    .filter((start) => start <= label)
+    .at(-1);
+  return MILEAGE_RATES[from ?? '2011-12'];
+}
+
+export const mileageRateLabels = (r: MileageRates): Record<Vehicle, string> => ({
+  car: `${r.car.firstPence}p a mile for the first ${r.car.thresholdMiles.toLocaleString('en-GB')} miles in the tax year, then ${r.car.afterPence}p`,
+  motorcycle: `${r.motorcycle}p a mile`,
+  bicycle: `${r.bicycle}p a mile`,
+});
 
 export interface MileageTripForClaim {
   id: number;
@@ -44,8 +77,9 @@ export interface MileageTripForClaim {
  * The claim in pence for each trip, keyed by trip id. Pass every trip in one
  * tax year: the 10,000-mile car and van threshold is counted in date order.
  */
-export function mileageClaims(trips: MileageTripForClaim[]): Map<number, number> {
-  const threshold = MILEAGE_RATES.car.thresholdMiles * 10;
+export function mileageClaims(trips: MileageTripForClaim[], taxYearLabel: string): Map<number, number> {
+  const rates = mileageRatesFor(taxYearLabel);
+  const threshold = rates.car.thresholdMiles * 10;
   let carTenths = 0;
   const claims = new Map<number, number>();
   const ordered = [...trips].sort((a, b) => (a.date === b.date ? a.id - b.id : a.date < b.date ? -1 : 1));
@@ -53,10 +87,10 @@ export function mileageClaims(trips: MileageTripForClaim[]): Map<number, number>
     let tenthPence: number;
     if (trip.vehicle === 'car') {
       const atFirstRate = Math.max(0, Math.min(trip.distanceTenths, threshold - carTenths));
-      tenthPence = atFirstRate * MILEAGE_RATES.car.firstPence + (trip.distanceTenths - atFirstRate) * MILEAGE_RATES.car.afterPence;
+      tenthPence = atFirstRate * rates.car.firstPence + (trip.distanceTenths - atFirstRate) * rates.car.afterPence;
       carTenths += trip.distanceTenths;
     } else {
-      tenthPence = trip.distanceTenths * MILEAGE_RATES[trip.vehicle];
+      tenthPence = trip.distanceTenths * rates[trip.vehicle];
     }
     claims.set(trip.id, Math.round(tenthPence / 10));
   }

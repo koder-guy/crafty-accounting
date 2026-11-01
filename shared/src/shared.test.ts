@@ -19,6 +19,7 @@ import {
   isDateInTaxYear,
   isValidIsoDate,
   mileageClaims,
+  mileageRatesFor,
   mtdEarliestSendDate,
   mtdExpensesToSend,
   mtdPayload,
@@ -279,6 +280,18 @@ describe('Self Assessment (SA103S) summary', () => {
     expect(big.turnoverOverShortFormLimit).toBe(true);
   });
 
+  it('uses the trading allowance for the tax year', () => {
+    const summary = (label: string) =>
+      buildSelfAssessmentSummary(
+        buildMtdPeriodSummary([{ hmrcCode: 'turnover', amountPence: 500_000 }], [{ hmrcCode: 'costOfGoods', amountPence: 200_000, disallowable: false }]),
+        label,
+      ).tradingAllowance;
+    expect(summary('2026-27')).toMatchObject({ allowancePence: 100_000, better: 'expenses', profitWithAllowancePence: 400_000 });
+    expect(summary('2027-28')).toMatchObject({ allowancePence: 300_000, better: 'allowance', profitWithAllowancePence: 200_000 });
+    expect(summary('2027-28').provisional).toBeTruthy();
+    expect(summary('2026-27').provisional).toBeUndefined();
+  });
+
   it('uses each year\'s form, and says when it has to assume one', () => {
     expect(sa103sFormFor('2025-26')).toMatchObject({ formLabel: '2025-26', assumed: false });
     expect(sa103sFormFor('2023-24')).toMatchObject({ formLabel: '2024-25', assumed: true });
@@ -335,16 +348,25 @@ describe('mileage', () => {
       trip(3, '2025-09-01', 'car', 100),
       trip(1, '2025-05-01', 'car', 9_950),
       trip(2, '2025-06-01', 'car', 100),
-    ]);
+    ], '2025-26');
     expect(claims.get(1)).toBe(447_750); // 9,950 × 45p
     expect(claims.get(2)).toBe(50 * 45 + 50 * 25); // splits across the threshold
     expect(claims.get(3)).toBe(100 * 25);
   });
 
   it('uses the flat rates for motorcycles and bicycles, which do not count towards the car threshold', () => {
-    const claims = mileageClaims([trip(1, '2025-05-01', 'motorcycle', 10), trip(2, '2025-05-01', 'bicycle', 10), trip(3, '2025-05-02', 'car', 10)]);
+    const claims = mileageClaims([trip(1, '2025-05-01', 'motorcycle', 10), trip(2, '2025-05-01', 'bicycle', 10), trip(3, '2025-05-02', 'car', 10)], '2025-26');
     expect([claims.get(1), claims.get(2), claims.get(3)]).toEqual([240, 200, 450]);
-    expect(mileageClaims([{ id: 1, date: '2025-05-01', vehicle: 'car', distanceTenths: 235 }]).get(1)).toBe(1058); // 23.5 × 45p, rounded
+    expect(mileageClaims([{ id: 1, date: '2025-05-01', vehicle: 'car', distanceTenths: 235 }], '2025-26').get(1)).toBe(1058); // 23.5 × 45p, rounded
+  });
+
+  it('uses the rates for the tax year', () => {
+    const claims = (label: string) => mileageClaims([trip(1, '2026-05-01', 'car', 10_000), trip(2, '2026-06-01', 'car', 100)], label);
+    expect([claims('2025-26').get(1), claims('2025-26').get(2)]).toEqual([450_000, 2_500]);
+    expect([claims('2026-27').get(1), claims('2026-27').get(2)]).toEqual([550_000, 2_500]);
+    expect([claims('2027-28').get(1), claims('2027-28').get(2)]).toEqual([550_000, 3_500]);
+    expect(mileageRatesFor('2030-31').car.afterPence).toBe(35);
+    expect(mileageRatesFor('2020-21').car.firstPence).toBe(45);
   });
 
   it('reads distances to one decimal place', () => {

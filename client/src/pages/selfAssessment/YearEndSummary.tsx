@@ -125,13 +125,13 @@ function NotOnForm({ data, names }: { data: YearEndSummaryResponse; names: Map<s
 
 function TradingAllowance({ data }: { data: YearEndSummaryResponse }) {
   const { form, tradingAllowance: t, expenseBoxes } = data.summary;
-  const allowance = whole(form.tradingAllowancePence);
+  const allowance = whole(t.allowancePence);
   return (
     <Card className="print:break-inside-avoid">
       <CardHeader icon={<Scale className="size-5 text-accent-soft" />} title="Trading allowance check" />
       <div className="space-y-4 px-5 pb-6 text-sm sm:px-6">
         <p className="text-muted">
-          Instead of claiming expenses you can deduct the {allowance} trading allowance from your income (box {form.tradingAllowanceBox}). You can't do both.
+          Instead of claiming expenses you can deduct the {allowance} trading allowance from your income (box {form.tradingAllowanceBox}). You can't do both. {t.provisional}
         </p>
         <div className="grid gap-3 sm:grid-cols-2">
           <div className={`rounded-lg border p-4 ${t.better === 'expenses' ? 'border-ok/50 bg-ok/10' : 'border-line'}`}>

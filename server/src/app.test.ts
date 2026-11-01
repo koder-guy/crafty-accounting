@@ -812,6 +812,16 @@ describe('mileage', () => {
     expect((await agent.get('/api/mileage').query({ taxYearId: yearId })).body.trips[0].claimPence).toBe(200 * 25);
   });
 
+  it('claims at the rates for the tax year the trip belongs to', async () => {
+    const rate = async (startYear: number) => {
+      const yearId = await createYear(startYear);
+      const trip10Miles = trip(yearId, { date: `${startYear}-05-01`, distanceTenths: 100 });
+      return (await agent.post('/api/mileage').send(trip10Miles).expect(201)).body.claimPence;
+    };
+    expect(await rate(2025)).toBe(450);
+    expect(await rate(2026)).toBe(550);
+  });
+
   it('counts claims as car, van and travel expenses in every set of figures', async () => {
     const yearId = await createYear();
     await agent.post('/api/incomes').send(income(yearId)).expect(201);

@@ -5,8 +5,8 @@ import {
   formatGBP,
   formatMiles,
   isDateInTaxYear,
-  MILEAGE_RATE_LABELS,
-  MILEAGE_RATES,
+  mileageRateLabels,
+  mileageRatesFor,
   parseMilesToTenths,
   tenthsToMiles,
   todayIso,
@@ -103,7 +103,7 @@ function TripForm({
             onChange={(e) => setMiles(e.target.value)}
           />
         </Field>
-        <Field label="Vehicle" htmlFor="trip-vehicle" className="sm:col-span-2" hint={MILEAGE_RATE_LABELS[vehicle]}>
+        <Field label="Vehicle" htmlFor="trip-vehicle" className="sm:col-span-2" hint={mileageRateLabels(mileageRatesFor(taxYear.label))[vehicle]}>
           <select id="trip-vehicle" className="field" value={vehicle} onChange={(e) => setVehicle(e.target.value as Vehicle)}>
             {VEHICLES.map((v) => (
               <option key={v} value={v}>
@@ -181,7 +181,8 @@ export function Mileage() {
 
   // If someone else saves the trip being edited, offer their version rather than overwriting it.
   const latest = editing ? data?.trips.find((t) => t.id === editing.id) : undefined;
-  const carMilesLeft = data ? Math.max(0, MILEAGE_RATES.car.thresholdMiles * 10 - data.totals.carDistanceTenths) : 0;
+  const rates = mileageRatesFor(taxYear?.label ?? '');
+  const carMilesLeft = data ? Math.max(0, rates.car.thresholdMiles * 10 - data.totals.carDistanceTenths) : 0;
 
   return (
     <>
@@ -209,9 +210,9 @@ export function Mileage() {
                 <Stat label="Business miles" value={formatMiles(data.totals.distanceTenths)} sub={`${data.trips.length} trips this tax year`} />
                 <Stat label="Mileage claim" value={formatGBP(data.totals.claimPence)} sub="Counted as car, van and travel expenses" />
                 <Stat
-                  label="Left at 45p"
+                  label={`Left at ${rates.car.firstPence}p`}
                   value={formatMiles(carMilesLeft)}
-                  sub={carMilesLeft > 0 ? 'Car and van miles before the 25p rate' : 'Car and van miles are now claimed at 25p'}
+                  sub={carMilesLeft > 0 ? `Car and van miles before the ${rates.car.afterPence}p rate` : `Car and van miles are now claimed at ${rates.car.afterPence}p`}
                 />
               </div>
 
@@ -326,8 +327,9 @@ export function Mileage() {
 
               <p className="flex items-start gap-2 text-xs text-faint">
                 <Gauge className="mt-0.5 size-3.5 shrink-0" aria-hidden />
-                HMRC approved mileage rates: cars and vans 45p a mile for the first 10,000 business miles in a tax year and 25p after
-                that, motorcycles 24p and bicycles 20p. Claims are worked out in date order through the tax year.
+                HMRC approved mileage rates: cars and vans {rates.car.firstPence}p a mile for the first{' '}
+                {rates.car.thresholdMiles.toLocaleString('en-GB')} business miles in a tax year and {rates.car.afterPence}p after that, motorcycles{' '}
+                {rates.motorcycle}p and bicycles {rates.bicycle}p. Claims are worked out in date order through the tax year. {rates.provisional}
               </p>
             </>
           )}

@@ -378,9 +378,10 @@ export function listMileage(db: Db, taxYearIds?: number[]): MileageTrip[] {
   const byYear = new Map<number, Row[]>();
   for (const row of rows) byYear.set(row.tax_year_id, [...(byYear.get(row.tax_year_id) ?? []), row]);
   const claims = new Map<number, number>();
-  for (const yearRows of byYear.values()) {
+  for (const [taxYearId, yearRows] of byYear) {
     const yearClaims = mileageClaims(
       yearRows.map((r) => ({ id: r.id, date: r.date, vehicle: r.vehicle, distanceTenths: r.distance_tenths })),
+      getTaxYear(db, taxYearId)!.label,
     );
     for (const [id, pence] of yearClaims) claims.set(id, pence);
   }

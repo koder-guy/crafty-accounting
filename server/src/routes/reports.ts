@@ -130,7 +130,7 @@ export function buildTaxEstimate(db: Db, taxYear: TaxYear): TaxEstimateResponse 
     taxYear,
     estimate: estimateTax({ label: taxYear.label, profitPence, otherIncomePence: taxYear.otherIncomePence }),
     usesTradingAllowance,
-    tradingAllowancePence: summary.form.tradingAllowancePence,
+    tradingAllowancePence: summary.tradingAllowance.allowancePence,
     profitWithExpensesPence: summary.netProfitPence,
     netLossPence: summary.netLossPence,
     dueDates: taxPaymentDates(startYearFromLabel(taxYear.label)!),
