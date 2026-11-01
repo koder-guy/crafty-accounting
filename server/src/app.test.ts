@@ -1394,6 +1394,24 @@ describe('breakdown report', () => {
   });
 });
 
+describe('years before Making Tax Digital', () => {
+  it('can only go on a Self Assessment return', async () => {
+    await agent.post('/api/tax-years').send({ startYear: 2024, submissionMethod: 'mtd' }).expect(400);
+    const yearId = await createYear(2024);
+    await agent.put(`/api/tax-years/${yearId}/submission-method`).send({ submissionMethod: 'mtd' }).expect(400);
+    await agent.put(`/api/tax-years/${yearId}/submission-method`).send({ submissionMethod: 'self_assessment' }).expect(200);
+    await agent.post('/api/tax-years').send({ startYear: 2025, submissionMethod: 'mtd' }).expect(201);
+  });
+
+  it('can move back to Self Assessment if one is already in MTD', async () => {
+    const yearId = await createYear(2024);
+    ctx.db.prepare("UPDATE tax_years SET submission_method = 'mtd' WHERE id = ?").run(yearId);
+    await agent.put(`/api/tax-years/${yearId}/submission-method`).send({ submissionMethod: 'mtd' }).expect(200);
+    await agent.put(`/api/tax-years/${yearId}/submission-method`).send({ submissionMethod: 'self_assessment' }).expect(200);
+    await agent.put(`/api/tax-years/${yearId}/submission-method`).send({ submissionMethod: 'mtd' }).expect(400);
+  });
+});
+
 describe('year-end summary', () => {
   it('gives SA103S figures that agree with the MTD totals, including custom categories', async () => {
     const yearId = await createYear();

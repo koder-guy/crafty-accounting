@@ -4,6 +4,8 @@ import {
   displayTaxYear,
   setActiveTaxYearSchema,
   mtdExpensesSchema,
+  MTD_FIRST_SEND_YEAR,
+  startYearFromLabel,
   submissionMethodSchema,
   taxSettingsSchema,
   taxYearFromStartYear,
@@ -39,9 +41,14 @@ export function taxYearsRouter(ctx: AppContext): Router {
     res.json(respond(req));
   });
 
+  const refuseMtdBeforeItStarted = (startYear: number) => {
+    if (startYear < MTD_FIRST_SEND_YEAR) throw new HttpError(400, 'Making Tax Digital starts from the 2025/26 tax year.');
+  };
+
   router.post('/', (req, res) => {
     const { startYear, submissionMethod } = parseWith(createTaxYearSchema, req.body);
     const year = taxYearFromStartYear(startYear);
+    if (submissionMethod === 'mtd') refuseMtdBeforeItStarted(startYear);
     const db = ctx.db;
     if (db.prepare('SELECT 1 FROM tax_years WHERE label = ?').get(year.label)) {
       throw new HttpError(409, `Tax year ${year.label.replace('-', '/')} already exists`);
@@ -72,7 +79,7 @@ export function taxYearsRouter(ctx: AppContext): Router {
   });
 
   /**
-   * Self Assessment to MTD any time; back to Self Assessment only while the year has no quarterly
+   * Self Assessment to MTD any time from the first MTD year; back to Self Assessment only while the year has no quarterly
    * updates. Recorded ones count as well as sent ones: they stand for updates sent with other software.
    */
   router.put('/:id/submission-method', (req, res) => {
@@ -80,6 +87,7 @@ export function taxYearsRouter(ctx: AppContext): Router {
     const year = getTaxYear(ctx.db, id);
     if (!year) throw new HttpError(404, 'Tax year not found');
     const { submissionMethod } = parseWith(submissionMethodSchema, req.body);
+    if (submissionMethod === 'mtd' && year.submissionMethod !== 'mtd') refuseMtdBeforeItStarted(startYearFromLabel(year.label)!);
     if (submissionMethod === 'self_assessment' && year.submissionMethod === 'mtd') {
       const { recorded, sent } = updates(id);
       if (recorded + sent > 0) {
