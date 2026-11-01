@@ -263,8 +263,7 @@ export function Mileage() {
                   title="Trips"
                   action={
                     <p className="flex-1 text-xs text-muted">
-                      Each trip's miles × HMRC's approved rate, worked out in date order through the tax year. Cars and vans:{' '}
-                      {rates.car.firstPence}p a mile for the first {rates.car.thresholdMiles.toLocaleString('en-GB')} business miles, then{' '}
+                      Cars and vans: {rates.car.firstPence}p a mile for the first {rates.car.thresholdMiles.toLocaleString('en-GB')} business miles, then{' '}
                       {rates.car.afterPence}p. Motorcycles: {rates.motorcycle}p. Bicycles: {rates.bicycle}p. {rates.provisional}
                     </p>
                   }
