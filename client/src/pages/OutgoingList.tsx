@@ -134,7 +134,7 @@ export function OutgoingList() {
                             className={`cursor-pointer transition-colors hover:bg-surface-2/60 ${open ? 'bg-surface-2/40' : ''}`}
                             onClick={(e) => !(e.target as HTMLElement).closest('a,button') && navigate(`/outgoing/${row.id}`)}
                           >
-                            <td className="py-3 pl-3">
+                            <td className="py-2 pl-3">
                               <button
                                 type="button"
                                 onClick={() => toggleRow(row.id)}
@@ -162,11 +162,11 @@ export function OutgoingList() {
                             <td className="px-4 py-3">
                               <PaymentBadge method={row.paymentMethod} />
                             </td>
-                            <td className="px-4 py-3 text-right whitespace-nowrap">
-                              <div className="tabular font-semibold text-out-soft">{formatGBP(row.totalPence)}</div>
-                              {row.disallowablePence > 0 && (
-                                <div className="tabular text-xs text-faint">{formatGBP(row.disallowablePence)} disallowable</div>
-                              )}
+                            <td
+                              className="tabular px-4 py-3 text-right font-semibold whitespace-nowrap text-out-soft"
+                              title={row.disallowablePence > 0 ? `${formatGBP(row.disallowablePence)} disallowable` : undefined}
+                            >
+                              {formatGBP(row.totalPence)}
                             </td>
                             <td className="px-3 py-2">
                               <RowActions
