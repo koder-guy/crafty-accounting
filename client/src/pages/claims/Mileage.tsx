@@ -225,6 +225,11 @@ export function Mileage() {
                 </Alert>
               )}
 
+              <Alert tone="info">
+                Rates: cars and vans {rates.car.firstPence}p a mile for the first {rates.car.thresholdMiles.toLocaleString('en-GB')} business miles, then{' '}
+                {rates.car.afterPence}p. Motorcycles {rates.motorcycle}p. Bicycles {rates.bicycle}p. {rates.provisional}
+              </Alert>
+
               {canEdit && (
                 <>
                   {editing && latest && latest.updatedAt !== editing.updatedAt && (
@@ -259,12 +264,6 @@ export function Mileage() {
 
               <Card>
                 <CardHeader icon={<Route className="size-5 text-accent-soft" />} title="Trips" />
-                <div className="px-5 pb-4 sm:px-6">
-                  <Alert tone="info">
-                    Rates: cars and vans {rates.car.firstPence}p a mile for the first {rates.car.thresholdMiles.toLocaleString('en-GB')} business miles, then{' '}
-                    {rates.car.afterPence}p. Motorcycles {rates.motorcycle}p. Bicycles {rates.bicycle}p. {rates.provisional}
-                  </Alert>
-                </div>
                 {data.trips.length === 0 ? (
                   <EmptyState icon={<Car className="size-8" />} title="No trips yet">
                     Add the journeys you make for the business, such as visiting customers or clients, or driving to buy supplies.

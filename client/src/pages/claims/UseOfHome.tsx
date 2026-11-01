@@ -88,16 +88,6 @@ function HoursForm({ taxYearId, data }: { taxYearId: number; data: UseOfHomeResp
       {canEdit && changedElsewhere && dirty && <ChangedElsewhere by={data.updatedBy} what="these hours" onLoad={load} />}
       <Card>
         <CardHeader icon={<House className="size-5 text-accent-soft" />} title="Hours worked at home" />
-        <div className="px-5 pb-4 sm:px-6">
-          <Alert tone="info">
-            Rates:{' '}
-            {[...USE_OF_HOME_BANDS]
-              .reverse()
-              .map((b) => `${b.label} ${formatGBP(b.pence).replace(/\.00$/, '')}`)
-              .join(', ')}
-            .
-          </Alert>
-        </div>
         <form onSubmit={submit} noValidate>
           <div className="overflow-x-auto">
             <table className="w-full min-w-[560px] text-sm">
@@ -227,6 +217,15 @@ export function UseOfHome() {
               <Alert tone="warning">
                 The flat rate covers the extra heating, lighting and power from working at home, so don't also claim a share of those
                 household bills in Outgoing. Business calls and the business share of your broadband can still go in Outgoing.
+              </Alert>
+
+              <Alert tone="info">
+                Rates:{' '}
+                {[...USE_OF_HOME_BANDS]
+                  .reverse()
+                  .map((b) => `${b.label} ${formatGBP(b.pence).replace(/\.00$/, '')}`)
+                  .join(', ')}
+                .
               </Alert>
 
               <HoursForm key={taxYear.id} taxYearId={taxYear.id} data={data} />
