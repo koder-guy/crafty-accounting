@@ -265,7 +265,7 @@ function FullYearProjection({ data, today }: { data: TaxEstimateResponse; today:
 
   return (
     <Card className="print:break-inside-avoid">
-      <CardHeader icon={<TrendingUp className="size-5 text-accent-soft" />} title="The whole year at this rate" />
+      <CardHeader icon={<TrendingUp className="size-5 text-accent-soft" />} title="Profit and tax forecast for the whole year" />
       <div className="space-y-2 px-5 pb-6 text-sm sm:px-6">
         <p className="text-ink">
           If the rest of the year goes like the first {elapsed} days, a full year's profit would be about{' '}
@@ -273,7 +273,7 @@ function FullYearProjection({ data, today }: { data: TaxEstimateResponse; today:
           <strong className="tabular text-accent-soft">{whole(Math.round(projected.totalPence / 100) * 100)}</strong>.
         </p>
         <p className="text-muted">
-          Many businesses have busier and quieter times of year, so treat this as a rough guide, not a forecast.
+          Many businesses have busier and quieter times of year, so treat this as a rough guide.
         </p>
       </div>
     </Card>
