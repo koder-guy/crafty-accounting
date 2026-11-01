@@ -88,6 +88,16 @@ function HoursForm({ taxYearId, data }: { taxYearId: number; data: UseOfHomeResp
       {canEdit && changedElsewhere && dirty && <ChangedElsewhere by={data.updatedBy} what="these hours" onLoad={load} />}
       <Card>
         <CardHeader icon={<House className="size-5 text-accent-soft" />} title="Hours worked at home" />
+        <div className="px-5 pb-4 sm:px-6">
+          <Alert tone="info">
+            Rates:{' '}
+            {[...USE_OF_HOME_BANDS]
+              .reverse()
+              .map((b) => `${b.label} ${formatGBP(b.pence).replace(/\.00$/, '')}`)
+              .join(', ')}
+            .
+          </Alert>
+        </div>
         <form onSubmit={submit} noValidate>
           <div className="overflow-x-auto">
             <table className="w-full min-w-[560px] text-sm">
@@ -221,14 +231,10 @@ export function UseOfHome() {
 
               <HoursForm key={taxYear.id} taxYearId={taxYear.id} data={data} />
 
-              <p className="flex items-start gap-2 text-xs text-faint">
-                <Info className="mt-0.5 size-3.5 shrink-0" aria-hidden />
-                HMRC's flat rate for working from home, for each month with 25 or more hours of business work at home:{' '}
-                {[...USE_OF_HOME_BANDS]
-                  .reverse()
-                  .map((b) => `${b.label.toLowerCase()} ${formatGBP(b.pence).replace(/\.00$/, '')}`)
-                  .join(', ')}
-                . Count only time spent working on the business at home. Months run from the 6th to the 5th, like the tax year.
+              <p className="flex items-start gap-2 text-sm text-muted">
+                <Info className="mt-0.5 size-4 shrink-0" aria-hidden />
+                HMRC's flat rate for working from home applies to each month with 25 or more hours of business work at home. Count only
+                time spent working on the business at home. Months run from the 6th to the 5th, like the tax year.
               </p>
             </>
           )}
