@@ -171,11 +171,14 @@ export function hmrcRouter(ctx: AppContext): Router {
   // HMRC_REDIRECT_URI can fix it when the address seen here differs (an unusual proxy).
   const redirectUri = (req: Request) => ctx.config.hmrc.redirectUri ?? `${req.protocol}://${req.get('host')}/api/hmrc/callback`;
 
+  const configured = () => Boolean(ctx.config.hmrc.clientId && ctx.config.hmrc.clientSecret);
+
   router.get('/', (req, res) => {
-    const row = getHmrcConnection(ctx.db, environment());
+    // Without credentials a saved connection is kept but reported as none, so nothing offers to use it.
+    const row = configured() ? getHmrcConnection(ctx.db, environment()) : null;
     const status: HmrcStatus = {
       environment: environment(),
-      configured: Boolean(ctx.config.hmrc.clientId && ctx.config.hmrc.clientSecret),
+      configured: configured(),
       redirectUri: redirectUri(req),
       nino: row?.nino ?? null,
       business: row?.business_id ? { businessId: row.business_id, tradingName: row.trading_name } : null,
@@ -185,6 +188,12 @@ export function hmrcRouter(ctx: AppContext): Router {
           : null,
     };
     res.json(status);
+  });
+
+  // The connection features only exist once HMRC_CLIENT_ID and HMRC_CLIENT_SECRET are set.
+  router.use((_req, _res, next) => {
+    if (!configured()) throw new HttpError(404, 'Not found');
+    next();
   });
 
   router.put('/nino', (req, res) => {

@@ -1,6 +1,6 @@
 import { DatabaseBackup, Landmark, Layers, Tags, Users } from 'lucide-react';
 import { SectionHeading, SectionLayout } from '../../components/SectionLayout';
-import { useCanEdit } from '../../lib/queries';
+import { useCanEdit, useHmrc } from '../../lib/queries';
 
 const SECTIONS = [
   { to: '/settings/people', label: 'People', icon: Users },
@@ -13,11 +13,12 @@ const SECTIONS = [
 export function SettingsLayout() {
   // Backups are for editors only.
   const canEdit = useCanEdit();
+  const { data: hmrc } = useHmrc();
   return (
     <SectionLayout
       title="Settings"
-      subtitle="Manage people, tax years, the HMRC connection, categories, backups and other app settings."
-      sections={canEdit ? SECTIONS : SECTIONS.filter((s) => s.to !== '/settings/backup')}
+      subtitle="Manage people, tax years, categories, backups and other app settings."
+      sections={SECTIONS.filter((s) => (s.to !== '/settings/backup' || canEdit) && (s.to !== '/settings/hmrc' || hmrc?.configured))}
     />
   );
 }

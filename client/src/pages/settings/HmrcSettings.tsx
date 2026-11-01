@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { useSearchParams } from 'react-router';
+import { Navigate, useSearchParams } from 'react-router';
 import { Landmark, Link2, ShieldCheck, Unlink } from 'lucide-react';
 import { formatDisplayDate, type HmrcBusiness, type HmrcFraudHeaderCheck, type HmrcStatus } from '@crafty/shared';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
@@ -11,33 +11,6 @@ import { SettingsHeading } from './SettingsLayout';
 const spacedNino = (nino: string) => nino.replace(/^(..)(..)(..)(..)(.)$/, '$1 $2 $3 $4 $5');
 
 const day = (iso: string) => formatDisplayDate(iso.slice(0, 10));
-
-function SetupSteps({ status }: { status: HmrcStatus }) {
-  return (
-    <div className="space-y-3 text-sm text-muted">
-      <p>To connect, the app needs its own application on HMRC’s Developer Hub:</p>
-      <ol className="list-decimal space-y-1.5 pl-5">
-        <li>
-          Sign in at{' '}
-          <a className="text-accent-soft hover:underline" href="https://developer.service.hmrc.gov.uk" target="_blank" rel="noreferrer">
-            developer.service.hmrc.gov.uk
-          </a>{' '}
-          and add a sandbox application.
-        </li>
-        <li>
-          Subscribe it to Business Details (MTD) 2.0, Obligations (MTD) 3.0, Self Employment Business (MTD) 5.0, Individual
-          Calculations (MTD) 8.0 and Test Fraud Prevention Headers 1.0.
-        </li>
-        <li>
-          Add this redirect URI to it: <code className="break-all text-ink">{status.redirectUri}</code>
-        </li>
-        <li>
-          Set <code>HMRC_CLIENT_ID</code> and <code>HMRC_CLIENT_SECRET</code> on the server (see the README) and restart it.
-        </li>
-      </ol>
-    </div>
-  );
-}
 
 function NinoForm({ status, canEdit }: { status: HmrcStatus; canEdit: boolean }) {
   const { saveNino } = useHmrcMutations();
@@ -212,6 +185,9 @@ export function HmrcSettings() {
     if (params.has('connected') || params.has('error')) setParams({}, { replace: true });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // This page only exists once HMRC_CLIENT_ID and HMRC_CLIENT_SECRET are set.
+  if (status && !status.configured) return <Navigate to="/settings" replace />;
+
   return (
     <>
       <div className="space-y-6">
@@ -251,9 +227,7 @@ export function HmrcSettings() {
                 <NinoForm status={status} canEdit={canEdit} />
 
                 <div className="space-y-4 border-t border-line pt-5">
-                  {!status.configured ? (
-                    <SetupSteps status={status} />
-                  ) : status.connection ? (
+                  {status.connection ? (
                     <>
                       <dl className="grid gap-x-4 gap-y-3 text-sm sm:grid-cols-[160px_1fr]">
                         <dt className="text-muted">Status</dt>
@@ -297,18 +271,16 @@ export function HmrcSettings() {
                     </>
                   )}
                   {connect.error && <Alert>{connect.error.message}</Alert>}
-                  {status.configured && (
-                    <p className="text-xs text-faint">
-                      Redirect URI registered with HMRC: <code className="break-all">{status.redirectUri}</code>
-                    </p>
-                  )}
+                  <p className="text-xs text-faint">
+                    Redirect URI registered with HMRC: <code className="break-all">{status.redirectUri}</code>
+                  </p>
                 </div>
               </>
             )}
           </div>
         </Card>
 
-        {status?.environment === 'sandbox' && status.configured && <FraudHeadersCard />}
+        {status?.environment === 'sandbox' && <FraudHeadersCard />}
       </div>
 
       <ConfirmDialog

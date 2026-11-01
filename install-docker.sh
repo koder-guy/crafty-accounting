@@ -113,11 +113,6 @@ HTTPS_PORT=$https_port
 MAX_UPLOAD_MB=20
 BACKUP_HOST_DIR=./backups
 TZ=Europe/London
-
-# Making Tax Digital (see "Connecting to HMRC" in the README).
-HMRC_CLIENT_ID=
-HMRC_CLIENT_SECRET=
-HMRC_ENV=sandbox
 EOF
     )
   else

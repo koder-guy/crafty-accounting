@@ -1632,14 +1632,33 @@ describe('HMRC connection', () => {
     return as.get('/api/hmrc/callback').query({ code: 'the-code', state }).expect(302);
   }
 
-  it('explains what to set up before connecting', async () => {
+  it('offers nothing but its status until the credentials are set', async () => {
     ctx.config.hmrc = { environment: 'sandbox', clientId: null, clientSecret: null, redirectUri: null };
     const status = (await agent.get('/api/hmrc').expect(200)).body;
     expect(status).toEqual({ environment: 'sandbox', configured: false, redirectUri: expect.stringMatching(/^http:\/\/127\.0\.0\.1:\d+\/api\/hmrc\/callback$/), nino: null, business: null, connection: null });
-    expect((await agent.post('/api/hmrc/connect').expect(400)).body.error).toMatch(/HMRC_CLIENT_ID/);
+    await agent.post('/api/hmrc/connect').expect(404);
+    await agent.get('/api/hmrc/callback').expect(404);
+    await agent.put('/api/hmrc/nino').send({ nino: 'AB123456C' }).expect(404);
+    await agent.get('/api/hmrc/obligations').expect(404);
+    await agent.get('/api/hmrc/fraud-headers/check').expect(404);
+    await agent.delete('/api/hmrc/connection').expect(404);
 
     ctx.config.hmrc.redirectUri = 'https://books.example.com/api/hmrc/callback';
     expect((await agent.get('/api/hmrc')).body.redirectUri).toBe('https://books.example.com/api/hmrc/callback');
+  });
+
+  it('keeps a saved connection for when the credentials come back', async () => {
+    await agent.put('/api/hmrc/nino').send({ nino: 'AB123456C' }).expect(200);
+    await connect();
+    const credentials = ctx.config.hmrc;
+
+    ctx.config.hmrc = { ...credentials, clientId: null, clientSecret: null };
+    expect((await agent.get('/api/hmrc')).body).toMatchObject({ configured: false, nino: null, business: null, connection: null });
+
+    ctx.config.hmrc = credentials;
+    const status = (await agent.get('/api/hmrc')).body;
+    expect(status).toMatchObject({ configured: true, nino: 'AB123456C' });
+    expect(status.connection).not.toBeNull();
   });
 
   it('checks and tidies the National Insurance number', async () => {

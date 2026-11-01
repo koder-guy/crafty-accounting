@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { Link } from 'react-router';
+import { Link, Navigate } from 'react-router';
 import { CalendarCheck, CircleCheck, CircleDashed, FileCheck, FilePen, Landmark, LoaderCircle, Send } from 'lucide-react';
 import {
   MTD_FIRST_SEND_YEAR,
@@ -397,7 +397,11 @@ function Amend({ data }: { data: MtdQuartersResponse }) {
 export function FinalDeclaration() {
   const { taxYear, isLoading: yearLoading } = useActiveTaxYear();
   const { data, isLoading, error } = useMtdQuarters(taxYear?.id);
+  const { data: hmrc } = useHmrc();
   const startYear = taxYear ? (startYearFromLabel(taxYear.label) ?? 0) : 0;
+
+  // Without a connection to HMRC this page only shows a declaration already made.
+  if (hmrc && !hmrc.configured && !yearLoading && !isLoading && !data?.finalDeclaration) return <Navigate to="/mtd/quarterly" replace />;
 
   return (
     <div className="space-y-6">
@@ -419,7 +423,7 @@ export function FinalDeclaration() {
       ) : data.finalDeclaration ? (
         <>
           <Declared data={data} />
-          <Amend data={data} />
+          {hmrc?.configured && <Amend data={data} />}
         </>
       ) : (
         <Declare data={data} />

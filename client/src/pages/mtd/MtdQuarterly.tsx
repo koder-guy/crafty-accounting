@@ -432,7 +432,7 @@ function SendToHmrc({
         {changed && (
           <Alert tone="warning">
             The figures up to {formatDisplayDate(q.endDate)} have changed since they were sent. Updates are cumulative, so your next
-            quarterly update brings HMRC up to date{laterHeld ? '' : ', or you can send this quarter again now'}.
+            quarterly update brings HMRC up to date{laterHeld || !canSend ? '' : ', or you can send this quarter again now'}.
           </Alert>
         )}
 
@@ -512,7 +512,11 @@ export function MtdQuarterly() {
       <div className="space-y-6">
         <SectionHeading
           title="Quarterly updates"
-          description="Your figures for each quarter, sent to HMRC (or recorded) by the 7th of the month after it ends."
+          description={
+            hmrc?.configured
+              ? 'Your figures for each quarter, sent to HMRC (or recorded) by the 7th of the month after it ends.'
+              : 'Your figures for each quarter, submitted with your bridging software and recorded here, by the 7th of the month after it ends.'
+          }
         />
         {yearLoading || (taxYear && isLoading) ? (
           <Spinner />
@@ -533,8 +537,8 @@ export function MtdQuarterly() {
                     <Link className="text-accent-soft hover:underline" to="/mtd/final-declaration">
                       final declaration
                     </Link>{' '}
-                    for this year was made on {formatDisplayDate(declared.at.slice(0, 10))}, so HMRC takes no more quarterly updates. To
-                    correct the year, amend it from the final declaration tab.
+                    for this year was made on {formatDisplayDate(declared.at.slice(0, 10))}, so HMRC takes no more quarterly updates.
+                    {hmrc?.configured && ' To correct the year, amend it from the final declaration tab.'}
                   </>
                 ) : sendable ? (
                   <>
@@ -544,9 +548,14 @@ export function MtdQuarterly() {
                 ) : (
                   <>
                     To keep a digital link, use <span className="text-ink">Export CSV</span> on the year-to-date figures and import
-                    the file into your MTD bridging software rather than retyping or copying them, then record each submission here. Or
-                    connect to HMRC in <Link className="text-accent-soft hover:underline" to="/settings/hmrc">Settings → HMRC</Link>{' '}
-                    to send updates from here.
+                    the file into your MTD bridging software rather than retyping or copying them, then record each submission here.
+                    {hmrc?.configured && (
+                      <>
+                        {' '}
+                        Or connect to HMRC in <Link className="text-accent-soft hover:underline" to="/settings/hmrc">Settings → HMRC</Link>{' '}
+                        to send updates from here.
+                      </>
+                    )}
                   </>
                 )}
               </p>

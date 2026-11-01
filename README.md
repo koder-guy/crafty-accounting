@@ -1,6 +1,6 @@
 # Crafty Accounting
 
-Self-hosted bookkeeping for UK sole traders on the cash basis. Keep your income and expenses, then file with HMRC either on a Self Assessment return or through Making Tax Digital (MTD): quarterly updates, the final declaration and amendments are sent from the app.
+Self-hosted bookkeeping for UK sole traders on the cash basis. Keep your income and expenses, then file with HMRC either on a Self Assessment return or through Making Tax Digital (MTD), using the app's quarterly figures with bridging software.
 
 ## Features
 
@@ -18,7 +18,7 @@ Self-hosted bookkeeping for UK sole traders on the cash basis. Keep your income 
   - **Compare years**: two tax years side by side: incoming, outgoing, profit and margin, month by month and by category, plus the estimated tax for full years. A year still in progress is compared with the same stretch of the other.
   - **Tax estimate**: Income Tax and Class 4 National Insurance on the year's profit, using the trading allowance if that's better. It shows what to put aside and when it's due, including payments on account, and can allow for a salary or pension. Rates are for England, Wales and Northern Ireland.
 - **Self Assessment → Year-end summary**: the figures for each box of the SA103S (self-employment, short), with disallowable amounts listed and a trading allowance comparison. Business entertaining is always disallowable, in every total. Depreciation isn't offered for new expenses, because on the cash basis you claim equipment when you buy it.
-- **Making Tax Digital**: quarterly updates, HMRC's tax calculation, the final declaration and amendments (see [Making Tax Digital](#making-tax-digital)).
+- **Making Tax Digital**: each quarter's figures as a CSV for bridging software, and a record of each submission (see [Making Tax Digital](#making-tax-digital)).
 - **People**: everyone signs in with their own name and password. **Editors** can change anything; **Read-only** people can view, export and print but not change the books or download backups. Transactions show who added and last changed them.
 - **Working together**: changes appear in every open browser within a second. If two people edit the same transaction, the second save is refused and the form offers to load the other version.
 - **Backups**: daily automatic backups, plus manual download and restore (see [Backups](#backups)).
@@ -116,9 +116,6 @@ Settings go in a `.env` file next to the app (the installers write one). Only in
 | `BACKUP_HOST_DIR` | `./backups` | Docker: the folder on the server for automatic backups |
 | `BACKUP_DIR` | `DATA_DIR/backups` | Without Docker: where automatic backups go |
 | `TZ` | `Europe/London` | Time zone for the daily backup |
-| `HMRC_CLIENT_ID` / `HMRC_CLIENT_SECRET` | *(none)* | Your application's credentials from HMRC (see [Connecting to HMRC](#connecting-to-hmrc)) |
-| `HMRC_ENV` | `sandbox` | `sandbox` (HMRC's test service) or `production` |
-| `HMRC_REDIRECT_URI` | worked out | Only if Settings → HMRC shows the wrong redirect URI |
 
 ## Backups
 
@@ -129,34 +126,15 @@ Settings go in a `.env` file next to the app (the installers write one). Only in
 - **Database only (.sql)**: restoring it replaces the database and leaves documents alone.
 - **Start again with an empty database** deletes the books after you type `RESET`; the old database and documents are kept until the next reset.
 
-A restore is checked in a separate database before anything is replaced, and older backups are upgraded automatically. Backups don't include the people who can sign in or the HMRC connection, so a restore keeps both as they are.
+A restore is checked in a separate database before anything is replaced, and older backups are upgraded automatically. Backups don't include the people who can sign in, so a restore keeps them as they are.
 
 ## Making Tax Digital
 
-From the 2025/26 tax year, an MTD year goes to HMRC like this. Without a connection to HMRC, you can still export each quarter's figures as a CSV for bridging software and record the submission. It has a row of HMRC's field names and a row of values, always the same columns. Bridging tools each have their own import format, so you may need to map the columns. Disallowable amounts are in the expense columns and in their own, so don't add them all up.
+From the 2025/26 tax year, an MTD year goes to HMRC through bridging software. Export each quarter's figures as a CSV, import them into your bridging software, submit them, then record the submission in the app. The CSV has a row of HMRC's field names and a row of values, always the same columns. Bridging tools each have their own import format, so you may need to map the columns. Disallowable amounts are in the expense columns and in their own, so don't add them all up.
 
 - **Expenses** go by category, or as one total if your annual turnover is below the VAT registration threshold (set per year in Settings → Tax Years). One total is allowable expenses only, with no disallowable amounts. Once the year's turnover reaches the threshold, expenses go by category for the whole year.
-- **Quarterly updates** cover 6 Apr–5 Jul, 6 Jul–5 Oct, 6 Oct–5 Jan and 6 Jan–5 Apr, each due by the 7th of the next month. They're cumulative, so each sends the year to date. **Send to HMRC** shows the figures to confirm first, and HMRC takes an update from 10 days before its quarter ends. The page shows what HMRC expects and has received, and warns when a later change affects a quarter already sent.
-- **HMRC's tax calculation** for the year so far appears on the Quarterly updates page, next to the app's own estimate.
-- **Final declaration**: after the tax year ends and once HMRC has all four updates, ask HMRC to calculate. Check its figures, including the band-by-band workings, and agree to HMRC's declaration. This replaces the Self Assessment return and is due by 31 January. Report any other income in your HMRC online account first, because the app only covers the business.
-- **Amendments**: until 12 months after the 31 January deadline, correct your books, send the corrected year's figures, and agree to HMRC's new calculation.
-
-The app records who sent each update, declaration and amendment, when, and HMRC's reference. These records are kept in backups and can't be changed by hand. It refuses to send if the figures have changed since you checked them.
-
-### Connecting to HMRC
-
-The app talks to HMRC as its own application, registered on HMRC's Developer Hub. For now that's the sandbox, HMRC's test service with made-up taxpayers; using the live service needs HMRC's approval for the application.
-
-1. At [developer.service.hmrc.gov.uk](https://developer.service.hmrc.gov.uk), add a sandbox application and subscribe it to **Business Details (MTD)** 2.0, **Obligations (MTD)** 3.0, **Self Employment Business (MTD)** 5.0, **Individual Calculations (MTD)** 8.0 and **Test Fraud Prevention Headers** 1.0.
-2. Add the redirect URI shown in **Settings → HMRC** (the app's address followed by `/api/hmrc/callback`).
-3. Put the client ID and a client secret in `.env` as `HMRC_CLIENT_ID` and `HMRC_CLIENT_SECRET`, and restart the app.
-4. Create an **Individual** with HMRC's [Create test user](https://developer.service.hmrc.gov.uk/api-test-user) service. In **Settings → HMRC**, enter its National Insurance number, choose **Connect to HMRC**, sign in as it, then choose **Find my business**.
-
-In the sandbox, HMRC answers with test data (a made-up business, obligations and calculations), not your own figures. Updates sent to the sandbox don't count once the app uses the live service.
-
-The connection lasts 18 months. **Disconnect** makes the app forget it; to withdraw the authority at HMRC too, do it in your HMRC online account.
-
-HMRC also requires fraud prevention details about the browser, device and network with every call. The app sends what it truthfully knows and leaves out the rest; **Settings → HMRC → Check with HMRC** lists anything HMRC says is missing.
+- **Quarterly updates** cover 6 Apr–5 Jul, 6 Jul–5 Oct, 6 Oct–5 Jan and 6 Jan–5 Apr, each due by the 7th of the next month. They're cumulative, so each reports the year to date.
+- **The final declaration** replaces the Self Assessment return and is due by 31 January. Make it with your MTD software, as the app doesn't send anything to HMRC itself.
 
 ## Development
 
@@ -178,4 +156,4 @@ The code is in three parts:
 
 ## Licence
 
-MIT; see [LICENSE](LICENSE). Crafty Accounting comes with no warranty: it helps you keep your books and send them to HMRC, but you remain responsible for what you submit.
+MIT; see [LICENSE](LICENSE). Crafty Accounting comes with no warranty: it helps you keep your books, but you remain responsible for what you submit to HMRC.

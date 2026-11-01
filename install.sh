@@ -116,11 +116,6 @@ TZ=Europe/London
 # Served over plain HTTP on your own network.
 COOKIE_SECURE=false
 TRUST_PROXY=false
-
-# Making Tax Digital (see "Connecting to HMRC" in the README).
-HMRC_CLIENT_ID=
-HMRC_CLIENT_SECRET=
-HMRC_ENV=sandbox
 EOF
   )
 else
