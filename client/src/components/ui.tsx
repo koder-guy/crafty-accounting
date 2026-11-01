@@ -112,12 +112,12 @@ export function Alert({ tone = 'error', children }: { tone?: 'error' | 'warning'
     error: 'border-out/40 bg-out-bg text-red-200',
     warning: 'border-warn/40 bg-warn-bg text-amber-100',
     success: 'border-ok/40 bg-ok/10 text-emerald-100',
-    info: 'border-accent/40 bg-accent-bg text-indigo-100',
+    info: 'border-line bg-surface text-muted',
   }[tone];
   const Icon = tone === 'info' ? Info : tone === 'success' ? CircleCheck : TriangleAlert;
   return (
     <div role={tone === 'error' ? 'alert' : 'status'} className={`flex gap-3 rounded-lg border px-4 py-3 text-sm ${styles}`}>
-      <Icon className="mt-0.5 size-4 shrink-0" aria-hidden />
+      <Icon className={`mt-0.5 size-4 shrink-0 ${tone === 'info' ? 'text-accent-soft' : ''}`} aria-hidden />
       <div className="min-w-0">{children}</div>
     </div>
   );
