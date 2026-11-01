@@ -112,7 +112,7 @@ export function Alert({ tone = 'error', children }: { tone?: 'error' | 'warning'
     error: 'border-out/40 bg-out-bg text-red-200',
     warning: 'border-warn/40 bg-warn-bg text-amber-100',
     success: 'border-ok/40 bg-ok/10 text-emerald-100',
-    info: 'border-ok/40 bg-ok/10 text-emerald-100',
+    info: 'border-accent/40 bg-accent-bg text-indigo-100',
   }[tone];
   const Icon = tone === 'info' ? Info : tone === 'success' ? CircleCheck : TriangleAlert;
   return (

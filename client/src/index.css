@@ -73,7 +73,8 @@
   .text-white,
   .text-amber-100,
   .text-red-200,
-  .text-emerald-100 {
+  .text-emerald-100,
+  .text-indigo-100 {
     color: var(--color-ink) !important;
   }
   @page {
