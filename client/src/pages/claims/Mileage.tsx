@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { Car, Copy, Gauge, Pencil, Plus, Route, Trash2 } from 'lucide-react';
+import { Car, Copy, Pencil, Plus, Route, Trash2 } from 'lucide-react';
 import {
   formatDisplayDate,
   formatGBP,
@@ -258,7 +258,17 @@ export function Mileage() {
               )}
 
               <Card>
-                <CardHeader icon={<Route className="size-5 text-accent-soft" />} title="Trips" />
+                <CardHeader
+                  icon={<Route className="size-5 text-accent-soft" />}
+                  title="Trips"
+                  action={
+                    <p className="flex-1 text-xs text-muted">
+                      Each trip's miles × HMRC's approved rate, worked out in date order through the tax year. Cars and vans:{' '}
+                      {rates.car.firstPence}p a mile for the first {rates.car.thresholdMiles.toLocaleString('en-GB')} business miles, then{' '}
+                      {rates.car.afterPence}p. Motorcycles: {rates.motorcycle}p. Bicycles: {rates.bicycle}p. {rates.provisional}
+                    </p>
+                  }
+                />
                 {data.trips.length === 0 ? (
                   <EmptyState icon={<Car className="size-8" />} title="No trips yet">
                     Add the journeys you make for the business, such as visiting customers or clients, or driving to buy supplies.
@@ -324,13 +334,6 @@ export function Mileage() {
                   </div>
                 )}
               </Card>
-
-              <p className="flex items-start gap-2 text-xs text-faint">
-                <Gauge className="mt-0.5 size-3.5 shrink-0" aria-hidden />
-                HMRC approved mileage rates: cars and vans {rates.car.firstPence}p a mile for the first{' '}
-                {rates.car.thresholdMiles.toLocaleString('en-GB')} business miles in a tax year and {rates.car.afterPence}p after that, motorcycles{' '}
-                {rates.motorcycle}p and bicycles {rates.bicycle}p. Claims are worked out in date order through the tax year. {rates.provisional}
-              </p>
             </>
           )}
       </div>
