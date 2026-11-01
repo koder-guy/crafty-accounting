@@ -331,8 +331,8 @@ export function Mileage() {
                 )}
               </Card>
 
-              <p className="flex items-start gap-2 text-xs text-faint">
-                <Info className="mt-0.5 size-3.5 shrink-0" aria-hidden />
+              <p className="flex items-start gap-2 text-sm text-muted">
+                <Info className="mt-0.5 size-4 shrink-0" aria-hidden />
                 Claims are worked out in date order through the tax year.
               </p>
             </>
