@@ -1,6 +1,6 @@
 import { Fragment, useState } from 'react';
 import { useNavigate } from 'react-router';
-import { ArrowUpRight, ChevronRight, Plus } from 'lucide-react';
+import { ArrowUpRight, ChevronRight, CircleSlash, Plus } from 'lucide-react';
 import { formatDisplayDate, formatGBP, shortCategoryName, type Expense, type ExpenseWithLineItems } from '@crafty/shared';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { SubmittedFiguresNotice } from '../components/SubmittedFiguresNotice';
@@ -166,6 +166,13 @@ export function OutgoingList() {
                               className="tabular px-4 py-3 text-right font-semibold whitespace-nowrap text-out-soft"
                               title={row.disallowablePence > 0 ? `${formatGBP(row.disallowablePence)} disallowable` : undefined}
                             >
+                              {/* Before the amount, so the amounts still line up on the right. */}
+                              {row.disallowablePence > 0 && (
+                                <>
+                                  <CircleSlash className="mr-1.5 inline size-3.5 align-[-2px] text-faint" aria-hidden />
+                                  <span className="sr-only">Includes {formatGBP(row.disallowablePence)} disallowable: </span>
+                                </>
+                              )}
                               {formatGBP(row.totalPence)}
                             </td>
                             <td className="px-3 py-2">
