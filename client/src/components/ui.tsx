@@ -1,6 +1,6 @@
 import type { ButtonHTMLAttributes, ReactNode } from 'react';
 import { Link, type LinkProps } from 'react-router';
-import { CircleCheck, LoaderCircle, TriangleAlert } from 'lucide-react';
+import { CircleCheck, Info, LoaderCircle, TriangleAlert } from 'lucide-react';
 import { PAYMENT_METHOD_LABELS, type PaymentMethod } from '@crafty/shared';
 
 type Variant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'softDanger';
@@ -107,13 +107,14 @@ export function Field({
   );
 }
 
-export function Alert({ tone = 'error', children }: { tone?: 'error' | 'warning' | 'success'; children: ReactNode }) {
+export function Alert({ tone = 'error', children }: { tone?: 'error' | 'warning' | 'success' | 'info'; children: ReactNode }) {
   const styles = {
     error: 'border-out/40 bg-out-bg text-red-200',
     warning: 'border-warn/40 bg-warn-bg text-amber-100',
     success: 'border-ok/40 bg-ok/10 text-emerald-100',
+    info: 'border-ok/40 bg-ok/10 text-emerald-100',
   }[tone];
-  const Icon = tone === 'success' ? CircleCheck : TriangleAlert;
+  const Icon = tone === 'info' ? Info : tone === 'success' ? CircleCheck : TriangleAlert;
   return (
     <div role={tone === 'error' ? 'alert' : 'status'} className={`flex gap-3 rounded-lg border px-4 py-3 text-sm ${styles}`}>
       <Icon className="mt-0.5 size-4 shrink-0" aria-hidden />
