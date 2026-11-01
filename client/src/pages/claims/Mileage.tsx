@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { Car, Copy, Pencil, Plus, Route, Trash2 } from 'lucide-react';
+import { Car, Copy, Gauge, Pencil, Plus, Route, Trash2 } from 'lucide-react';
 import {
   formatDisplayDate,
   formatGBP,
@@ -333,6 +333,11 @@ export function Mileage() {
                   </div>
                 )}
               </Card>
+
+              <p className="flex items-start gap-2 text-xs text-faint">
+                <Gauge className="mt-0.5 size-3.5 shrink-0" aria-hidden />
+                Claims are worked out in date order through the tax year.
+              </p>
             </>
           )}
       </div>
