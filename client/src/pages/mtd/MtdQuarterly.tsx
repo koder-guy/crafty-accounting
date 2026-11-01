@@ -548,7 +548,7 @@ export function MtdQuarterly() {
                 ) : (
                   <>
                     To keep a digital link, use <span className="text-ink">Export CSV</span> on the year-to-date figures and import
-                    the file into your MTD bridging software rather than retyping or copying them, then record each submission here.
+                    the file into your MTD bridging software, then record each submission here.
                     {hmrc?.configured && (
                       <>
                         {' '}
