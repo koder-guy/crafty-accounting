@@ -34,6 +34,12 @@
   html {
     color-scheme: dark;
   }
+  /* The page header is pinned on desktop (PageHeader); keep scrolled-to content out from under it. */
+  @media (width >= 64rem) {
+    html {
+      scroll-padding-top: calc(var(--page-header-h, 0px) + 1rem);
+    }
+  }
   body {
     @apply bg-page text-ink font-sans antialiased;
   }
