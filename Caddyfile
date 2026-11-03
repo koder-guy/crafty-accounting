@@ -5,7 +5,14 @@
 #   TLS_ISSUER    "internal" for a private certificate from Caddy's own
 #                 certificate authority (home network), or your email address
 #                 to get a free Let's Encrypt certificate for a public domain.
+#   SITE_IP       the IP address in SITE_ADDRESS that browsers use, if any
 # Plain http:// requests are redirected to https:// automatically.
+
+{
+	# Browsers don't send an IP address as the server name, and Docker hides the
+	# address they connected to, so Caddy needs telling which certificate to use.
+	default_sni {$SITE_IP:localhost}
+}
 
 {$SITE_ADDRESS:localhost} {
 	tls {$TLS_ISSUER:internal}

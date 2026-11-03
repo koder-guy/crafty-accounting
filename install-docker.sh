@@ -106,6 +106,7 @@ SESSION_SECRET=$(od -An -N32 -tx1 /dev/urandom | tr -d ' \n')
 # HTTPS: the addresses you browse to, and a private certificate for them (see the
 # README). If this computer's IP address changes, update SITE_ADDRESS.
 SITE_ADDRESS=$site
+SITE_IP=${LAN_IP:-localhost}
 TLS_ISSUER=internal
 HTTP_PORT=$http_port
 HTTPS_PORT=$https_port
@@ -117,6 +118,15 @@ EOF
     )
   else
     echo "Keeping the existing settings in $ENV_FILE."
+    # Installs from before SITE_IP: browsing by IP address failed the TLS handshake.
+    if ! grep -q '^SITE_IP=' "$ENV_FILE"; then
+      local site_ip
+      site_ip="$(env_value SITE_ADDRESS | tr ',' '\n' | tr -d ' ' | grep -E '^[0-9]+(\.[0-9]+){3}$' | head -n 1 || true)"
+      if [ -n "$site_ip" ]; then
+        printf '\n# The IP address in SITE_ADDRESS that browsers use.\nSITE_IP=%s\n' "$site_ip" >> "$ENV_FILE"
+        echo "Added SITE_IP=$site_ip, so browsing to https://$site_ip works."
+      fi
+    fi
   fi
   local HTTPS_PORT
   HTTPS_PORT="$(env_value HTTPS_PORT)"; HTTPS_PORT="${HTTPS_PORT:-443}"

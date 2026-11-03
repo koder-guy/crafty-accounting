@@ -66,7 +66,7 @@ docker compose up -d --build
 
 Open `https://localhost`, sign in as `Admin` / `admin` and choose your own password. Browsers warn about the certificate until you trust it (see [HTTPS](#https)).
 
-Everything has a default, so a `.env` file in the same folder is only needed for what you change (see [Configuration](#configuration)). Usually that's `SITE_ADDRESS`, so other devices can reach it, such as `SITE_ADDRESS=localhost, crafty.local, 192.168.1.50`. Run `docker compose up -d` after changing it.
+Everything has a default, so a `.env` file in the same folder is only needed for what you change (see [Configuration](#configuration)). Usually that's `SITE_ADDRESS`, so other devices can reach it, such as `SITE_ADDRESS=localhost, crafty.local, 192.168.1.50`, plus `SITE_IP=192.168.1.50` to browse by IP address. Run `docker compose up -d` after changing it.
 
 Automatic backups go to `./backups`, or to `BACKUP_HOST_DIR` (ideally another disk or a NAS share). On Linux, let the container's user write there:
 
@@ -108,6 +108,7 @@ Settings go in a `.env` file next to the app (the installers write one). Only in
 | `SESSION_SECRET` | generated | Signs the session cookie; one is generated and kept with the data if empty |
 | `PORT` | `3000` | Port the app listens on |
 | `SITE_ADDRESS` | `localhost` | Docker: address(es) for HTTPS, comma separated |
+| `SITE_IP` | `localhost` | Docker: the IP address in `SITE_ADDRESS` that browsers use, if any |
 | `TLS_ISSUER` | `internal` | Docker: `internal`, or your email address for Let's Encrypt |
 | `HTTP_PORT` / `HTTPS_PORT` | `80` / `443` | Docker: ports Caddy listens on |
 | `MAX_UPLOAD_MB` | `20` | Largest document you can attach |
