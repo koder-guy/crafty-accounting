@@ -1,4 +1,4 @@
-// Incoming (incomes) and outgoing (expenses) transaction routes.
+// Income and expense transaction routes.
 import { Router } from 'express';
 import {
   displayTaxYear,
@@ -122,7 +122,7 @@ export function incomesRouter(ctx: AppContext): Router {
       ['Date', 'Description', 'Source', 'Reference', 'Category', 'HMRC code', 'Payment method', 'Amount (GBP)', 'Documents', 'Notes'],
       rows,
     );
-    res.attachment(csvFilename('incoming', getTaxYear(ctx.db, filters.taxYearId))).type('text/csv').send(csv);
+    res.attachment(csvFilename('income', getTaxYear(ctx.db, filters.taxYearId))).type('text/csv').send(csv);
   });
 
   router.get('/:id', (req, res) => {
@@ -241,7 +241,7 @@ export function expensesRouter(ctx: AppContext): Router {
       ['Date', 'Payee', 'Invoice number', 'Order number', 'Payment method', 'Amount (GBP)', 'Disallowable (GBP)', 'Documents', 'Notes'],
       rows,
     );
-    res.attachment(csvFilename('outgoing', getTaxYear(ctx.db, filters.taxYearId))).type('text/csv').send(csv);
+    res.attachment(csvFilename('expenses', getTaxYear(ctx.db, filters.taxYearId))).type('text/csv').send(csv);
   });
 
   router.get('/:id', (req, res) => {

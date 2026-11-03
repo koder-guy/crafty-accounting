@@ -404,7 +404,7 @@ export function mileageCategoryId(db: Db): number {
 
 /**
  * Mileage claims shaped like expense line items, so they count in every total
- * alongside outgoing transactions (MTD figures, dashboard, reports).
+ * alongside expense transactions (MTD figures, dashboard, reports).
  */
 export function mileageClaimLines(db: Db, taxYearIds?: number[]) {
   const categoryId = mileageCategoryId(db);
@@ -468,13 +468,13 @@ export function yearEntries(db: Db, taxYearId: number): { incomes: IncomeEntry[]
 
 /**
  * Flags a possible double claim: mileage at HMRC rates alongside allowable
- * outgoing in the same category (including custom categories mapped to it).
+ * expenses in the same category (including custom categories mapped to it).
  * The app can't tell fuel from parking, so this is only ever a warning.
  */
 export function mileageCheck(db: Db, taxYearId: number): MileageCheck | null {
   const mileagePence = mileageClaimLines(db, [taxYearId]).reduce((acc, c) => acc + c.amountPence, 0);
   if (mileagePence === 0) return null;
-  const outgoing = db
+  const expenses = db
     .prepare(
       `SELECT COALESCE(SUM(li.amount_pence), 0) AS pence, COUNT(*) AS count
        FROM expense_line_items li
@@ -483,8 +483,8 @@ export function mileageCheck(db: Db, taxYearId: number): MileageCheck | null {
        WHERE e.tax_year_id = ? AND c.hmrc_code = ? AND li.disallowable = 0`,
     )
     .get(taxYearId, MILEAGE_HMRC_CODE) as { pence: number; count: number };
-  if (outgoing.count === 0) return null;
-  return { mileagePence, outgoingPence: outgoing.pence, outgoingCount: outgoing.count, categoryId: mileageCategoryId(db) };
+  if (expenses.count === 0) return null;
+  return { mileagePence, expensesPence: expenses.pence, expenseCount: expenses.count, categoryId: mileageCategoryId(db) };
 }
 
 // ---- Use of home ----

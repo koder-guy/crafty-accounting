@@ -57,7 +57,7 @@ export function ExpenseForm() {
   const id = params.id ? Number(params.id) : null;
   const navigate = useNavigate();
   const { data: existing, isLoading: loadingExisting, error: loadError, refetch: refetchExisting } = useExpense(id);
-  // Duplicating: /outgoing/new?copy=<id> fills the new form from that transaction.
+  // Duplicating: /expenses/new?copy=<id> fills the new form from that transaction.
   const [searchParams] = useSearchParams();
   const copyId = id ? null : Number(searchParams.get('copy')) || null;
   const { data: original, isLoading: loadingOriginal, error: originalError } = useExpense(copyId);
@@ -199,7 +199,7 @@ export function ExpenseForm() {
     save.mutate(
       { id: id ?? undefined, form: transactionForm(payload, files) },
       {
-        onSuccess: (saved) => navigate(`/outgoing/${saved.id}`),
+        onSuccess: (saved) => navigate(`/expenses/${saved.id}`),
         onError: (err) => {
           // Someone else saved first: fetch their version so the form can offer it.
           if (err instanceof ApiError && err.status === 409) refetchExisting();
@@ -211,8 +211,8 @@ export function ExpenseForm() {
     );
   });
 
-  const title = id ? 'Edit outgoing' : copyId ? 'Duplicate outgoing' : 'Add outgoing';
-  const backTo = id ? `/outgoing/${id}` : copyId ? `/outgoing/${copyId}` : '/outgoing';
+  const title = id ? 'Edit expense' : copyId ? 'Duplicate expense' : 'Add expense';
+  const backTo = id ? `/expenses/${id}` : copyId ? `/expenses/${copyId}` : '/expenses';
 
   if (yearLoading || loadingCategories || (id && loadingExisting) || (copyId && loadingOriginal)) {
     return (
@@ -460,7 +460,7 @@ export function ExpenseForm() {
                 Cancel
               </Button>
               <Button type="submit" variant="primary" busy={save.isPending || preparingPhoto} disabled={badDocumentNames}>
-                {id ? 'Save changes' : 'Add outgoing'}
+                {id ? 'Save changes' : 'Add expense'}
               </Button>
             </div>
           </Card>

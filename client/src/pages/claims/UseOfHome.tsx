@@ -216,7 +216,7 @@ export function UseOfHome() {
 
               <Alert tone="warning">
                 The flat rate covers the extra heating, lighting and power from working at home, so don't also claim a share of those
-                household bills in Outgoing. Business calls and the business share of your broadband can still go in Outgoing.
+                household bills in Expenses. Business calls and the business share of your broadband can still go in Expenses.
               </Alert>
 
               <Alert tone="info">

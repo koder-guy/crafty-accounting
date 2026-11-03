@@ -34,7 +34,7 @@ export function dashboardRouter(ctx: AppContext): Router {
       const index = taxMonthIndex(income.date, startYear);
       if (index >= 0) monthly[index].incomePence += income.amountPence;
     }
-    // Allowable spending only, to match the Total outgoing box.
+    // Allowable spending only, to match the Total expenses box.
     for (const line of lines) {
       if (line.disallowable) continue;
       const index = taxMonthIndex(line.date, startYear);

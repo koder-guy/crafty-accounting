@@ -1,4 +1,4 @@
-// Building blocks shared by the Incoming and Outgoing pages.
+// Building blocks shared by the Income and Expenses pages.
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type DragEvent as ReactDragEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import type { UseFormRegisterReturn } from 'react-hook-form';

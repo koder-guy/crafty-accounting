@@ -23,8 +23,8 @@ import { DocIndicator } from '../components/transactions';
 import { Alert, Card, CardHeader, Spinner } from '../components/ui';
 import { useActiveTaxYear, useCanEdit, useDashboard, useMtdQuarters } from '../lib/queries';
 
-const CHART_IN = { id: 'chart-incoming', fill: 'url(#chart-incoming)', swatch: '#8559f4', glow: '#8559f480' };
-const CHART_OUT = { id: 'chart-outgoing', fill: 'url(#chart-outgoing)', swatch: '#6ea0f5', glow: '#6ea0f580' };
+const CHART_IN = { id: 'chart-income', fill: 'url(#chart-income)', swatch: '#8559f4', glow: '#8559f480' };
+const CHART_OUT = { id: 'chart-expenses', fill: 'url(#chart-expenses)', swatch: '#6ea0f5', glow: '#6ea0f580' };
 
 function StatCard({
   label,
@@ -52,7 +52,7 @@ function StatCard({
 }
 
 /** "Includes £185.60 mileage and £130.00 use of home. Excludes £15.11 disallowable" */
-function outgoingNote(data: DashboardData): string {
+function expensesNote(data: DashboardData): string {
   const flatRates = [
     data.mileagePence > 0 ? `${formatGBP(data.mileagePence)} mileage` : null,
     data.useOfHomePence > 0 ? `${formatGBP(data.useOfHomePence)} use of home` : null,
@@ -79,8 +79,8 @@ function ChartTooltip({ active, payload }: ChartTooltipProps) {
   return (
     <div className="rounded-lg border border-line-strong bg-surface-2 px-3 py-2 text-xs shadow-xl">
       <div className="mb-1.5 font-medium text-ink">{month.range}</div>
-      <ChartTooltipRow label="Incoming" colour={CHART_IN.swatch} pence={month.incomePence} />
-      <ChartTooltipRow label="Outgoing" colour={CHART_OUT.swatch} pence={month.expensesPence} />
+      <ChartTooltipRow label="Income" colour={CHART_IN.swatch} pence={month.incomePence} />
+      <ChartTooltipRow label="Expenses" colour={CHART_OUT.swatch} pence={month.expensesPence} />
     </div>
   );
 }
@@ -98,8 +98,8 @@ function ChartTooltipRow({ label, colour, pence }: { label: string; colour: stri
 }
 
 /** Rounds the largest bar up to a value that divides into four tidy steps, so it fills at least 75% of the chart. */
-function niceMax(rows: { incoming: number; outgoing: number }[]): number {
-  const max = Math.max(...rows.flatMap((r) => [r.incoming, r.outgoing]));
+function niceMax(rows: { income: number; expenses: number }[]): number {
+  const max = Math.max(...rows.flatMap((r) => [r.income, r.expenses]));
   if (max <= 0) return 100;
   const step = max / 4;
   const magnitude = 10 ** Math.floor(Math.log10(step));
@@ -109,7 +109,7 @@ function niceMax(rows: { incoming: number; outgoing: number }[]): number {
 
 function MonthlyChart({ data }: { data: DashboardData['monthly'] }) {
   const navigate = useNavigate();
-  const rows = data.map((m) => ({ ...m, incoming: m.incomePence / 100, outgoing: m.expensesPence / 100 }));
+  const rows = data.map((m) => ({ ...m, income: m.incomePence / 100, expenses: m.expensesPence / 100 }));
   return (
     <div className="h-[228px] px-2 pb-4 sm:px-4">
       <ResponsiveContainer width="100%" height="100%">
@@ -141,23 +141,25 @@ function MonthlyChart({ data }: { data: DashboardData['monthly'] }) {
           <Legend
             iconType="square"
             wrapperStyle={{ fontSize: 13, paddingTop: 12 }}
-            formatter={(value: string) => <span className="text-muted">{value === 'incoming' ? 'Incoming (£)' : 'Outgoing (£)'}</span>}
+            // Bar order (income first), not Recharts' default alphabetical order.
+            itemSorter={null}
+            formatter={(value: string) => <span className="text-muted">{value === 'income' ? 'Income (£)' : 'Expenses (£)'}</span>}
           />
           <Bar
-            dataKey="incoming"
+            dataKey="income"
             fill={CHART_IN.fill}
             radius={5}
             maxBarSize={36}
             style={{ cursor: 'pointer', filter: `drop-shadow(0 0 3px ${CHART_IN.glow})` }}
-            onClick={(bar) => navigate(`/incoming?taxMonth=${bar.payload.index}`)}
+            onClick={(bar) => navigate(`/income?taxMonth=${bar.payload.index}`)}
           />
           <Bar
-            dataKey="outgoing"
+            dataKey="expenses"
             fill={CHART_OUT.fill}
             radius={5}
             maxBarSize={36}
             style={{ cursor: 'pointer', filter: `drop-shadow(0 0 3px ${CHART_OUT.glow})` }}
-            onClick={(bar) => navigate(`/outgoing?taxMonth=${bar.payload.index}`)}
+            onClick={(bar) => navigate(`/expenses?taxMonth=${bar.payload.index}`)}
           />
         </BarChart>
       </ResponsiveContainer>
@@ -363,9 +365,9 @@ export function Dashboard() {
                 }
               />
               <StatCard
-                label="Total outgoing"
+                label="Total expenses"
                 value={formatGBP(data.totals.allowableExpensesPence)}
-                sub={outgoingNote(data)}
+                sub={expensesNote(data)}
                 icon={
                   <IconChip className="bg-out-bg text-out-soft">
                     <TrendingDown className="size-5" aria-hidden />
@@ -377,7 +379,7 @@ export function Dashboard() {
                 value={formatGBP(data.totals.netProfitPence)}
                 sub={
                   <>
-                    Income minus allowable outgoing.{' '}
+                    Income minus allowable expenses.{' '}
                     <Link to="/reports/tax-estimate" className="text-accent-soft hover:underline">
                       Estimated tax {formatGBP(data.taxEstimate.totalPence)}
                     </Link>
@@ -393,19 +395,19 @@ export function Dashboard() {
             </div>
 
             <Card>
-              <CardHeader icon={<TrendingUp className="size-5 text-accent-soft" />} title="Monthly incoming vs outgoing" />
+              <CardHeader icon={<TrendingUp className="size-5 text-accent-soft" />} title="Monthly income vs expenses" />
               <MonthlyChart data={data.monthly} />
             </Card>
 
             <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
               <RecentList
-                title="Recent incoming sales"
+                title="Recent income"
                 icon={<ArrowDownRight className="size-5 text-in-soft" />}
-                viewAll="/incoming"
-                empty="No incoming records for this tax year."
+                viewAll="/income"
+                empty="No income recorded for this tax year."
                 items={data.recentIncomes.map((i) => ({
                   key: i.id,
-                  to: `/incoming/${i.id}`,
+                  to: `/income/${i.id}`,
                   name: i.description,
                   sub: `${formatDisplayDate(i.date)} · ${PAYMENT_METHOD_LABELS[i.paymentMethod]}`,
                   amount: formatGBP(i.amountPence),
@@ -414,13 +416,13 @@ export function Dashboard() {
                 }))}
               />
               <RecentList
-                title="Recent outgoing payments"
+                title="Recent expenses"
                 icon={<ArrowUpRight className="size-5 text-out-soft" />}
-                viewAll="/outgoing"
-                empty="No outgoing records for this tax year."
+                viewAll="/expenses"
+                empty="No expenses recorded for this tax year."
                 items={data.recentExpenses.map((e) => ({
                   key: e.id,
-                  to: `/outgoing/${e.id}`,
+                  to: `/expenses/${e.id}`,
                   name: e.payee,
                   sub: `${formatDisplayDate(e.date)} · ${PAYMENT_METHOD_LABELS[e.paymentMethod]}`,
                   amount: formatGBP(e.totalPence),

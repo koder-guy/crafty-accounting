@@ -53,7 +53,7 @@ export function Welcome() {
             </ButtonLink>
           }
         >
-          Create a UK tax year (6 April to 5 April), then add your incoming and outgoing transactions.
+          Create a UK tax year (6 April to 5 April), then add your income and expenses.
         </Option>
         <Option
           icon={<Sparkles className="size-5" aria-hidden />}

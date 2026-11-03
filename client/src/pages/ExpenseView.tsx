@@ -23,17 +23,17 @@ export function ExpenseView() {
   return (
     <>
       <PageHeader
-        title={expense ? expense.payee : 'Outgoing'}
-        subtitle={expense ? `Outgoing · ${formatDisplayDate(expense.date)}` : undefined}
+        title={expense ? expense.payee : 'Expense'}
+        subtitle={expense ? `Expense · ${formatDisplayDate(expense.date)}` : undefined}
         actions={
           expense &&
           canEdit && (
             <>
-              <ButtonLink to={`/outgoing/${id}/edit`}>
+              <ButtonLink to={`/expenses/${id}/edit`}>
                 <Pencil className="size-4" aria-hidden />
                 Edit
               </ButtonLink>
-              <ButtonLink to={`/outgoing/new?copy=${id}`} title="Start a new transaction with the same details">
+              <ButtonLink to={`/expenses/new?copy=${id}`} title="Start a new transaction with the same details">
                 <Copy className="size-4" aria-hidden />
                 Duplicate
               </ButtonLink>
@@ -46,7 +46,7 @@ export function ExpenseView() {
         }
       />
       <PageBody>
-        <BackLink to="/outgoing">All outgoing</BackLink>
+        <BackLink to="/expenses">All expenses</BackLink>
         {isLoading ? (
           <Spinner />
         ) : error || !expense ? (
@@ -125,12 +125,12 @@ export function ExpenseView() {
 
       <ConfirmDialog
         open={confirming}
-        title="Delete this outgoing transaction?"
+        title="Delete this expense?"
         confirmLabel="Delete"
         onClose={() => setConfirming(false)}
         onConfirm={async () => {
           await remove.mutateAsync(id);
-          navigate('/outgoing');
+          navigate('/expenses');
         }}
       >
         <p>

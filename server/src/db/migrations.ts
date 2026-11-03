@@ -293,7 +293,7 @@ UPDATE expense_line_items SET disallowable = 1
 WHERE category_id IN (SELECT id FROM categories WHERE type = 'EXPENSE' AND hmrc_code IN ('businessEntertainmentCosts', 'depreciation'));
 `,
   },
-  // Outgoings no longer have a description of their own (line items still do). Any written so far
+  // Expenses no longer have a description of their own (line items still do). Any written so far
   // move to the notes, which stay within their 2000 character limit.
   {
     version: 16,

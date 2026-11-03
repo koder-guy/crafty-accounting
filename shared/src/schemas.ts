@@ -104,7 +104,7 @@ const optionalQueryText = z
   .optional()
   .transform((v) => (v ? v : undefined));
 
-/** Query-string filters shared by the incoming/outgoing list and CSV export. */
+/** Query-string filters shared by the income and expense lists and CSV export. */
 export const transactionFiltersSchema = z.object({
   taxYearId: z.coerce.number().int().positive(),
   search: optionalQueryText,

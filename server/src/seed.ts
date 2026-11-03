@@ -25,8 +25,8 @@ try {
   if (!process.exitCode) {
     const result = generateSampleData(db, uploadsDir);
     console.log(
-      `Loaded sample data into ${dataDir}: ${result.taxYears} tax years, ${result.incomes} incoming, ` +
-        `${result.expenses} outgoing, ${result.documents} documents, ${result.submissions} MTD submissions, ${result.trips} mileage trips.`,
+      `Loaded sample data into ${dataDir}: ${result.taxYears} tax years, ${result.incomes} income, ` +
+        `${result.expenses} expenses, ${result.documents} documents, ${result.submissions} MTD submissions, ${result.trips} mileage trips.`,
     );
   }
 } finally {

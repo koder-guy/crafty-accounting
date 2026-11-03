@@ -135,8 +135,8 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
       </div>
       <nav className="flex-1 space-y-1.5 overflow-y-auto px-4 py-5" aria-label="Main">
         <NavItem to="/" end icon={TrendingUp} label="Dashboard" />
-        <NavItem to="/incoming" icon={ArrowDownRight} label="Incoming" count={active?.incomeCount} />
-        <NavItem to="/outgoing" icon={ArrowUpRight} label="Outgoing" count={active?.expenseCount} />
+        <NavItem to="/income" icon={ArrowDownRight} label="Income" count={active?.incomeCount} />
+        <NavItem to="/expenses" icon={ArrowUpRight} label="Expenses" count={active?.expenseCount} />
         <NavItem to="/claims" icon={Car} label="Simplified Expenses" />
         {/* Only the section for the active year's submission type; see useSectionFollowsYear. */}
         {active?.submissionMethod === 'mtd' ? (

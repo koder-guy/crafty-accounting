@@ -96,7 +96,7 @@ export function compareSections(a: BreakdownSection, b: BreakdownSection): Compa
           standard.name,
           `cat:${standard.categoryId}`,
           (g) => ({ total: g.standard.totalPence, disallowable: g.standard.disallowablePence }),
-          customs.size > 0 ? 'not in a custom category' : 'recorded in Outgoing',
+          customs.size > 0 ? 'not in a custom category' : 'recorded in Expenses',
         ),
       );
     }

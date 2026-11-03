@@ -206,7 +206,7 @@ function CategoryTable({
                       );
                     }),
                     ...(g.standard.count > 0
-                      ? [child(g.standard, g.custom.length ? 'not in a custom category' : 'recorded in Outgoing')]
+                      ? [child(g.standard, g.custom.length ? 'not in a custom category' : 'recorded in Expenses')]
                       : []),
                   ]
                 : []),
@@ -305,7 +305,7 @@ export function DrillDown({
                             ? '/claims/mileage'
                             : i.kind === 'home'
                               ? '/claims/use-of-home'
-                              : `/${i.kind === 'income' ? 'incoming' : 'outgoing'}/${i.transactionId}`
+                              : `/${i.kind === 'income' ? 'income' : 'expenses'}/${i.transactionId}`
                         }
                         className="font-medium text-ink hover:text-accent-soft hover:underline"
                       >
@@ -377,7 +377,7 @@ export function Breakdown() {
     for (const g of [...data.expenses.groups, ...data.income.groups]) {
       if (g.standard.categoryId === selection.categoryId) {
         if (selection.group) return g.standard.name;
-        return `${g.standard.name} (${g.custom.length ? 'not in a custom category' : 'recorded in Outgoing'})`;
+        return `${g.standard.name} (${g.custom.length ? 'not in a custom category' : 'recorded in Expenses'})`;
       }
       const c = g.custom.find((x) => x.categoryId === selection.categoryId);
       if (c) return c.name;

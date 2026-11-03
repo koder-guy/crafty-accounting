@@ -20,7 +20,7 @@ import {
 import { Alert, ButtonLink, Card, CardHeader, EmptyState, PaymentBadge, Spinner } from '../components/ui';
 import { exportCsvUrl, useActiveTaxYear, useCanEdit, useCategories, useDeleteTransaction, useIncomes } from '../lib/queries';
 
-export function IncomingList() {
+export function IncomeList() {
   const { taxYear, isLoading: yearLoading } = useActiveTaxYear();
   const filterState = useTransactionFilters(taxYear);
   const { data: categories = [] } = useCategories();
@@ -46,15 +46,15 @@ export function IncomingList() {
   return (
     <>
       <PageHeader
-        title="Incoming"
+        title="Income"
         actions={
           taxYear && (
             <>
               {filterState.filters && <ExportCsvButton href={exportCsvUrl('incomes', filterState.filters)} />}
               {canEdit && (
-                <ButtonLink to="/incoming/new" variant="primary">
+                <ButtonLink to="/income/new" variant="primary">
                   <Plus className="size-4" aria-hidden />
-                  Add incoming
+                  Add income
                 </ButtonLink>
               )}
             </>
@@ -70,7 +70,7 @@ export function IncomingList() {
           <Card>
             <CardHeader
               icon={<ArrowDownRight className="size-5 text-in-soft" />}
-              title="Incoming sales"
+              title="Income received"
               action={
                 data && (
                   <span className="text-sm text-muted">
@@ -88,8 +88,8 @@ export function IncomingList() {
             ) : isLoading ? (
               <Spinner />
             ) : sorted.length === 0 ? (
-              <EmptyState icon={<ArrowDownRight className="size-10" />} title={filterState.active ? 'No matching transactions' : 'No incoming transactions yet'}>
-                {filterState.active ? 'Try changing or clearing the filters.' : 'Record your first sale with “Add incoming”.'}
+              <EmptyState icon={<ArrowDownRight className="size-10" />} title={filterState.active ? 'No matching transactions' : 'No income recorded yet'}>
+                {filterState.active ? 'Try changing or clearing the filters.' : 'Record your first sale with “Add income”.'}
               </EmptyState>
             ) : (
               <>
@@ -97,7 +97,7 @@ export function IncomingList() {
                 {sorted.map((row) => (
                   <TransactionCard
                     key={row.id}
-                    to={`/incoming/${row.id}`}
+                    to={`/income/${row.id}`}
                     title={row.description}
                     sub={`${formatDisplayDate(row.date)} · ${shortCategoryName(row.categoryName)}`}
                     amount={formatGBP(row.amountPence)}
@@ -126,7 +126,7 @@ export function IncomingList() {
                       <tr
                         key={row.id}
                         className="cursor-pointer transition-colors hover:bg-surface-2/60"
-                        onClick={(e) => !(e.target as HTMLElement).closest('a,button') && navigate(`/incoming/${row.id}`)}
+                        onClick={(e) => !(e.target as HTMLElement).closest('a,button') && navigate(`/income/${row.id}`)}
                       >
                         <td className="px-4 py-3 whitespace-nowrap text-muted">{formatDisplayDate(row.date)}</td>
                         <td className="w-2/3 max-w-0 px-4 py-3">
@@ -146,8 +146,8 @@ export function IncomingList() {
                         </td>
                         <td className="px-3 py-2">
                           <RowActions
-                            viewTo={`/incoming/${row.id}`}
-                            editTo={`/incoming/${row.id}/edit`}
+                            viewTo={`/income/${row.id}`}
+                            editTo={`/income/${row.id}/edit`}
                             onDelete={() => setToDelete(row)}
                           />
                         </td>
@@ -164,7 +164,7 @@ export function IncomingList() {
 
       <ConfirmDialog
         open={toDelete !== null}
-        title="Delete this incoming transaction?"
+        title="Delete this income?"
         confirmLabel="Delete"
         onClose={() => setToDelete(null)}
         onConfirm={() => remove.mutateAsync(toDelete!.id)}

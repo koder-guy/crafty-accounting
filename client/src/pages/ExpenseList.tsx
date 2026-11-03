@@ -18,16 +18,16 @@ import {
   useTransactionFilters,
 } from '../components/transactions';
 import { Alert, Badge, ButtonLink, Card, CardHeader, EmptyState, PaymentBadge, Spinner } from '../components/ui';
-import { exportCsvUrl, useActiveTaxYear, useCanEdit, useCategories, useDeleteTransaction, useExpandedOutgoingRows, useExpenses } from '../lib/queries';
+import { exportCsvUrl, useActiveTaxYear, useCanEdit, useCategories, useDeleteTransaction, useExpandedExpenseRows, useExpenses } from '../lib/queries';
 
-export function OutgoingList() {
+export function ExpenseList() {
   const { taxYear, isLoading: yearLoading } = useActiveTaxYear();
   const filterState = useTransactionFilters(taxYear);
   const { data: categories = [] } = useCategories();
   const { data, isLoading, error } = useExpenses(filterState.filters);
   const canEdit = useCanEdit();
   const remove = useDeleteTransaction('expenses');
-  const { isExpanded, toggle: toggleRow } = useExpandedOutgoingRows();
+  const { isExpanded, toggle: toggleRow } = useExpandedExpenseRows();
   const [toDelete, setToDelete] = useState<Expense | null>(null);
   const navigate = useNavigate();
 
@@ -47,15 +47,15 @@ export function OutgoingList() {
   return (
     <>
       <PageHeader
-        title="Outgoing"
+        title="Expenses"
         actions={
           taxYear && (
             <>
               {filterState.filters && <ExportCsvButton href={exportCsvUrl('expenses', filterState.filters)} />}
               {canEdit && (
-                <ButtonLink to="/outgoing/new" variant="primary">
+                <ButtonLink to="/expenses/new" variant="primary">
                   <Plus className="size-4" aria-hidden />
-                  Add outgoing
+                  Add expense
                 </ButtonLink>
               )}
             </>
@@ -71,7 +71,7 @@ export function OutgoingList() {
           <Card>
             <CardHeader
               icon={<ArrowUpRight className="size-5 text-out-soft" />}
-              title="Outgoing payments"
+              title="Expenses paid"
               action={
                 data && (
                   <span className="text-sm text-muted">
@@ -89,8 +89,8 @@ export function OutgoingList() {
             ) : isLoading ? (
               <Spinner />
             ) : sorted.length === 0 ? (
-              <EmptyState icon={<ArrowUpRight className="size-10" />} title={filterState.active ? 'No matching transactions' : 'No outgoing transactions yet'}>
-                {filterState.active ? 'Try changing or clearing the filters.' : 'Record a purchase or invoice with “Add outgoing”.'}
+              <EmptyState icon={<ArrowUpRight className="size-10" />} title={filterState.active ? 'No matching transactions' : 'No expenses recorded yet'}>
+                {filterState.active ? 'Try changing or clearing the filters.' : 'Record a purchase or invoice with “Add expense”.'}
               </EmptyState>
             ) : (
               <>
@@ -98,7 +98,7 @@ export function OutgoingList() {
                 {sorted.map((row) => (
                   <TransactionCard
                     key={row.id}
-                    to={`/outgoing/${row.id}`}
+                    to={`/expenses/${row.id}`}
                     title={row.payee}
                     sub={`${formatDisplayDate(row.date)} · ${categorySummary(row.categoryNames)}`}
                     amount={formatGBP(row.totalPence)}
@@ -132,7 +132,7 @@ export function OutgoingList() {
                         <Fragment key={row.id}>
                           <tr
                             className={`cursor-pointer transition-colors hover:bg-surface-2/60 ${open ? 'bg-surface-2/40' : ''}`}
-                            onClick={(e) => !(e.target as HTMLElement).closest('a,button') && navigate(`/outgoing/${row.id}`)}
+                            onClick={(e) => !(e.target as HTMLElement).closest('a,button') && navigate(`/expenses/${row.id}`)}
                           >
                             <td className="py-2 pl-3">
                               <button
@@ -177,8 +177,8 @@ export function OutgoingList() {
                             </td>
                             <td className="px-3 py-2">
                               <RowActions
-                                viewTo={`/outgoing/${row.id}`}
-                                editTo={`/outgoing/${row.id}/edit`}
+                                viewTo={`/expenses/${row.id}`}
+                                editTo={`/expenses/${row.id}/edit`}
                                 onDelete={() => setToDelete(row)}
                               />
                             </td>
@@ -205,7 +205,7 @@ export function OutgoingList() {
 
       <ConfirmDialog
         open={toDelete !== null}
-        title="Delete this outgoing transaction?"
+        title="Delete this expense?"
         confirmLabel="Delete"
         onClose={() => setToDelete(null)}
         onConfirm={() => remove.mutateAsync(toDelete!.id)}

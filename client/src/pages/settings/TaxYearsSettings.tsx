@@ -149,8 +149,8 @@ export function TaxYearsSettings() {
                         {Number(year.label.slice(0, 4)) === currentStart && <Badge>Current</Badge>}
                       </div>
                       <p className="mt-1 text-sm text-muted">
-                        {formatDisplayDate(year.startDate)} – {formatDisplayDate(year.endDate)} · {year.incomeCount} incoming ·{' '}
-                        {year.expenseCount} outgoing · {year.documentCount} documents
+                        {formatDisplayDate(year.startDate)} – {formatDisplayDate(year.endDate)} · {year.incomeCount} income ·{' '}
+                        {year.expenseCount} expenses · {year.documentCount} documents
                       </p>
                       <YearMethod
                         year={year}
@@ -210,8 +210,8 @@ export function TaxYearsSettings() {
         {toDelete && (
           <>
             <p>
-              This permanently deletes <strong className="text-ink">{toDelete.incomeCount} incoming</strong> and{' '}
-              <strong className="text-ink">{toDelete.expenseCount} outgoing</strong> transactions, and{' '}
+              This permanently deletes <strong className="text-ink">{toDelete.incomeCount} income</strong> and{' '}
+              <strong className="text-ink">{toDelete.expenseCount} expense</strong> transactions, and{' '}
               <strong className="text-ink">{toDelete.documentCount} attached documents</strong>.
             </p>
             <p>This can't be undone. Download a backup first if you might need this data.</p>

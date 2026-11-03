@@ -221,7 +221,7 @@ export function Mileage() {
               ) : (
                 <Alert tone="warning">
                   The mileage rate covers all the running costs of the vehicle (fuel, insurance, servicing, repairs). Don't also record
-                  those costs as outgoing for the same vehicle. Parking, tolls and train fares can still go in Outgoing.
+                  those costs as expenses for the same vehicle. Parking, tolls and train fares can still go in Expenses.
                 </Alert>
               )}
 

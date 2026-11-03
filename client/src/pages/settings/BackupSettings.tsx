@@ -113,7 +113,7 @@ export function BackupSettings() {
           <CardHeader icon={<RotateCcw className="size-5 text-out-soft" />} title="Start again with an empty database" />
           <div className="space-y-4 px-5 pb-6 sm:px-6">
             <p className="text-sm text-muted">
-              Deletes all tax years, incoming and outgoing transactions, attached documents, custom categories and MTD submission
+              Deletes all tax years, income and expense transactions, attached documents, custom categories and MTD submission
               records. The standard MTD categories and your sign-in password stay. A copy of the old data is kept on the server as{' '}
               <code>crafty.pre-reset.db</code> and <code>uploads.pre-reset</code> until the next reset.
             </p>

@@ -28,7 +28,7 @@ export function IncomeForm() {
   const id = params.id ? Number(params.id) : null;
   const navigate = useNavigate();
   const { data: existing, isLoading: loadingExisting, error: loadError, refetch: refetchExisting } = useIncome(id);
-  // Duplicating: /incoming/new?copy=<id> fills the new form from that transaction.
+  // Duplicating: /income/new?copy=<id> fills the new form from that transaction.
   const [searchParams] = useSearchParams();
   const copyId = id ? null : Number(searchParams.get('copy')) || null;
   const { data: original, isLoading: loadingOriginal, error: originalError } = useIncome(copyId);
@@ -139,7 +139,7 @@ export function IncomeForm() {
     save.mutate(
       { id: id ?? undefined, form: transactionForm(payload, files) },
       {
-        onSuccess: (saved) => navigate(`/incoming/${saved.id}`),
+        onSuccess: (saved) => navigate(`/income/${saved.id}`),
         onError: (err) => {
           // Someone else saved first: fetch their version so the form can offer it.
           if (err instanceof ApiError && err.status === 409) refetchExisting();
@@ -153,8 +153,8 @@ export function IncomeForm() {
     );
   });
 
-  const title = id ? 'Edit incoming' : copyId ? 'Duplicate incoming' : 'Add incoming';
-  const backTo = id ? `/incoming/${id}` : copyId ? `/incoming/${copyId}` : '/incoming';
+  const title = id ? 'Edit income' : copyId ? 'Duplicate income' : 'Add income';
+  const backTo = id ? `/income/${id}` : copyId ? `/income/${copyId}` : '/income';
 
   if (yearLoading || loadingCategories || (id && loadingExisting) || (copyId && loadingOriginal)) {
     return (
@@ -295,7 +295,7 @@ export function IncomeForm() {
                 Cancel
               </Button>
               <Button type="submit" variant="primary" busy={save.isPending || preparingPhoto} disabled={badDocumentNames}>
-                {id ? 'Save changes' : 'Add incoming'}
+                {id ? 'Save changes' : 'Add income'}
               </Button>
             </div>
           </Card>

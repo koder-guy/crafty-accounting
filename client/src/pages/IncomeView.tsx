@@ -23,17 +23,17 @@ export function IncomeView() {
   return (
     <>
       <PageHeader
-        title={income ? income.description : 'Incoming'}
-        subtitle={income ? `Incoming · ${formatDisplayDate(income.date)}` : undefined}
+        title={income ? income.description : 'Income'}
+        subtitle={income ? `Income · ${formatDisplayDate(income.date)}` : undefined}
         actions={
           income &&
           canEdit && (
             <>
-              <ButtonLink to={`/incoming/${id}/edit`}>
+              <ButtonLink to={`/income/${id}/edit`}>
                 <Pencil className="size-4" aria-hidden />
                 Edit
               </ButtonLink>
-              <ButtonLink to={`/incoming/new?copy=${id}`} title="Start a new transaction with the same details">
+              <ButtonLink to={`/income/new?copy=${id}`} title="Start a new transaction with the same details">
                 <Copy className="size-4" aria-hidden />
                 Duplicate
               </ButtonLink>
@@ -46,7 +46,7 @@ export function IncomeView() {
         }
       />
       <PageBody>
-        <BackLink to="/incoming">All incoming</BackLink>
+        <BackLink to="/income">All income</BackLink>
         {isLoading ? (
           <Spinner />
         ) : error || !income ? (
@@ -82,12 +82,12 @@ export function IncomeView() {
 
       <ConfirmDialog
         open={confirming}
-        title="Delete this incoming transaction?"
+        title="Delete this income?"
         confirmLabel="Delete"
         onClose={() => setConfirming(false)}
         onConfirm={async () => {
           await remove.mutateAsync(id);
-          navigate('/incoming');
+          navigate('/income');
         }}
       >
         <p>

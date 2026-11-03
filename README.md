@@ -5,7 +5,7 @@ Self-hosted bookkeeping for UK sole traders on the cash basis. Keep your income 
 ## Features
 
 - **Tax years** run 6 April to 5 April. Each is set to go to HMRC by a **Self Assessment return** or by **Making Tax Digital**, and the menu shows only that section. A year with quarterly updates stays MTD.
-- **Incoming and outgoing**: income with a category and payment method (cash, card or bank transfer); purchases split into line items, each with a category and optionally marked disallowable, with the transaction total added up from them. Attach up to 10 documents (PDFs or images) to each, or take a photo with the device's camera (a computer's camera needs [HTTPS](#https); a phone's works either way). Photos are saved as JPEGs of 2 MB or less, and you can rename any new document before saving. **Duplicate** starts a new entry from an existing one, for things that repeat.
+- **Income and expenses**: income with a category and payment method (cash, card or bank transfer); purchases split into line items, each with a category and optionally marked disallowable, with the transaction total added up from them. Attach up to 10 documents (PDFs or images) to each, or take a photo with the device's camera (a computer's camera needs [HTTPS](#https); a phone's works either way). Photos are saved as JPEGs of 2 MB or less, and you can rename any new document before saving. **Duplicate** starts a new entry from an existing one, for things that repeat.
 - **Lists** can be searched, filtered, sorted and exported to CSV.
 - **Simplified expenses**:
   - **Mileage** at HMRC's rates (for each tax year; for 2026/27, cars and vans 55p a mile for the first 10,000 miles and 25p after, motorcycles 24p, bicycles 20p). It warns if a year also has actual vehicle costs, which HMRC doesn't allow alongside mileage.
@@ -15,7 +15,7 @@ Self-hosted bookkeeping for UK sole traders on the cash basis. Keep your income 
 - **Dashboard**: totals, a monthly chart, a breakdown by HMRC category and key dates.
 - **Reports**:
   - **Breakdown**: income and spending for any period, by category and payee, with the transactions behind each row.
-  - **Compare years**: two tax years side by side: incoming, outgoing, profit and margin, month by month and by category, plus the estimated tax for full years. A year still in progress is compared with the same stretch of the other.
+  - **Compare years**: two tax years side by side: income, expenses, profit and margin, month by month and by category, plus the estimated tax for full years. A year still in progress is compared with the same stretch of the other.
   - **Tax estimate**: Income Tax and Class 4 National Insurance on the year's profit, using the trading allowance if that's better. It shows what to put aside and when it's due, including payments on account, and can allow for a salary or pension. Rates are for England, Wales and Northern Ireland.
 - **Self Assessment → Year-end summary**: the figures for each box of the SA103S (self-employment, short), with disallowable amounts listed and a trading allowance comparison. Business entertaining is always disallowable, in every total. Depreciation isn't offered for new expenses, because on the cash basis you claim equipment when you buy it. Record the date you filed, and the app warns if the figures change afterwards.
 - **Making Tax Digital**: each quarter's figures as a CSV for bridging software, and a record of each submission (see [Making Tax Digital](#making-tax-digital)).

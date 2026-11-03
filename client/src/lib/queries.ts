@@ -267,14 +267,14 @@ export function useDeleteTransaction(kind: Kind) {
 
 // ---- UI state ----
 
-const EXPANDED_KEY = ['ui', 'outgoing-expanded'];
+const EXPANDED_KEY = ['ui', 'expense-expanded'];
 
 /**
- * Which Outgoing rows are expanded. Kept in the query cache (never garbage
+ * Which Expenses rows are expanded. Kept in the query cache (never garbage
  * collected) so it survives moving between sections; it's cleared on sign-in
  * and sign-out with the rest of the cache, and on a page refresh.
  */
-export function useExpandedOutgoingRows() {
+export function useExpandedExpenseRows() {
   const qc = useQueryClient();
   const { data: ids } = useQuery({
     queryKey: EXPANDED_KEY,

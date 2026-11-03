@@ -11,10 +11,10 @@ import { EditorOnly } from './components/ReadOnly';
 import { Spinner } from './components/ui';
 import { Login } from './pages/Login';
 import { Dashboard } from './pages/Dashboard';
-import { IncomingList } from './pages/IncomingList';
+import { IncomeList } from './pages/IncomeList';
 import { IncomeForm } from './pages/IncomeForm';
 import { IncomeView } from './pages/IncomeView';
-import { OutgoingList } from './pages/OutgoingList';
+import { ExpenseList } from './pages/ExpenseList';
 import { ExpenseForm } from './pages/ExpenseForm';
 import { ExpenseView } from './pages/ExpenseView';
 import { ClaimsLayout } from './pages/claims/ClaimsLayout';
@@ -55,38 +55,38 @@ function App() {
     <Routes>
       <Route element={<Layout />}>
         <Route index element={<Dashboard />} />
-        <Route path="incoming" element={<IncomingList />} />
+        <Route path="income" element={<IncomeList />} />
         <Route
-          path="incoming/new"
+          path="income/new"
           element={
-            <EditorOnly title="Add incoming">
+            <EditorOnly title="Add income">
               <IncomeForm />
             </EditorOnly>
           }
         />
-        <Route path="incoming/:id" element={<IncomeView />} />
+        <Route path="income/:id" element={<IncomeView />} />
         <Route
-          path="incoming/:id/edit"
+          path="income/:id/edit"
           element={
-            <EditorOnly title="Edit incoming">
+            <EditorOnly title="Edit income">
               <IncomeForm />
             </EditorOnly>
           }
         />
-        <Route path="outgoing" element={<OutgoingList />} />
+        <Route path="expenses" element={<ExpenseList />} />
         <Route
-          path="outgoing/new"
+          path="expenses/new"
           element={
-            <EditorOnly title="Add outgoing">
+            <EditorOnly title="Add expense">
               <ExpenseForm />
             </EditorOnly>
           }
         />
-        <Route path="outgoing/:id" element={<ExpenseView />} />
+        <Route path="expenses/:id" element={<ExpenseView />} />
         <Route
-          path="outgoing/:id/edit"
+          path="expenses/:id/edit"
           element={
-            <EditorOnly title="Edit outgoing">
+            <EditorOnly title="Edit expense">
               <ExpenseForm />
             </EditorOnly>
           }

@@ -558,7 +558,7 @@ describe('comparing tax years', () => {
       ['cat:9', [200, 0], undefined],
       ['cat:2', [300, 100], 'not in a custom category'],
     ]);
-    // Only the flat rate was used in this category, so there's no "recorded in Outgoing" row.
+    // Only the flat rate was used in this category, so there's no "recorded in Expenses" row.
     expect(rows[1].children.map((c) => c.show)).toEqual(['flat:mileage']);
     expect(rows[2].children).toEqual([]);
   });

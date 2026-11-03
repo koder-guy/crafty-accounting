@@ -62,7 +62,7 @@ export interface Category {
   hmrcCode: string;
   /** User-defined name that maps onto one of the standard MTD categories. */
   isCustom: boolean;
-  /** Incoming transactions plus outgoing line items using this category. */
+  /** Income transactions plus expense line items using this category. */
   usageCount: number;
 }
 
@@ -229,14 +229,14 @@ export interface BreakdownCategory {
   isCustom: boolean;
   totalPence: number;
   disallowablePence: number;
-  /** Incoming transactions or outgoing line items. */
+  /** Income transactions or expense line items. */
   count: number;
 }
 
 /** One standard MTD category, with any custom categories mapped to it. */
 export type FlatRateKind = 'mileage' | 'home';
 
-/** Claims worked out at an HMRC flat rate rather than recorded as outgoing. */
+/** Claims worked out at an HMRC flat rate rather than recorded as expenses. */
 export interface BreakdownFlatRate {
   kind: FlatRateKind;
   name: string;
@@ -268,13 +268,13 @@ export interface BreakdownResponse {
   to: string;
   income: BreakdownSection;
   expenses: BreakdownSection;
-  /** Outgoing transactions by payee, largest first. */
+  /** Expense transactions by payee, largest first. */
   payees: { payee: string; totalPence: number; count: number }[];
 }
 
 export interface BreakdownItem {
   kind: 'income' | 'expense' | 'mileage' | 'home';
-  /** The incoming or outgoing transaction (or mileage trip) to link to. */
+  /** The income or expense transaction (or mileage trip) to link to. */
   transactionId: number;
   date: string;
   payee: string | null;
@@ -330,22 +330,22 @@ export interface MileageResponse {
     /** Car and van miles, which count towards the 10,000-mile threshold. */
     carDistanceTenths: number;
   };
-  /** Outgoing in the same category as mileage, which may be a double claim (see MileageCheck). */
+  /** Expenses in the same category as mileage, which may be a double claim (see MileageCheck). */
   check: MileageCheck | null;
 }
 
 /**
- * Set when a tax year has both mileage claims and outgoing in "Car, van and
+ * Set when a tax year has both mileage claims and expenses in "Car, van and
  * travel expenses". HMRC doesn't allow the mileage rate and actual running
  * costs (fuel, insurance, repairs) for the same vehicle, though parking,
  * tolls and fares are fine, so it's a prompt to check rather than an error.
  */
 export interface MileageCheck {
   mileagePence: number;
-  outgoingPence: number;
-  /** Outgoing line items in the category (allowable ones only). */
-  outgoingCount: number;
-  /** The standard category, for linking to the outgoing list. */
+  expensesPence: number;
+  /** Expense line items in the category (allowable ones only). */
+  expenseCount: number;
+  /** The standard category, for linking to the expense list. */
   categoryId: number;
 }
 
@@ -367,7 +367,7 @@ export type ComparisonPeriod = 'same' | 'full';
 
 export interface YearComparisonMonth extends TaxMonth {
   incomePence: number;
-  /** Allowable outgoing only, to match the profit. */
+  /** Allowable expenses only, to match the profit. */
   expensesPence: number;
   profitPence: number;
 }

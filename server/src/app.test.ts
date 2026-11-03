@@ -606,7 +606,7 @@ describe('incomes', () => {
     expect((await agent.get('/api/incomes').query({ taxYearId: yearId })).body).toHaveLength(1);
   });
 
-  it('stores documents on outgoing too', async () => {
+  it('stores documents on expenses too', async () => {
     const yearId = await createYear();
     const created = (
       await agent
@@ -641,7 +641,7 @@ describe('incomes', () => {
     expect(amount.body).toHaveLength(1);
 
     const csv = await agent.get('/api/incomes/export.csv').query({ taxYearId: yearId, paymentMethod: 'cash' }).expect(200);
-    expect(csv.headers['content-disposition']).toContain('incoming-2025-26.csv');
+    expect(csv.headers['content-disposition']).toContain('income-2025-26.csv');
     const lines = csv.text.trim().split('\r\n');
     expect(lines).toHaveLength(2);
     expect(lines[1]).toContain('Christmas fair');
@@ -849,7 +849,7 @@ describe('mileage', () => {
     });
     const onlyMileage = (await agent.get('/api/reports/breakdown/items').query({ ...range, flatRate: 'mileage' }).expect(200)).body;
     expect(onlyMileage).toMatchObject([{ kind: 'mileage', amountPence: 1350 }]);
-    // The standard category on its own is just the outgoing recorded against it.
+    // The standard category on its own is just the expenses recorded against it.
     expect(
       (await agent.get('/api/reports/breakdown/items').query({ ...range, categoryId: cat('carVanTravelExpenses'), group: '0' }).expect(200)).body,
     ).toEqual([]);
@@ -860,7 +860,7 @@ describe('mileage', () => {
     expect(items).toMatchObject([{ kind: 'mileage', amountPence: 1350, description: 'Home to Abingdon Market and back' }]);
   });
 
-  it('warns when outgoing in the same category may claim the car twice', async () => {
+  it('warns when expenses in the same category may claim the car twice', async () => {
     const yearId = await createYear();
     const fuel = (disallowable = false) =>
       expense(yearId, {
@@ -873,7 +873,7 @@ describe('mileage', () => {
     expect((await agent.get('/api/mileage').query({ taxYearId: yearId })).body.check).toBeNull();
 
     await agent.post('/api/mileage').send(trip(yearId)).expect(201);
-    const check = { mileagePence: 1350, outgoingPence: 4000, outgoingCount: 1, categoryId: cat('carVanTravelExpenses') };
+    const check = { mileagePence: 1350, expensesPence: 4000, expenseCount: 1, categoryId: cat('carVanTravelExpenses') };
     expect((await agent.get('/api/mileage').query({ taxYearId: yearId })).body.check).toEqual(check);
     expect((await agent.get('/api/reports/year-end').query({ taxYearId: yearId })).body.mileageCheck).toEqual(check);
   });
@@ -1142,7 +1142,7 @@ describe('MTD quarters', () => {
     expect(body.lineItems.map((l: { disallowable: boolean }) => l.disallowable)).toEqual([true, false]);
   });
 
-  it('moves outgoing descriptions to the notes in an older backup', async () => {
+  it('moves expense descriptions to the notes in an older backup', async () => {
     const old = new Database(':memory:');
     old.exec('CREATE TABLE schema_migrations (version INTEGER PRIMARY KEY, applied_at TEXT)');
     for (const migration of MIGRATIONS.filter((m) => m.version <= 15)) {

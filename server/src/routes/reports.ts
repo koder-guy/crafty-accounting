@@ -251,7 +251,7 @@ export function reportsRouter(ctx: AppContext): Router {
     res.json(response);
   });
 
-  /** Income and expenses by category (and outgoing by payee) for any date range. */
+  /** Income and expenses by category (and expenses by payee) for any date range. */
   router.get('/breakdown', (req, res) => {
     const { from, to } = parseWith(reportRangeSchema, req.query);
     const db = ctx.db;

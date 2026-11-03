@@ -90,14 +90,14 @@ function Headlines({ a, b }: { a: YearComparisonYear; b: YearComparisonYear }) {
   return (
     <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
       <StatBox
-        label="Incoming"
+        label="Income"
         value={formatGBP(a.totals.incomePence)}
         valueClass="text-in-soft"
         compared={`${was}: ${formatGBP(b.totals.incomePence)}`}
         change={<Change first={a.totals.incomePence} second={b.totals.incomePence} good="up" />}
       />
       <StatBox
-        label="Allowable outgoing"
+        label="Allowable expenses"
         value={formatGBP(a.totals.allowableExpensesPence)}
         valueClass="text-out-soft"
         compared={`${was}: ${formatGBP(b.totals.allowableExpensesPence)}`}
@@ -128,8 +128,8 @@ const CHOSEN_YEAR = { id: 'compare-chosen-year', fill: 'url(#compare-chosen-year
 const OTHER_YEAR = { id: 'compare-other-year', fill: 'url(#compare-other-year)', swatch: '#6ea0f5', glow: '#6ea0f580' };
 
 const METRICS = {
-  incomePence: { label: 'Incoming', good: 'up' },
-  expensesPence: { label: 'Allowable outgoing', good: 'down' },
+  incomePence: { label: 'Income', good: 'up' },
+  expensesPence: { label: 'Allowable expenses', good: 'down' },
   profitPence: { label: 'Profit', good: 'up' },
 } as const;
 type Metric = keyof typeof METRICS;
@@ -329,7 +329,7 @@ function CategoryTable({ a, b, pick, good, showShare }: { a: YearComparisonYear;
             <th scope="col" className="px-3 py-3 text-right font-medium">{shortYear(a)}</th>
             <th scope="col" className="px-3 py-3 text-right font-medium">{shortYear(b)}</th>
             <th scope="col" className="px-3 py-3 text-right font-medium">Change</th>
-            <th scope="col" className={`${lastCell} text-right font-medium whitespace-nowrap`}>% of incoming</th>
+            <th scope="col" className={`${lastCell} text-right font-medium whitespace-nowrap`}>% of income</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-line">
