@@ -93,6 +93,14 @@ describe('auth', () => {
     expect((await other.get('/api/auth/me')).body).toMatchObject({ authenticated: true, user: { name: NAME } });
   });
 
+  it('signs in only until the browser quits (a session cookie, with no expiry)', async () => {
+    const res = await request(createApp(ctx)).post('/api/auth/login').send({ name: NAME, password: PASSWORD }).expect(200);
+    const cookies = ([] as string[]).concat(res.headers['set-cookie'] ?? []);
+    const session = cookies.filter((c) => c.startsWith('crafty_session'));
+    expect(session.length).toBeGreaterThan(0);
+    for (const c of session) expect(c).not.toMatch(/expires=|max-age=/i);
+  });
+
   it('creates Admin / admin on a new install, who must choose a new password first', async () => {
     const emptyDir = fs.mkdtempSync(path.join(os.tmpdir(), 'crafty-test-'));
     const fresh = createContext(loadConfig({ DATA_DIR: emptyDir, CLIENT_DIST: path.join(emptyDir, 'none') }));

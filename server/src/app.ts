@@ -53,7 +53,7 @@ export function createApp(ctx: AppContext) {
       httpOnly: true,
       sameSite: 'lax',
       secure: ctx.config.cookieSecure,
-      maxAge: 30 * 24 * 60 * 60 * 1000,
+      // No maxAge: a browser-session cookie, so quitting the browser signs you out.
     }),
   );
 
