@@ -29,7 +29,7 @@ import { CompareYears } from './pages/reports/CompareYears';
 import { TaxEstimate } from './pages/reports/TaxEstimate';
 import { SelfAssessmentLayout } from './pages/selfAssessment/SelfAssessmentLayout';
 import { YearEndSummary } from './pages/selfAssessment/YearEndSummary';
-import { SettingsIndex, SettingsLayout } from './pages/settings/SettingsLayout';
+import { SettingsLayout } from './pages/settings/SettingsLayout';
 import { TaxYearsSettings } from './pages/settings/TaxYearsSettings';
 import { CustomCategories } from './pages/settings/CustomCategories';
 import { BackupSettings } from './pages/settings/BackupSettings';
@@ -92,25 +92,21 @@ function App() {
           }
         />
         <Route path="claims" element={<ClaimsLayout />}>
-          <Route index element={<Navigate to="mileage" replace />} />
           <Route path="mileage" element={<Mileage />} />
           <Route path="use-of-home" element={<UseOfHome />} />
         </Route>
         <Route path="mileage" element={<Navigate to="/claims/mileage" replace />} />
         <Route path="use-of-home" element={<Navigate to="/claims/use-of-home" replace />} />
         <Route path="mtd" element={<MtdLayout />}>
-          <Route index element={<Navigate to="quarterly" replace />} />
           <Route path="quarterly" element={<MtdQuarterly />} />
           <Route path="final-declaration" element={<FinalDeclaration />} />
           <Route path="tax-estimate" element={<Navigate to="/reports/tax-estimate" replace />} />
         </Route>
         <Route path="self-assessment" element={<SelfAssessmentLayout />}>
-          <Route index element={<Navigate to="year-end" replace />} />
           <Route path="year-end" element={<YearEndSummary />} />
           <Route path="tax-estimate" element={<Navigate to="/reports/tax-estimate" replace />} />
         </Route>
         <Route path="reports" element={<ReportsLayout />}>
-          <Route index element={<Navigate to="tax-estimate" replace />} />
           <Route path="tax-estimate" element={<TaxEstimate />} />
           <Route path="breakdown" element={<Breakdown />} />
           <Route path="compare-years" element={<CompareYears />} />
@@ -118,7 +114,6 @@ function App() {
         </Route>
         <Route path="year-end" element={<Navigate to="/self-assessment/year-end" replace />} />
         <Route path="settings" element={<SettingsLayout />}>
-          <Route index element={<SettingsIndex />} />
           <Route path="tax-years" element={<TaxYearsSettings />} />
           <Route path="categories" element={<CustomCategories />} />
           <Route path="people" element={<People />} />

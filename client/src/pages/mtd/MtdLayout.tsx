@@ -21,6 +21,7 @@ export function MtdLayout() {
       }
       sections={showDeclaration ? [QUARTERLY, FINAL_DECLARATION] : [QUARTERLY]}
       variant="tabs"
+      ready={!!hmrc && (!taxYear || !!data)}
     />
   );
 }

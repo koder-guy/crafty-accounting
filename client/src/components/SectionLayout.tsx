@@ -1,5 +1,5 @@
-import type { ComponentType, ReactNode } from 'react';
-import { NavLink, Outlet } from 'react-router';
+import { useEffect, type ComponentType, type ReactNode } from 'react';
+import { Navigate, NavLink, Outlet, useLocation } from 'react-router';
 import { PageBody, PageHeader } from './PageHeader';
 
 export interface SectionLink {
@@ -8,21 +8,55 @@ export interface SectionLink {
   icon: ComponentType<{ className?: string; 'aria-hidden'?: boolean }>;
 }
 
+const LAST_PAGE_PREFIX = 'crafty.lastPage.';
+
+function readLastPage(root: string): string | null {
+  try {
+    return sessionStorage.getItem(LAST_PAGE_PREFIX + root);
+  } catch {
+    return null;
+  }
+}
+
 /**
  * A page with sub-pages: a menu down the side on desktop ("side"), or tabs
  * across the top ("tabs"). Phones always get tabs.
+ *
+ * The section's own address (such as `/reports`) opens the sub-page last shown in this browser tab,
+ * if it's still in `sections`, or else the first. Pass `ready={false}` while which sub-pages are
+ * shown is still loading, so a remembered one isn't passed over.
  */
 export function SectionLayout({
   title,
   subtitle,
   sections,
   variant = 'side',
+  ready = true,
 }: {
   title: string;
   subtitle: string;
   sections: SectionLink[];
   variant?: 'side' | 'tabs';
+  ready?: boolean;
 }) {
+  const { pathname } = useLocation();
+  const first = sections[0]?.to ?? '';
+  const root = first.slice(0, first.lastIndexOf('/'));
+  const isSection = sections.some((s) => s.to === pathname);
+  useEffect(() => {
+    if (!isSection) return;
+    try {
+      sessionStorage.setItem(LAST_PAGE_PREFIX + root, pathname);
+    } catch {
+      // Storage unavailable: the section opens on its first page.
+    }
+  }, [isSection, root, pathname]);
+
+  if (ready && first && pathname.replace(/\/$/, '') === root) {
+    const last = readLastPage(root);
+    return <Navigate to={sections.some((s) => s.to === last) ? last! : first} replace />;
+  }
+
   if (variant === 'tabs') {
     return (
       <>
