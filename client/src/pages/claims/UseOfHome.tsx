@@ -17,6 +17,7 @@ import { SubmittedFiguresNotice } from '../../components/SubmittedFiguresNotice'
 import { ExportCsvButton } from '../../components/transactions';
 import { Alert, Button, Card, CardHeader, Spinner } from '../../components/ui';
 import { useActiveTaxYear, useCanEdit, useSaveUseOfHome, useUseOfHome } from '../../lib/queries';
+import { ClaimStats, RatesUsed, Stat } from './ClaimStats';
 
 const parseHours = (value: string): number | null => {
   const text = value.trim();
@@ -27,16 +28,6 @@ const parseHours = (value: string): number | null => {
 };
 
 const fieldsFrom = (data: UseOfHomeResponse) => data.months.map((m) => (m.hours ? String(m.hours) : ''));
-
-function Stat({ label, value, sub }: { label: string; value: string; sub: string }) {
-  return (
-    <Card className="p-5">
-      <div className="eyebrow">{label}</div>
-      <div className="tabular mt-2 text-2xl font-bold text-white">{value}</div>
-      <div className="mt-1 text-xs text-muted">{sub}</div>
-    </Card>
-  );
-}
 
 function HoursForm({ taxYearId, data }: { taxYearId: number; data: UseOfHomeResponse }) {
   const canEdit = useCanEdit();
@@ -208,24 +199,19 @@ export function UseOfHome() {
             <Alert>{error?.message ?? 'Could not load use of home'}</Alert>
           ) : (
             <>
-              <div className="grid gap-4 sm:grid-cols-3">
+              <ClaimStats>
                 <Stat label="Months claimed" value={String(data.totals.monthsClaimed)} sub="With 25 or more hours at home" />
                 <Stat label="Hours at home" value={data.totals.hours.toLocaleString('en-GB')} sub="Business work this tax year" />
                 <Stat label="Use of home claim" value={formatGBP(data.totals.claimPence)} sub="Counted as rent, rates, power and insurance" />
-              </div>
+                <RatesUsed
+                  rates={[...USE_OF_HOME_BANDS].reverse().map((b) => ({ label: b.label, rate: formatGBP(b.pence).replace(/\.00$/, '') }))}
+                  note="For each month, by the hours worked at home"
+                />
+              </ClaimStats>
 
               <Alert tone="warning">
                 The flat rate covers the extra heating, lighting and power from working at home, so don't also claim a share of those
                 household bills in Expenses. Business calls and the business share of your broadband can still go in Expenses.
-              </Alert>
-
-              <Alert tone="info">
-                Rates:{' '}
-                {[...USE_OF_HOME_BANDS]
-                  .reverse()
-                  .map((b) => `${b.label} ${formatGBP(b.pence).replace(/\.00$/, '')}`)
-                  .join(', ')}
-                .
               </Alert>
 
               <HoursForm key={taxYear.id} taxYearId={taxYear.id} data={data} />

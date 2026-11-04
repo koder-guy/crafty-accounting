@@ -24,6 +24,7 @@ import { ChangedElsewhere, dateInYear, duplicateDate, recordedBy, yearRangeHint 
 import { NoTaxYear } from '../../components/NoTaxYear';
 import { SectionHeading } from '../../components/SectionLayout';
 import { SubmittedFiguresNotice } from '../../components/SubmittedFiguresNotice';
+import { ClaimStats, RatesUsed, Stat } from './ClaimStats';
 import { Alert, Button, Card, CardHeader, EmptyState, Field, IconButton, Spinner } from '../../components/ui';
 import { useActiveTaxYear, useCanEdit, useMileage, useMileageMutations } from '../../lib/queries';
 
@@ -142,16 +143,6 @@ function TripForm({
   );
 }
 
-function Stat({ label, value, sub }: { label: string; value: string; sub: string }) {
-  return (
-    <Card className="p-5">
-      <div className="eyebrow">{label}</div>
-      <div className="tabular mt-2 text-2xl font-bold text-white">{value}</div>
-      <div className="mt-1 text-xs text-muted">{sub}</div>
-    </Card>
-  );
-}
-
 export function Mileage() {
   const { taxYear, isLoading: yearLoading } = useActiveTaxYear();
   const { data, isLoading, error } = useMileage(taxYear?.id);
@@ -206,7 +197,7 @@ export function Mileage() {
             <Alert>{error?.message ?? 'Could not load mileage'}</Alert>
           ) : (
             <>
-              <div className="grid gap-4 sm:grid-cols-3">
+              <ClaimStats>
                 <Stat label="Business miles" value={formatMiles(data.totals.distanceTenths)} sub={`${data.trips.length} trips this tax year`} />
                 <Stat label="Mileage claim" value={formatGBP(data.totals.claimPence)} sub="Counted as car, van and travel expenses" />
                 <Stat
@@ -214,7 +205,16 @@ export function Mileage() {
                   value={formatMiles(carMilesLeft)}
                   sub={carMilesLeft > 0 ? `Car and van miles before the ${rates.car.afterPence}p rate` : `Car and van miles are now claimed at ${rates.car.afterPence}p`}
                 />
-              </div>
+                <RatesUsed
+                  rates={[
+                    { label: `Car or van, first ${rates.car.thresholdMiles.toLocaleString('en-GB')}`, rate: `${rates.car.firstPence}p` },
+                    { label: 'Car or van, after that', rate: `${rates.car.afterPence}p` },
+                    { label: 'Motorcycle', rate: `${rates.motorcycle}p` },
+                    { label: 'Bicycle', rate: `${rates.bicycle}p` },
+                  ]}
+                  note={rates.provisional}
+                />
+              </ClaimStats>
 
               {data.check ? (
                 <MileageCheckAlert check={data.check} />
@@ -224,11 +224,6 @@ export function Mileage() {
                   those costs as expenses for the same vehicle. Parking, tolls and train fares can still go in Expenses.
                 </Alert>
               )}
-
-              <Alert tone="info">
-                Rates: cars and vans {rates.car.firstPence}p a mile for the first {rates.car.thresholdMiles.toLocaleString('en-GB')} business miles, then{' '}
-                {rates.car.afterPence}p. Motorcycles {rates.motorcycle}p. Bicycles {rates.bicycle}p. {rates.provisional}
-              </Alert>
 
               {canEdit && (
                 <>
