@@ -194,12 +194,15 @@ EOF
     if [ "$OS" = darwin ]; then
       echo "To trust it on this Mac (asks for your password):"
       echo "  sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain \"$CERT\""
-      local other
-      other="$(other_address "$(env_value SITE_ADDRESS)" "$HTTPS_PORT")"
+      local other=""
+      cert_served "$HTTPS_PORT" "$CERT" && other="$(other_address "$(env_value SITE_ADDRESS)" "$HTTPS_PORT")"
       [ -n "$other" ] && echo "Other devices can download it from https://$other/crafty-root.crt"
       echo "For other devices, see \"HTTPS\" in the README."
     else
-      cert_help "$CERT" "$(other_address "$(env_value SITE_ADDRESS)" "$HTTPS_PORT")" "$NEW_INSTALL"
+      local other="" show_pem="$NEW_INSTALL"
+      cert_served "$HTTPS_PORT" "$CERT" && other="$(other_address "$(env_value SITE_ADDRESS)" "$HTTPS_PORT")"
+      [ -n "$other" ] || show_pem=1
+      cert_help "$CERT" "$other" "$show_pem"
     fi
   fi
   cat <<EOF
@@ -223,11 +226,18 @@ cert_fingerprint() {
     | tr 'a-f' 'A-F' | sed 's/../&:/g; s/:$//'
 }
 
+# Whether Caddy, on HTTPS port $1 of this computer, serves certificate $2 at /crafty-root.crt.
+# A version whose Caddyfile doesn't would answer with the app's page instead.
+cert_served() {
+  curl -fsSk --max-time 10 "https://localhost:$1/crafty-root.crt" 2>/dev/null | cmp -s - "$2"
+}
+
 # How to get certificate $1 onto other devices, served by Caddy at https://$2/crafty-root.crt
-# ($2 empty when the only address is this computer's own). On a new install ($3 = 1) it
-# also prints the certificate itself, to copy into a file.
+# ($2 empty when the only address is this computer's own, or Caddy doesn't serve it). When
+# $3 = 1 (a new install, or nothing to download it from) it also prints the certificate
+# itself, to copy into a file.
 cert_help() {
-  local cert="$1" addr="$2" new_install="$3" fp
+  local cert="$1" addr="$2" show_pem="$3" fp
   fp="$(cert_fingerprint "$cert")"
   echo "Its SHA-256 fingerprint is"
   echo "  $fp"
@@ -241,9 +251,10 @@ cert_help() {
     echo "On other devices, open https://$addr/crafty-root.crt (past the warning) and"
     echo "install it, checking the fingerprint (see \"HTTPS\" in the README)."
   fi
-  if [ "$new_install" = 1 ]; then
+  if [ "$show_pem" = 1 ]; then
     echo
-    echo "Or copy the certificate from here into a file named crafty-root.crt:"
+    if [ -n "$addr" ]; then echo "Or copy the certificate from here into a file named crafty-root.crt:"
+    else echo "To get it onto another device, copy it from here into a file named crafty-root.crt:"; fi
     echo
     cat "$cert"
   fi
@@ -254,7 +265,7 @@ cert_help() {
 other_address() {
   local addr
   for addr in $(printf '%s' "$1" | tr ',' ' '); do
-    case "$addr" in localhost | 127.* | ::1 | "[::1]") continue ;; esac
+    case "$addr" in localhost | localhost:* | 127.* | ::1 | "[::1]" | "[::1]":*) continue ;; esac
     case "$addr" in *:[0-9]*) echo "$addr" ;; *) if [ "${2:-443}" = 443 ]; then echo "$addr"; else echo "$addr:$2"; fi ;; esac
     return
   done
