@@ -426,6 +426,11 @@ if [ -n "$CERT" ]; then
   fi
   echo "For other devices, see \"HTTPS\" in the README."
 fi
+if [ "$HTTPS" = true ] && [ "$OS" = linux ] && [ "$HTTPS_PORT" != 443 ]; then
+  echo
+  echo "Linux only lets this user use ports 80 and 443 once root allows it, so the"
+  echo "addresses end in :$HTTPS_PORT. To use 80 and 443, see \"HTTPS\" in the README."
+fi
 echo
 echo "It keeps running after you close this window, until you stop it or restart"
 echo "the computer. It doesn't start by itself; after a restart, run:"

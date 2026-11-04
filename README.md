@@ -33,6 +33,13 @@ Self-hosted bookkeeping for UK sole traders on the cash basis. Keep your income 
 
 [`install.sh`](install.sh) works on macOS and on Linux distributions such as Ubuntu, Debian and Fedora (Intel/AMD or ARM), and needs only `curl` and `tar`. It needs no administrator password: everything goes in `~/crafty-accounting`, including its own copy of Node 22 and of [Caddy](https://caddyserver.com) for HTTPS. It starts the app and prints the `https://` addresses to open.
 
+**Which account:** run the installer, and later `crafty`, as the ordinary user who will own the app: not as root (the installer refuses) and without `sudo`. That user needs no administrator rights. On a fresh Linux server or container where you only have root, such as a Proxmox LXC, create the user first and switch to it (minimal Debian images may also need `apt install curl`, as root):
+
+```bash
+adduser crafty
+su - crafty
+```
+
 The app keeps running when the terminal closes, but doesn't start by itself after a restart:
 
 ```bash
@@ -112,11 +119,16 @@ The authority lasts 10 years. The quick install keeps it in `~/crafty-accounting
 
 If ports 80 and 443 are taken, change `HTTP_PORT` and `HTTPS_PORT`; the address then needs the port, such as `https://crafty.local:8443`.
 
-On Linux, the quick install runs as a normal user, who can't use ports below 1024. To use 80 and 443 (needed for Let's Encrypt), allow them once as an administrator, then set `HTTP_PORT=80` and `HTTPS_PORT=443` in `.env` and run `~/crafty-accounting/crafty restart`:
+On Linux, the quick install runs as a normal user, who can't use ports below 1024, so it uses 8080 and 8443. To use 80 and 443 (needed for Let's Encrypt, and the addresses then need no port):
 
-```bash
-echo 'net.ipv4.ip_unprivileged_port_start=80' | sudo tee /etc/sysctl.d/50-crafty-ports.conf && sudo sysctl --system
-```
+1. Allow them once as **root**: from the root account (such as a Proxmox container's console), or with `su -` and the root password. The app's user usually can't use `sudo`, and doesn't need to. In a Proxmox container, run it inside the container.
+
+   ```bash
+   echo 'net.ipv4.ip_unprivileged_port_start=80' > /etc/sysctl.d/50-crafty-ports.conf && sysctl -p /etc/sysctl.d/50-crafty-ports.conf
+   ```
+
+   On an account that does have `sudo`, the same is `echo 'net.ipv4.ip_unprivileged_port_start=80' | sudo tee /etc/sysctl.d/50-crafty-ports.conf && sudo sysctl -p /etc/sysctl.d/50-crafty-ports.conf`.
+2. Back as the app's user, set `HTTP_PORT=80` and `HTTPS_PORT=443` in `~/crafty-accounting/.env`, then run `~/crafty-accounting/crafty restart`.
 
 ## Configuration
 
