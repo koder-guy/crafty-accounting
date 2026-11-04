@@ -57,9 +57,14 @@ latest_release() {
   local tags
   tags="$(curl -fsSL -H 'Accept: application/vnd.github+json' "https://api.github.com/repos/$REPO/tags?per_page=100")" \
     || fail "couldn't find the latest release on GitHub. Run this again, or give CRAFTY_BRANCH (e.g. CRAFTY_BRANCH=main)."
-  printf '%s\n' "$tags" | sed -n 's/.*"name": *"\(v[0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\)".*/\1/p' \
-    | sort -t. -k1.2,1n -k2,2n -k3,3n | tail -n 1 | grep . || echo main
+  # Every tag name, however GitHub lays out its reply (it can come on one line), newest last.
+  printf '%s' "$tags" | grep -o '"name": *"v[0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*"' \
+    | grep -o 'v[0-9][0-9.]*' | sort -V | tail -n 1 | grep . || echo main
 }
+
+# The version in an app folder's source, e.g. 1.9.1.
+# Empty, not an error, when there's none (a new install).
+app_version() { sed -n "s/^export const APP_VERSION = '\(.*\)';/\1/p" "$1/shared/src/index.ts" 2>/dev/null || true; }
 
 sha256() { sha256sum "$1" | cut -d' ' -f1; }
 sha512() { sha512sum "$1" | cut -d' ' -f1; }
@@ -282,6 +287,14 @@ user_main() {
     step "Downloading the app ($branch)"
     rm -rf app.new && mkdir app.new
     curl -fsSL "$tarball" | tar -xz -C app.new --strip-components=1 || fail "couldn't download the app ($branch) from $tarball."
+    # Never back to an older version by accident: only when asked for by name.
+    local running new
+    running="$(app_version app)"; new="$(app_version app.new)"
+    if [ -n "$running" ] && [ -n "$new" ] && [ "$new" != "$running" ] && [ -z "${CRAFTY_BRANCH:-}${CRAFTY_TARBALL:-}" ] \
+      && [ "$(printf '%s\n%s\n' "$running" "$new" | sort -V | tail -n 1)" = "$running" ]; then
+      rm -rf app.new
+      fail "the newest release found ($new) is older than the version running ($running), so nothing was changed. To install it anyway, give CRAFTY_BRANCH=v$new."
+    fi
     # Carry on with the installer that came with it, so the update is set up the way the
     # new version expects (`crafty update` starts the outgoing version's copy).
     if [ -f app.new/install.sh ] && grep -q '^user_main()' app.new/install.sh && ! cmp -s "${BASH_SOURCE[0]}" app.new/install.sh; then
@@ -488,6 +501,8 @@ restart() {
     for s in $SERVICES; do
       pid="$(main_pid "$s")"
       if [ -z "$pid" ] || [ "$pid" = 0 ]; then
+        # Between two attempts at starting (after a crash, say), systemd is already on it.
+        case "$(systemctl is-active "$s" 2>/dev/null)" in activating | reloading) continue ;; esac
         echo "$s isn't running. As root, start it with: systemctl start $s" >&2; return 1
       fi
       kill "$pid"
