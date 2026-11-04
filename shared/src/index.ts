@@ -9,6 +9,7 @@ export * from './taxEstimate';
 export * from './useOfHome';
 export * from './yearComparison';
 export * from './photos';
+export * from './diskSpace';
 export * from './types';
 
 export const APP_NAME = 'Crafty Accounting';

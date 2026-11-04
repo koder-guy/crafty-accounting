@@ -18,6 +18,7 @@ import { documentNameProblem } from './documents';
 import { fraudPreventionHeaders, parseBrowserData, publicIp } from './fraudPrevention';
 import { hmrcAccessToken } from './hmrc';
 import { changeSummaries, newestTag } from './updates';
+import { checkDiskSpace, raiseNotification, syncUpdateNotification } from './notifications';
 import { clearData, generateSampleData } from './sampleData';
 
 const NAME = 'Admin';
@@ -1811,6 +1812,7 @@ describe('backup and restore', () => {
     expect((await agent.get('/api/use-of-home').query({ taxYearId: 1 }).expect(200)).body.totals.claimPence).toBe(0);
     expect(ctx.db.prepare("SELECT 1 FROM settings WHERE key = 'active_tax_year_id'").get()).toBeUndefined();
     expect((await agent.get('/api/users')).body.map((u: { name: string }) => u.name)).toEqual([NAME]);
+    expect((await agent.get('/api/notifications').expect(200)).body).toEqual({ notifications: [] });
   });
 });
 
@@ -2980,5 +2982,135 @@ describe('updates', () => {
     } finally {
       fs.rmSync(installDir, { recursive: true, force: true });
     }
+  });
+});
+
+describe('notifications', () => {
+  const [major, minor, patch] = APP_VERSION.split('.').map(Number);
+  const newer = `${major}.${minor}.${patch + 1}`;
+  const newest = `${major}.${minor + 1}.0`;
+  const GB = 1024 ** 3;
+
+  const unread = async (who = agent) => (await who.get('/api/notifications').expect(200)).body.notifications as { id: number; kind: string; title: string; link: string | null }[];
+
+  function github(tags: string[]) {
+    ctx.fetch = vi.fn(async (url: string | URL | Request) =>
+      String(url).includes('/tags') ? Response.json(tags.map((name) => ({ name }))) : Response.json({ commits: [] }),
+    ) as typeof fetch;
+  }
+
+  it('tells editors about a new version until it is installed or replaced, once each', async () => {
+    const viewer = await addPerson('Accountant', 'read-only-password', 'viewer');
+    const events: string[] = [];
+    const publish = ctx.liveUpdates.publish.bind(ctx.liveUpdates);
+    ctx.liveUpdates.publish = (event, from) => {
+      events.push(event.area);
+      publish(event, from);
+    };
+
+    github([`v${APP_VERSION}`, `v${newer}`]);
+    await agent.post('/api/updates/check').expect(200);
+    await agent.post('/api/updates/check').expect(200);
+    expect(await unread()).toMatchObject([{ kind: 'update', title: `Version ${newer} is available`, link: '/settings/updates' }]);
+    expect(events.filter((a) => a === 'notifications')).toHaveLength(1);
+    expect(await unread(viewer)).toEqual([]);
+
+    // A newer release replaces it; GitHub failing leaves it be.
+    github([`v${newest}`, `v${newer}`]);
+    await agent.post('/api/updates/check').expect(200);
+    expect((await unread()).map((n) => n.title)).toEqual([`Version ${newest} is available`]);
+    ctx.fetch = vi.fn(async () => new Response('', { status: 500 })) as typeof fetch;
+    await agent.post('/api/updates/check').expect(200);
+    expect(await unread()).toHaveLength(1);
+
+    // Once that's the running version (here: GitHub has nothing newer), it goes.
+    github([`v${APP_VERSION}`]);
+    await agent.post('/api/updates/check').expect(200);
+    expect(await unread()).toEqual([]);
+
+    // Just after starting, before checking, only versions already installed are cleared.
+    raiseNotification(ctx, { key: `update:${APP_VERSION}`, kind: 'update', title: 'old', message: '', audience: 'editors' });
+    raiseNotification(ctx, { key: `update:${newer}`, kind: 'update', title: 'new', message: '', audience: 'editors' });
+    syncUpdateNotification(ctx, null, false);
+    expect((await unread()).map((n) => n.title)).toEqual(['new']);
+  });
+
+  it('is marked read by each person for themselves, viewers included', async () => {
+    const jo = await addPerson('Jo');
+    const viewer = await addPerson('Accountant', 'read-only-password', 'viewer');
+    raiseNotification(ctx, { key: 'a', kind: 'update', title: 'First', message: 'one', audience: 'all' });
+    raiseNotification(ctx, { key: 'b', kind: 'update', title: 'Second', message: 'two', audience: 'all' });
+    raiseNotification(ctx, { key: 'c', kind: 'low-space', title: 'Editors only', message: 'three', audience: 'editors' });
+
+    const mine = await unread();
+    expect(mine.map((n) => n.title).sort()).toEqual(['Editors only', 'First', 'Second']);
+    const first = mine.find((n) => n.title === 'First')!.id;
+    const after = (await agent.post(`/api/notifications/${first}/read`).expect(200)).body.notifications;
+    expect(after.map((n: { title: string }) => n.title).sort()).toEqual(['Editors only', 'Second']);
+    await agent.post(`/api/notifications/${first}/read`).expect(200); // again is fine
+    await agent.post('/api/notifications/999/read').expect(200);
+    await agent.post('/api/notifications/abc/read').expect(404);
+
+    expect(await unread(jo)).toHaveLength(3);
+    expect((await unread(viewer)).map((n) => n.title).sort()).toEqual(['First', 'Second']);
+    expect((await viewer.post('/api/notifications/read-all').expect(200)).body.notifications).toEqual([]);
+    expect(await unread(jo)).toHaveLength(3);
+
+    // Raising the same condition again doesn't make it unread.
+    raiseNotification(ctx, { key: 'a', kind: 'update', title: 'First', message: 'reworded', audience: 'all' });
+    expect((await unread()).map((n) => n.title)).not.toContain('First');
+  });
+
+  it('warns when the data disk runs low, and clears once there is room again', async () => {
+    let free = 500 * 1024 ** 2;
+    const space = () => ({ freeBytes: free, totalBytes: 100 * GB });
+
+    checkDiskSpace(ctx, space);
+    checkDiskSpace(ctx, space);
+    const [low] = await unread();
+    expect(low).toMatchObject({ kind: 'low-space', title: 'Disk space is running low', link: '/settings/backup' });
+    expect((await agent.get('/api/notifications')).body.notifications[0].message).toMatch(/^The disk holding your books and documents has 500 MB free of 100\.0 GB/);
+    await agent.post(`/api/notifications/${low.id}/read`).expect(200);
+
+    // Only just over the limit: still counts as low, so it isn't raised afresh.
+    free = 1.1 * GB;
+    checkDiskSpace(ctx, space);
+    expect(ctx.db.prepare('SELECT COUNT(*) AS n FROM notifications').get()).toEqual({ n: 1 });
+
+    free = 2 * GB;
+    checkDiskSpace(ctx, space);
+    expect(ctx.db.prepare('SELECT COUNT(*) AS n FROM notifications').get()).toEqual({ n: 0 });
+
+    // Running low again is news again.
+    free = 100 * 1024 ** 2;
+    checkDiskSpace(ctx, space);
+    expect(await unread()).toHaveLength(1);
+
+    // Unreadable disks are left as they were.
+    checkDiskSpace(ctx, () => null);
+    expect(await unread()).toHaveLength(1);
+  });
+
+  it('belongs to the install: left out of backups and kept through a restore and a reset', async () => {
+    raiseNotification(ctx, { key: 'a', kind: 'update', title: 'Read', message: '', audience: 'all' });
+    raiseNotification(ctx, { key: 'b', kind: 'update', title: 'Unread', message: '', audience: 'all' });
+    const read = (await unread()).find((n) => n.title === 'Read')!.id;
+    await agent.post(`/api/notifications/${read}/read`).expect(200);
+
+    const dump = (await agent.get('/api/backup.sql').expect(200)).text;
+    expect(dump).not.toMatch(/INSERT INTO "notification/);
+
+    ctx.db.prepare('DELETE FROM notifications').run();
+    raiseNotification(ctx, { key: 'a', kind: 'update', title: 'Read', message: '', audience: 'all' });
+    raiseNotification(ctx, { key: 'b', kind: 'update', title: 'Unread', message: '', audience: 'all' });
+    const readAgain = (await unread()).find((n) => n.title === 'Read')!.id;
+    await agent.post(`/api/notifications/${readAgain}/read`).expect(200);
+
+    await agent.post('/api/restore').attach('file', Buffer.from(dump), 'backup.sql').expect(200);
+    expect((await unread()).map((n) => n.title)).toEqual(['Unread']);
+    await agent.post('/api/reset').send({ confirm: 'RESET' }).expect(200);
+    expect((await unread()).map((n) => n.title)).toEqual(['Unread']);
+    raiseNotification(ctx, { key: 'c', kind: 'update', title: 'After reset', message: '', audience: 'all' });
+    expect(await unread()).toHaveLength(2);
   });
 });

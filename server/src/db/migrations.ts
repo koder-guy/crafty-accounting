@@ -313,6 +313,30 @@ ALTER TABLE tax_years ADD COLUMN sa_filed_on TEXT;
 ALTER TABLE tax_years ADD COLUMN sa_filed_figures TEXT;
 `,
   },
+  // Notifications under the bell (an update to install, the disk running low), and who has read
+  // each. Like the people, they belong to the install, not the books: left out of backups.
+  // `key` names the condition, so it's raised once while it lasts; the row goes when it ends.
+  {
+    version: 18,
+    sql: `
+CREATE TABLE notifications (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  key TEXT NOT NULL UNIQUE,
+  kind TEXT NOT NULL,
+  title TEXT NOT NULL,
+  message TEXT NOT NULL,
+  link TEXT,
+  audience TEXT NOT NULL DEFAULT 'all' CHECK (audience IN ('all', 'editors')),
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+);
+CREATE TABLE notification_reads (
+  notification_id INTEGER NOT NULL REFERENCES notifications(id) ON DELETE CASCADE,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  read_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  PRIMARY KEY (notification_id, user_id)
+);
+`,
+  },
 ];
 
 export const CURRENT_SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;

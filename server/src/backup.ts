@@ -20,7 +20,9 @@ import { HttpError } from './http';
 
 const REQUIRED_TABLES = ['schema_migrations', 'tax_years', 'settings', 'categories', 'incomes', 'expenses', 'expense_line_items', 'mtd_submissions'];
 const ALLOWED_STATEMENT = /^(CREATE TABLE |CREATE INDEX |CREATE UNIQUE INDEX |INSERT INTO )/;
-const INSTALL_TABLES = new Set(['users', 'hmrc_connections']);
+const INSTALL_TABLES = new Set(['users', 'hmrc_connections', 'notifications', 'notification_reads']);
+/** Install tables copied across a restore as they are (users are handled on their own). */
+const KEPT_TABLES = ['hmrc_connections', 'notifications', 'notification_reads'];
 const MAX_ZIP_BYTES = 4 * 1024 ** 3;
 
 const quoteIdent = (name: string) => `"${name.replace(/"/g, '""')}"`;
@@ -124,13 +126,13 @@ export function restoreBackup(ctx: AppContext, sql: string, uploadsFrom?: string
   const newDbFile = buildDatabaseFromDump(ctx, sql);
   const { dbFile, uploadsDir } = ctx.paths;
 
-  // Automatic backup settings, sign-ins and the HMRC connection belong to this install, so they survive a restore.
+  // Automatic backup settings, sign-ins, notifications and the HMRC connection belong to this install, so they survive a restore.
   const keepSettings = ctx.db.prepare("SELECT key, value FROM settings WHERE key LIKE 'auto\\_backup\\_%' ESCAPE '\\'").all() as {
     key: string;
     value: string | null;
   }[];
   const keepUsers = ctx.db.prepare('SELECT id, name, password_hash, role, created_at FROM users').all();
-  const keepHmrc = ctx.db.prepare('SELECT * FROM hmrc_connections').all() as Record<string, unknown>[];
+  const kept = KEPT_TABLES.map((table) => ({ table, rows: ctx.db.prepare(`SELECT * FROM ${table}`).all() as Record<string, unknown>[] }));
 
   ctx.db.pragma('wal_checkpoint(TRUNCATE)');
   ctx.db.close();
@@ -145,12 +147,12 @@ export function restoreBackup(ctx: AppContext, sql: string, uploadsFrom?: string
     ctx.db.prepare('DELETE FROM users').run();
     const insert = ctx.db.prepare('INSERT INTO users (id, name, password_hash, role, created_at) VALUES (@id, @name, @password_hash, @role, @created_at)');
     for (const user of keepUsers) insert.run(user);
-    ctx.db.prepare('DELETE FROM hmrc_connections').run();
-    for (const row of keepHmrc) {
-      const columns = Object.keys(row);
-      ctx.db
-        .prepare(`INSERT INTO hmrc_connections (${columns.join(', ')}) VALUES (${columns.map((c) => `@${c}`).join(', ')})`)
-        .run(row);
+    for (const { table, rows } of kept) {
+      ctx.db.prepare(`DELETE FROM ${table}`).run();
+      for (const row of rows) {
+        const columns = Object.keys(row);
+        ctx.db.prepare(`INSERT INTO ${table} (${columns.join(', ')}) VALUES (${columns.map((c) => `@${c}`).join(', ')})`).run(row);
+      }
     }
   })();
 
@@ -184,7 +186,7 @@ export function resetToEmpty(ctx: AppContext): void {
     db.prepare("DELETE FROM settings WHERE key NOT LIKE 'auto\\_backup\\_%' ESCAPE '\\'").run();
     db.prepare('UPDATE users SET active_tax_year_id = NULL').run();
     // Start ids from 1 again; standard categories and users keep theirs.
-    db.prepare("DELETE FROM sqlite_sequence WHERE name NOT IN ('categories', 'users')").run();
+    db.prepare("DELETE FROM sqlite_sequence WHERE name NOT IN ('categories', 'users', 'notifications')").run();
   })();
 
   const previous = path.join(dataDir, 'uploads.pre-reset');

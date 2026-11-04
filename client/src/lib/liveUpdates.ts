@@ -22,9 +22,9 @@ export function useLiveUpdates() {
     const refetch = (area?: string) =>
       qc.invalidateQueries({
         predicate: (q) =>
-          // An update check or the progress of an update changes nothing but its own status.
-          area === 'updates'
-            ? q.queryKey[0] === 'updates'
+          // An update check or the progress of an update changes nothing but its own status; nor do notifications.
+          area === 'updates' || area === 'notifications'
+            ? q.queryKey[0] === area
             : q.queryKey[0] === 'me'
               ? area === 'users'
               : fromHmrc(q.queryKey[0])

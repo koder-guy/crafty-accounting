@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { APP_NAME, APP_VERSION, displayTaxYear, taxYearStartYearForDate, todayIso, type SubmissionMethod } from '@crafty/shared';
 import { useLiveUpdates } from '../lib/liveUpdates';
+import { NotificationBell } from './NotificationBell';
 import { UserMenu } from './UserMenu';
 import { useActiveTaxYear, useCanEdit, useTaxYearMutations, useTaxYears, useUpdates } from '../lib/queries';
 
@@ -225,6 +226,7 @@ export function Layout() {
       <div className="sticky top-0 z-30 flex items-center justify-between border-b border-line bg-sidebar/95 px-4 py-3 backdrop-blur lg:hidden print:hidden">
         <Brand />
         <div className="flex items-center gap-1">
+          <NotificationBell compact />
           <UserMenu compact />
           <button
             type="button"

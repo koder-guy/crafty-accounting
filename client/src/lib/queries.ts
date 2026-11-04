@@ -20,6 +20,7 @@ import type {
   HmrcStatus,
   Income,
   MeResponse,
+  NotificationsResponse,
   MileageInput,
   MileageResponse,
   MileageTrip,
@@ -412,6 +413,39 @@ export function useUpdateMutations() {
         onSuccess(data);
       },
       onError: () => qc.invalidateQueries({ queryKey: ['updates'] }),
+    }),
+  };
+}
+
+// ---- Notifications ----
+
+/** The signed-in person's unread notifications, for the bell. Live updates refetch it; hourly as a fallback. */
+export const useNotifications = () =>
+  useQuery({
+    queryKey: ['notifications'],
+    queryFn: () => api.get<NotificationsResponse>('/notifications'),
+    refetchInterval: 60 * 60 * 1000,
+  });
+
+export function useNotificationMutations() {
+  const qc = useQueryClient();
+  const onSuccess = (data: NotificationsResponse) => qc.setQueryData(['notifications'], data);
+  // Gone from the list straight away; the server's answer (or a refetch on failure) settles it.
+  const hide = (keep: (id: number) => boolean) =>
+    qc.setQueryData<NotificationsResponse>(['notifications'], (old) => old && { notifications: old.notifications.filter((n) => keep(n.id)) });
+  const onError = () => qc.invalidateQueries({ queryKey: ['notifications'] });
+  return {
+    markRead: useMutation({
+      mutationFn: (id: number) => api.post<NotificationsResponse>(`/notifications/${id}/read`),
+      onMutate: (id) => hide((n) => n !== id),
+      onSuccess,
+      onError,
+    }),
+    markAllRead: useMutation({
+      mutationFn: () => api.post<NotificationsResponse>('/notifications/read-all'),
+      onMutate: () => hide(() => false),
+      onSuccess,
+      onError,
     }),
   };
 }

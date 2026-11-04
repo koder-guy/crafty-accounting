@@ -1,6 +1,7 @@
 import { useEffect, useRef, type ReactNode } from 'react';
 import { displayTaxYear } from '@crafty/shared';
 import { useActiveTaxYear } from '../lib/queries';
+import { NotificationBell } from './NotificationBell';
 import { UserMenu } from './UserMenu';
 
 /**
@@ -39,9 +40,10 @@ export function PageHeader({
           </p>
         </div>
         {actions && <div className="flex flex-wrap items-center gap-2 sm:justify-end print:hidden">{actions}</div>}
-        {/* The account menu stays top right; page buttons wrap on their own. Phones have it in the top bar instead. */}
+        {/* The bell and account menu stay top right; page buttons wrap on their own. Phones have it in the top bar instead. */}
         <div className="hidden shrink-0 items-center gap-2 lg:flex print:hidden">
           {actions && <span className="mx-1 h-6 w-px bg-line" aria-hidden />}
+          <NotificationBell />
           <UserMenu />
         </div>
       </header>

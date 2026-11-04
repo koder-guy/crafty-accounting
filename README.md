@@ -23,7 +23,8 @@ Self-hosted bookkeeping for UK sole traders on the cash basis. Keep your income 
 - **Working together**: changes appear in every open browser within a second. If two people edit the same transaction, the second save is refused and the form offers to load the other version.
 - **Backups**: daily automatic backups, each one downloadable or restorable in a click (see [Backups](#backups)).
 - Reports and the year-end summary print or save as PDF.
-- **Updates**: the app checks for new versions twice a day and says so at the bottom of the menu. **Settings → Updates** lists what's changed and, for the Linux quick install, installs it in a click after saving a backup. For Docker it shows the command to run.
+- **Notifications**: a bell at the top right shows how many unread notifications you have: a new version to install, or the disk running low on space. Open one to go to the page that deals with it, or mark it read. Only editors get these two, since only they can act on them.
+- **Updates**: the app checks for new versions twice a day and says so at the bottom of the menu and under the bell. **Settings → Updates** lists what's changed and, for the Linux quick install, installs it in a click after saving a backup. For Docker it shows the command to run.
 
 ## Quick install (Linux server)
 

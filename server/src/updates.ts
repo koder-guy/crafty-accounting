@@ -7,6 +7,7 @@ import { APP_NAME, APP_VERSION, type UpdateStatus } from '@crafty/shared';
 import { runAutoBackup } from './autoBackup';
 import type { AppContext } from './context';
 import { HttpError } from './http';
+import { syncUpdateNotification } from './notifications';
 
 export const UPDATE_REPO = 'koder-guy/crafty-accounting';
 const GITHUB_API = `https://api.github.com/repos/${UPDATE_REPO}`;
@@ -132,6 +133,7 @@ export class Updates {
         this.available = { version: tag.slice(1), url: `https://github.com/${UPDATE_REPO}/releases/tag/${tag}`, changes };
       }
       this.checkError = null;
+      syncUpdateNotification(this.ctx, this.available, true);
     } catch (err) {
       const message = (err as Error).name === 'TimeoutError' ? 'GitHub took too long to answer' : (err as Error).message;
       this.checkError = `Couldn't check for updates: ${message}`;

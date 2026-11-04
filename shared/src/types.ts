@@ -544,3 +544,22 @@ export interface UpdateStatus {
   /** The last update that failed, with the end of its log. The running version is unchanged. */
   failed: { version: string; at: string; log: string } | null;
 }
+
+/** What a notification is about, for its icon. */
+export type NotificationKind = 'update' | 'low-space';
+
+/** Something the person should know or act on, shown under the bell until they mark it read. */
+export interface AppNotification {
+  id: number;
+  kind: NotificationKind;
+  title: string;
+  message: string;
+  /** A page in the app to go to about it, e.g. "/settings/updates". */
+  link: string | null;
+  createdAt: string;
+}
+
+export interface NotificationsResponse {
+  /** The signed-in person's unread notifications, newest first. */
+  notifications: AppNotification[];
+}

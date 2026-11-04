@@ -3,6 +3,7 @@ import { createApp } from './app';
 import { startAutoBackupScheduler } from './autoBackup';
 import { loadConfig } from './config';
 import { createContext } from './context';
+import { startNotificationChecks } from './notifications';
 import { startUpdateChecker } from './updates';
 
 const config = loadConfig();
@@ -11,6 +12,7 @@ const app = createApp(ctx);
 
 const stopScheduler = startAutoBackupScheduler(ctx);
 const stopUpdateChecker = startUpdateChecker(ctx);
+const stopNotificationChecks = startNotificationChecks(ctx);
 
 const listening = () => {
   const where = config.host ? `${config.host}:${config.port}` : `port ${config.port}`;
@@ -23,6 +25,7 @@ const server = config.host ? app.listen(config.port, config.host, listening) : a
 const shutdown = () => {
   stopScheduler();
   stopUpdateChecker();
+  stopNotificationChecks();
   ctx.liveUpdates.closeAll();
   server.close(() => {
     ctx.db.close();

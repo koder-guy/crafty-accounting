@@ -12,6 +12,7 @@ import { documentsRouter } from './routes/documents';
 import { hmrcRouter } from './routes/hmrc';
 import { mileageRouter } from './routes/mileage';
 import { mtdRouter } from './routes/mtd';
+import { notificationsRouter } from './routes/notifications';
 import { useOfHomeRouter } from './routes/useOfHome';
 import { reportsRouter } from './routes/reports';
 import { sampleDataRouter } from './routes/sampleData';
@@ -96,6 +97,7 @@ export function createApp(ctx: AppContext) {
   app.use('/api/reports', reportsRouter(ctx));
   app.use('/api/sample-data', sampleDataRouter(ctx));
   app.use('/api/updates', updatesRouter(ctx));
+  app.use('/api/notifications', notificationsRouter(ctx));
   app.use('/api', backupRouter(ctx));
   app.use('/api', (_req, _res, next) => next(new HttpError(404, 'Not found')));
 

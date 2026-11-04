@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Clock, Download, History, Trash2 } from 'lucide-react';
-import type { AutoBackupStatus, DiskSpace } from '@crafty/shared';
+import { diskSize, lowSpaceThreshold, type AutoBackupStatus, type DiskSpace } from '@crafty/shared';
 
 type AutoBackupFile = AutoBackupStatus['backups'][number];
 import { ConfirmDialog } from '../../components/ConfirmDialog';
@@ -18,19 +18,10 @@ const dateTime = (iso: string) =>
 const fileSize = (bytes: number) =>
   bytes < 1024 * 1024 ? `${Math.max(1, Math.round(bytes / 1024))} KB` : `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 
-const diskSize = (bytes: number) => {
-  const gb = bytes / 1024 ** 3;
-  if (gb >= 1024) return `${(gb / 1024).toFixed(1)} TB`;
-  if (gb >= 1) return `${gb.toFixed(1)} GB`;
-  return `${Math.round(bytes / 1024 ** 2)} MB`;
-};
-
-const GB = 1024 ** 3;
-
 /** Free space on a disk, flagged when it's under 1 GB or too little for three more backups like the newest. */
 function FreeSpace({ space, backupBytes }: { space: DiskSpace | null; backupBytes: number }) {
   if (!space) return <span className="text-muted">Can't be read</span>;
-  const low = space.freeBytes < Math.max(GB, 3 * backupBytes);
+  const low = space.freeBytes < lowSpaceThreshold(backupBytes);
   return (
     <span className={low ? 'text-out-soft' : undefined}>
       {diskSize(space.freeBytes)} free of {diskSize(space.totalBytes)}

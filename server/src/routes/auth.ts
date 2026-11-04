@@ -61,6 +61,8 @@ const READ_ONLY_ALLOWED = [
   { method: 'PUT', path: /^\/tax-years\/active$/ },
   // Changing their own password; the users router checks it's their own and nothing else.
   { method: 'PUT', path: /^\/users\/\d+$/ },
+  // Marking their own notifications read.
+  { method: 'POST', path: /^\/notifications\/(\d+\/read|read-all)$/ },
 ];
 
 /** Refuses changes (and backup downloads) from read-only people. Mounted on /api after requireAuth. */
