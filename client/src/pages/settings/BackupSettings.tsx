@@ -111,7 +111,8 @@ export function BackupSettings() {
             <p className="text-sm text-muted">
               Deletes all tax years, income and expense transactions, attached documents, custom categories and MTD submission
               records. The standard MTD categories and your sign-in password stay. A copy of the old data is kept on the server as{' '}
-              <code>crafty.pre-reset.db</code> and <code>uploads.pre-reset</code> until the next reset.
+              <code>crafty.pre-reset.db</code> and <code>uploads.pre-reset</code> until the next reset. Saved backups in the backup folder
+              stay as they are.
             </p>
             <Button
               variant="danger"
@@ -157,7 +158,7 @@ export function BackupSettings() {
           All tax years, transactions, documents, custom categories and MTD submission records will be deleted, leaving an empty
           database.
         </p>
-        <p>Use Back up now first if you might need any of it.</p>
+        <p>Saved backups in the backup folder stay as they are. Use Back up now first if you might need any of it.</p>
       </ConfirmDialog>
     </>
   );
