@@ -332,6 +332,11 @@ export function useAutoBackupMutations() {
       onSuccess,
       onError: () => qc.invalidateQueries({ queryKey: ['auto-backup'] }),
     }),
+    remove: useMutation({
+      mutationFn: (name: string) => api.delete<AutoBackupStatus>(`/backup/auto/files/${encodeURIComponent(name)}`),
+      onSuccess,
+      onError: () => qc.invalidateQueries({ queryKey: ['auto-backup'] }),
+    }),
   };
 }
 

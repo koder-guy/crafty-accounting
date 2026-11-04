@@ -14,7 +14,7 @@ import {
   saveAutoBackupSettings,
 } from '../autoBackup';
 import type { AppContext } from '../context';
-import { getSetting } from '../db';
+import { getSetting, setSetting } from '../db';
 import { dumpSql, extractZipBackup, resetToEmpty, restoreBackup, writeZipBackup } from '../backup';
 import { decodeUploadName } from '../documents';
 import { HttpError, parseWith } from '../http';
@@ -105,6 +105,14 @@ export function backupRouter(ctx: AppContext): Router {
   router.post('/backup/auto/files/:name/restore', async (req, res) => {
     await restoreZip(autoBackupFile(req.params.name));
     res.json({ restored: true });
+  });
+
+  router.delete('/backup/auto/files/:name', (req, res) => {
+    const newest = listAutoBackups(ctx.paths.backupDir)[0]?.name;
+    fs.rmSync(autoBackupFile(req.params.name));
+    // Without the newest backup, the next daily run mustn't be skipped as "nothing changed".
+    if (req.params.name === newest) setSetting(ctx.db, 'auto_backup_fingerprint', null);
+    res.json(autoStatus());
   });
 
   router.post('/reset', (req, res) => {

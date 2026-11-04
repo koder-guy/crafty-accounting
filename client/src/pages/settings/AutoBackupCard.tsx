@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { Clock, Download, History } from 'lucide-react';
+import { Clock, Download, History, Trash2 } from 'lucide-react';
 import type { AutoBackupStatus } from '@crafty/shared';
 
 type AutoBackupFile = AutoBackupStatus['backups'][number];
@@ -28,7 +28,7 @@ function LastRun({ status }: { status: AutoBackupStatus }) {
 
 export function AutoBackupCard() {
   const { data: status, isLoading, error } = useAutoBackup();
-  const { save, runNow } = useAutoBackupMutations();
+  const { save, runNow, remove } = useAutoBackupMutations();
   const [enabled, setEnabled] = useState(true);
   const [time, setTime] = useState('02:00');
   const [keep, setKeep] = useState('30');
@@ -36,6 +36,7 @@ export function AutoBackupCard() {
   const qc = useQueryClient();
   const [restoring, setRestoring] = useState<AutoBackupFile | null>(null);
   const [restored, setRestored] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<AutoBackupFile | null>(null);
 
   const restore = async () => {
     const backup = restoring!;
@@ -177,6 +178,18 @@ export function AutoBackupCard() {
                           <History className="size-4" aria-hidden />
                           Restore…
                         </Button>
+                        <Button
+                          variant="softDanger"
+                          className="px-2.5"
+                          title="Delete"
+                          aria-label={`Delete the backup from ${dateTime(b.createdAt)}`}
+                          onClick={() => {
+                            setRestored(null);
+                            setDeleting(b);
+                          }}
+                        >
+                          <Trash2 className="size-4" aria-hidden />
+                        </Button>
                       </div>
                     </li>
                     ))}
@@ -214,6 +227,22 @@ export function AutoBackupCard() {
           Later backups stay in the backup folder. Use Back up now first if you might need the current data, as it may not be in a
           saved backup yet.
         </p>
+      </ConfirmDialog>
+
+      <ConfirmDialog
+        open={deleting !== null}
+        title="Delete this backup?"
+        confirmLabel="Delete backup"
+        onClose={() => setDeleting(null)}
+        onConfirm={() => remove.mutateAsync(deleting!.name)}
+      >
+        <p>
+          The backup from <strong className="text-ink">{deleting && dateTime(deleting.createdAt)}</strong> will be deleted from the backup
+          folder. This can't be undone.
+        </p>
+        {deleting?.name === status?.backups[0]?.name && (
+          <p>It's the newest backup, so the next daily backup will be made even if nothing has changed.</p>
+        )}
       </ConfirmDialog>
     </>
   );

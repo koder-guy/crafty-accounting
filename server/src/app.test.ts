@@ -1471,6 +1471,29 @@ describe('automatic backups', () => {
     await agent.post('/api/backup/auto/files/crafty-accounting-auto-2020-01-01-0200.zip/restore').expect(404);
   });
 
+  it('deletes a saved backup, and backs up again next time if it was the newest', async () => {
+    const yearId = await createYear();
+    const first = (await agent.post('/api/backup/auto/run').expect(200)).body.backups[0].name;
+    await agent.post('/api/incomes').send(income(yearId)).expect(201);
+    const second = (await agent.post('/api/backup/auto/run').expect(200)).body.backups[0].name;
+
+    const viewer = await addPerson('Accountant', 'read-only-password', 'viewer');
+    await viewer.delete(`/api/backup/auto/files/${first}`).expect(403);
+
+    const afterOlder = (await agent.delete(`/api/backup/auto/files/${first}`).expect(200)).body;
+    expect(afterOlder.backups.map((b: { name: string }) => b.name)).toEqual([second]);
+    expect(fs.existsSync(path.join(ctx.paths.backupDir, first))).toBe(false);
+    // The data hasn't changed since the newest backup, so a scheduled run still skips.
+    expect((await runAutoBackup(ctx)).status).toBe('skipped');
+
+    expect((await agent.delete(`/api/backup/auto/files/${second}`).expect(200)).body.backups).toEqual([]);
+    expect((await runAutoBackup(ctx)).status).toBe('created');
+
+    await agent.delete(`/api/backup/auto/files/${second}`).expect(404);
+    await agent.delete('/api/backup/auto/files/..%2Fcrafty.db').expect(404);
+    expect(fs.existsSync(ctx.paths.dbFile)).toBe(true);
+  });
+
   it('validates settings and keeps them through a reset and a restore', async () => {
     await agent.put('/api/backup/auto').send({ enabled: true, time: '25:00', keep: 30 }).expect(400);
     await agent.put('/api/backup/auto').send({ enabled: true, time: '02:00', keep: 0 }).expect(400);
