@@ -15,7 +15,7 @@ import { NoTaxYear } from '../../components/NoTaxYear';
 import { SectionHeading } from '../../components/SectionLayout';
 import { SubmittedFiguresNotice } from '../../components/SubmittedFiguresNotice';
 import { ExportMenu } from '../../components/transactions';
-import { Alert, Button, Card, CardHeader, Spinner } from '../../components/ui';
+import { Alert, Button, Card, CardHeader, DismissibleAlert, Spinner } from '../../components/ui';
 import { useActiveTaxYear, useCanEdit, useSaveUseOfHome, useUseOfHome } from '../../lib/queries';
 import { ClaimStats, RatesUsed, Stat } from './ClaimStats';
 
@@ -207,10 +207,10 @@ export function UseOfHome() {
                   rates={[...USE_OF_HOME_BANDS].reverse().map((b) => ({ label: b.label, rate: formatGBP(b.pence).replace(/\.00$/, '') }))}                />
               </ClaimStats>
 
-              <Alert tone="warning">
+              <DismissibleAlert id="use-of-home-bills">
                 The flat rate covers the extra heating, lighting and power from working at home, so don't also claim a share of those
                 household bills in Expenses. Business calls and the business share of your broadband can still go in Expenses.
-              </Alert>
+              </DismissibleAlert>
 
               <HoursForm key={taxYear.id} taxYearId={taxYear.id} data={data} />
 

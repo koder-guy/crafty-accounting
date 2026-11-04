@@ -1,6 +1,6 @@
-import type { ButtonHTMLAttributes, ReactNode } from 'react';
+import { useState, type ButtonHTMLAttributes, type ReactNode } from 'react';
 import { Link, type LinkProps } from 'react-router';
-import { CircleCheck, Info, LoaderCircle, TriangleAlert } from 'lucide-react';
+import { CircleCheck, Info, LoaderCircle, TriangleAlert, X } from 'lucide-react';
 import { PAYMENT_METHOD_LABELS, type PaymentMethod } from '@crafty/shared';
 
 type Variant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'softDanger';
@@ -107,7 +107,16 @@ export function Field({
   );
 }
 
-export function Alert({ tone = 'error', children }: { tone?: 'error' | 'warning' | 'success' | 'info'; children: ReactNode }) {
+export function Alert({
+  tone = 'error',
+  onDismiss,
+  children,
+}: {
+  tone?: 'error' | 'warning' | 'success' | 'info';
+  /** Shows a close button in the top right corner. */
+  onDismiss?: () => void;
+  children: ReactNode;
+}) {
   const styles = {
     error: 'border-out/40 bg-out-bg text-red-200',
     warning: 'border-warn/40 bg-warn-bg text-amber-100',
@@ -118,8 +127,52 @@ export function Alert({ tone = 'error', children }: { tone?: 'error' | 'warning'
   return (
     <div role={tone === 'error' ? 'alert' : 'status'} className={`flex gap-3 rounded-lg border px-4 py-3 text-sm ${styles}`}>
       <Icon className={`mt-0.5 size-4 shrink-0 ${tone === 'info' ? 'text-accent-soft' : ''}`} aria-hidden />
-      <div className="min-w-0">{children}</div>
+      <div className="min-w-0 flex-1">{children}</div>
+      {onDismiss && (
+        <button
+          type="button"
+          title="Dismiss"
+          aria-label="Dismiss"
+          onClick={onDismiss}
+          className="-mt-1.5 -mr-2.5 inline-flex size-6 shrink-0 items-center justify-center rounded-md opacity-60 transition-opacity hover:bg-white/10 hover:opacity-100 print:hidden"
+        >
+          <X className="size-3.5" aria-hidden />
+        </button>
+      )}
     </div>
+  );
+}
+
+const DISMISSED_PREFIX = 'crafty.dismissed.';
+
+/**
+ * An Alert with a close button that stays closed in this browser (localStorage, under `id`),
+ * so it comes back on another device or browser.
+ */
+export function DismissibleAlert({ id, tone = 'warning', children }: { id: string; tone?: 'error' | 'warning' | 'success' | 'info'; children: ReactNode }) {
+  const key = DISMISSED_PREFIX + id;
+  const [dismissed, setDismissed] = useState(() => {
+    try {
+      return localStorage.getItem(key) === '1';
+    } catch {
+      return false;
+    }
+  });
+  if (dismissed) return null;
+  return (
+    <Alert
+      tone={tone}
+      onDismiss={() => {
+        try {
+          localStorage.setItem(key, '1');
+        } catch {
+          // Storage unavailable (private window): it still closes until the page is reloaded.
+        }
+        setDismissed(true);
+      }}
+    >
+      {children}
+    </Alert>
   );
 }
 

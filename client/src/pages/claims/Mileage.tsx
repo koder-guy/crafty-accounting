@@ -25,7 +25,7 @@ import { NoTaxYear } from '../../components/NoTaxYear';
 import { SectionHeading } from '../../components/SectionLayout';
 import { SubmittedFiguresNotice } from '../../components/SubmittedFiguresNotice';
 import { ClaimStats, RatesUsed, Stat } from './ClaimStats';
-import { Alert, Button, Card, CardHeader, EmptyState, Field, IconButton, Spinner } from '../../components/ui';
+import { Alert, Button, Card, CardHeader, DismissibleAlert, EmptyState, Field, IconButton, Spinner } from '../../components/ui';
 import { useActiveTaxYear, useCanEdit, useMileage, useMileageMutations } from '../../lib/queries';
 
 /** One line per vehicle type, with its number of trips, under a stat box's figure. */
@@ -249,10 +249,10 @@ export function Mileage() {
               {data.check ? (
                 <MileageCheckAlert check={data.check} />
               ) : (
-                <Alert tone="warning">
+                <DismissibleAlert id="mileage-running-costs">
                   The mileage rate covers all the running costs of the vehicle (fuel, insurance, servicing, repairs). Don't also record
                   those costs as expenses for the same vehicle. Parking, tolls and train fares can still go in Expenses.
-                </Alert>
+                </DismissibleAlert>
               )}
 
               {canEdit && (
