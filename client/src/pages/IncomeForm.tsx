@@ -7,7 +7,7 @@ import { DateInput } from '../components/DateInput';
 import { BackLink, ChangedElsewhere, CopiedFrom, EscapeToCancel, dateInYear, duplicateDate, yearRangeHint } from '../components/FormShell';
 import { NoTaxYear } from '../components/NoTaxYear';
 import { PageBody, PageHeader } from '../components/PageHeader';
-import { DocumentField, PaymentMethodSelect } from '../components/transactions';
+import { DocumentField, PaymentMethodPicker } from '../components/transactions';
 import { SubmittedFiguresNotice } from '../components/SubmittedFiguresNotice';
 import { Alert, Button, Card, Field, Spinner } from '../components/ui';
 import { ApiError, transactionForm } from '../lib/api';
@@ -261,7 +261,21 @@ export function IncomeForm() {
                 </select>
               </Field>
               <Field label="Payment method" htmlFor="paymentMethod" error={errors.paymentMethod?.message}>
-                <PaymentMethodSelect registration={register('paymentMethod', { required: 'Choose a payment method' })} />
+                <Controller
+                  control={control}
+                  name="paymentMethod"
+                  rules={{ required: 'Choose a payment method' }}
+                  render={({ field }) => (
+                    <PaymentMethodPicker
+                      id="paymentMethod"
+                      value={field.value}
+                      onChange={field.onChange}
+                      onBlur={field.onBlur}
+                      ref={field.ref}
+                      invalid={!!errors.paymentMethod}
+                    />
+                  )}
+                />
               </Field>
               <Field label="Reference" htmlFor="reference" hint="Optional, e.g. a payout or receipt number" className="sm:col-span-2">
                 <input id="reference" className="field" {...register('reference', { maxLength: 100 })} />
