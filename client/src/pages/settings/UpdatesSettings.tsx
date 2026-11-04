@@ -110,8 +110,8 @@ function UpdateProgress({ applying, restarting }: { applying: NonNullable<Update
         </p>
         <p className="mt-1 text-muted">
           {restarting
-            ? "The app is restarting, which takes a few seconds. This page reloads by itself once the new version answers."
-            : `Started ${dateTime(applying.startedAt)}. The app will reload automatically when done.`}
+            ? 'Installation complete. The app is now restarting and will reload automatically when done.'
+            : 'The update will install shortly once the download is complete.'}
         </p>
       </div>
     </div>
