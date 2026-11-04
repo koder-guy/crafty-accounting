@@ -481,7 +481,9 @@ case "$ADDRESS" in
   *:[0-9]*) URL="https://$ADDRESS" ;;
   *) if [ "$HTTPS_PORT" = 443 ]; then URL="https://$ADDRESS"; else URL="https://$ADDRESS:$HTTPS_PORT"; fi ;;
 esac
-SERVICES="crafty-accounting crafty-caddy"
+# Caddy first: a page that started an update reloads once the new app answers, and
+# came up blank when that was while Caddy was still restarting.
+SERVICES="crafty-caddy crafty-accounting"
 
 main_pid() { systemctl show -p MainPID --value "$1" 2>/dev/null; }
 

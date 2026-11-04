@@ -345,6 +345,36 @@ export function useAutoBackupMutations() {
 /** Set in this tab once it starts an update, so it reloads itself when the new version answers. */
 const UPDATING_KEY = 'crafty-updating';
 
+let reloading = false;
+
+/**
+ * Reloads once the new version's page and the scripts and styles it names all load,
+ * checking every couple of seconds (and giving up after a minute, reloading anyway).
+ * The server answering isn't enough: the HTTPS proxy in front may still be restarting,
+ * and reloading then left a blank page.
+ */
+async function reloadWhenReady() {
+  if (reloading) return;
+  reloading = true;
+  const loads = async (url: string) => (await fetch(url, { cache: 'no-store' })).ok;
+  for (let attempt = 0; attempt < 30; attempt++) {
+    await new Promise((r) => setTimeout(r, 2000));
+    try {
+      const res = await fetch('/', { cache: 'no-store' });
+      if (!res.ok) continue;
+      const page = new DOMParser().parseFromString(await res.text(), 'text/html');
+      const files = [
+        ...[...page.querySelectorAll<HTMLScriptElement>('script[src]')].map((s) => s.getAttribute('src')!),
+        ...[...page.querySelectorAll<HTMLLinkElement>('link[rel="stylesheet"][href]')].map((l) => l.getAttribute('href')!),
+      ];
+      if (files.length > 0 && (await Promise.all(files.map(loads))).every(Boolean)) break;
+    } catch {
+      // Not answering yet.
+    }
+  }
+  window.location.reload();
+}
+
 /**
  * The server's update status. Refetched hourly for the sidebar notice, and every few seconds
  * during an update, through the restart (when requests fail for a while).
@@ -362,7 +392,7 @@ export const useUpdates = () => {
     if (!running || !sessionStorage.getItem(UPDATING_KEY)) return;
     if (running !== APP_VERSION) {
       sessionStorage.removeItem(UPDATING_KEY);
-      window.location.reload();
+      void reloadWhenReady();
     } else if (!applying) {
       sessionStorage.removeItem(UPDATING_KEY); // it failed, and the same version is still running
     }
