@@ -34,17 +34,23 @@ export function backupRouter(ctx: AppContext): Router {
     await writeZipBackup(ctx, res);
   });
 
+  const restoreZip = async (zipFile: string) => {
+    const { sql, uploadsDir } = await extractZipBackup(ctx, zipFile);
+    try {
+      restoreBackup(ctx, sql, uploadsDir);
+    } finally {
+      // Moved into place on success; left behind only if the restore failed.
+      fs.rmSync(uploadsDir, { recursive: true, force: true });
+    }
+  };
+
   router.post('/restore', upload.single('file'), async (req, res) => {
     const file = req.file;
     if (!file) throw new HttpError(400, 'Choose a backup file to restore');
-    let extractedUploads: string | undefined;
     try {
       const name = decodeUploadName(file.originalname).toLowerCase();
       if (name.endsWith('.zip')) {
-        const { sql, uploadsDir } = await extractZipBackup(ctx, file.path);
-        extractedUploads = uploadsDir;
-        restoreBackup(ctx, sql, uploadsDir);
-        extractedUploads = undefined;
+        await restoreZip(file.path);
       } else if (name.endsWith('.sql')) {
         restoreBackup(ctx, fs.readFileSync(file.path, 'utf8'));
       } else {
@@ -53,7 +59,6 @@ export function backupRouter(ctx: AppContext): Router {
       res.json({ restored: true });
     } finally {
       fs.rmSync(file.path, { force: true });
-      if (extractedUploads) fs.rmSync(extractedUploads, { recursive: true, force: true });
     }
   });
 
@@ -86,11 +91,20 @@ export function backupRouter(ctx: AppContext): Router {
     res.json(autoStatus());
   });
 
-  router.get('/backup/auto/files/:name', (req, res) => {
-    const name = req.params.name;
+  const autoBackupFile = (name: string) => {
     const file = path.join(ctx.paths.backupDir, name);
     if (!isAutoBackupName(name) || !fs.existsSync(file)) throw new HttpError(404, 'Backup not found');
-    res.download(file, name);
+    return file;
+  };
+
+  router.get('/backup/auto/files/:name', (req, res) => {
+    res.download(autoBackupFile(req.params.name), req.params.name);
+  });
+
+  // Restores a saved automatic backup in place, without downloading and uploading it.
+  router.post('/backup/auto/files/:name/restore', async (req, res) => {
+    await restoreZip(autoBackupFile(req.params.name));
+    res.json({ restored: true });
   });
 
   router.post('/reset', (req, res) => {

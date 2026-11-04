@@ -1,30 +1,11 @@
 import { useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { BellRing, DatabaseBackup, Download, FileArchive, FileCode, RotateCcw, Upload } from 'lucide-react';
+import { BellRing, RotateCcw, Upload } from 'lucide-react';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { Alert, Button, Card, CardHeader, dismissedNoticeCount, showDismissedNotices } from '../../components/ui';
 import { api } from '../../lib/api';
 import { AutoBackupCard } from './AutoBackupCard';
 import { SettingsHeading } from './SettingsLayout';
-
-function DownloadTile({ href, icon, title, children }: { href: string; icon: React.ReactNode; title: string; children: React.ReactNode }) {
-  return (
-    <a
-      href={href}
-      download
-      className="group flex gap-4 rounded-xl border border-line bg-page/40 p-5 transition-colors hover:border-accent/50 hover:bg-surface-2"
-    >
-      <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-accent-bg text-accent-soft">{icon}</div>
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2 font-medium text-ink">
-          {title}
-          <Download className="size-4 text-faint group-hover:text-accent-soft" aria-hidden />
-        </div>
-        <p className="mt-1 text-sm text-muted">{children}</p>
-      </div>
-    </a>
-  );
-}
 
 export function BackupSettings() {
   const qc = useQueryClient();
@@ -61,24 +42,12 @@ export function BackupSettings() {
       <div className="space-y-6">
         <SettingsHeading
           title="Backup and Restore"
-          description="Download a copy of your books, restore from an earlier backup, or start again with an empty database."
+          description="Back up your books, restore from an earlier backup, or start again with an empty database."
         />
         <AutoBackupCard />
 
         <Card>
-          <CardHeader icon={<DatabaseBackup className="size-5 text-accent-soft" />} title="Download a backup" />
-          <div className="grid gap-4 px-5 pb-6 sm:px-6 lg:grid-cols-2">
-            <DownloadTile href="/api/backup.zip" icon={<FileArchive className="size-5" />} title="Full backup (.zip)">
-              The database plus every attached document. Use this to move the app or recover everything.
-            </DownloadTile>
-            <DownloadTile href="/api/backup.sql" icon={<FileCode className="size-5" />} title="Database only (.sql)">
-              A readable SQL dump of all tax years, transactions and categories. Documents are not included.
-            </DownloadTile>
-          </div>
-        </Card>
-
-        <Card>
-          <CardHeader icon={<Upload className="size-5 text-accent-soft" />} title="Restore from a backup" />
+          <CardHeader icon={<Upload className="size-5 text-accent-soft" />} title="Restore from a backup file" />
           <div className="space-y-4 px-5 pb-6 sm:px-6">
             <Alert tone="warning">
               Restoring <strong>replaces all current data</strong> with the backup. A .zip backup also replaces all attached documents; a .sql
@@ -169,7 +138,7 @@ export function BackupSettings() {
           Everything currently in the app will be replaced by <strong className="text-ink break-all">{file?.name}</strong>
           {isZip ? ', including all attached documents' : ''}.
         </p>
-        <p>Download a backup of the current data first if you might need it.</p>
+        <p>Use Back up now first if you might need the current data.</p>
       </ConfirmDialog>
 
       <ConfirmDialog
@@ -184,7 +153,7 @@ export function BackupSettings() {
           All tax years, transactions, documents, custom categories and MTD submission records will be deleted, leaving an empty
           database.
         </p>
-        <p>Download a full backup (.zip) first if you might need any of it.</p>
+        <p>Use Back up now first if you might need any of it.</p>
       </ConfirmDialog>
     </>
   );

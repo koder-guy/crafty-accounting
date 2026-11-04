@@ -1450,6 +1450,26 @@ describe('automatic backups', () => {
     expect((await agent.get('/api/tax-years')).body.taxYears).toHaveLength(1);
   });
 
+  it('restores a saved backup in place, keeping the later ones', async () => {
+    const yearId = await createYear();
+    await agent.post('/api/incomes').send(income(yearId)).expect(201);
+    const first = (await agent.post('/api/backup/auto/run').expect(200)).body.backups[0].name;
+    await agent.post('/api/incomes').send(income(yearId)).expect(201);
+    await agent.post('/api/backup/auto/run').expect(200);
+
+    await agent.post(`/api/backup/auto/files/${first}/restore`).expect(200);
+    const [year] = (await agent.get('/api/tax-years')).body.taxYears;
+    expect((await agent.get('/api/incomes').query({ taxYearId: year.id })).body).toHaveLength(1);
+    const { backups } = (await agent.get('/api/backup/auto')).body;
+    expect(backups).toHaveLength(2);
+    // The second backup that minute is named -2 and comes first.
+    expect(backups[1].name).toBe(first);
+    expect(fs.readdirSync(ctx.paths.tmpDir).filter((f) => f.startsWith('restore-'))).toEqual([]);
+
+    await agent.post('/api/backup/auto/files/..%2Fcrafty.db/restore').expect(404);
+    await agent.post('/api/backup/auto/files/crafty-accounting-auto-2020-01-01-0200.zip/restore').expect(404);
+  });
+
   it('validates settings and keeps them through a reset and a restore', async () => {
     await agent.put('/api/backup/auto').send({ enabled: true, time: '25:00', keep: 30 }).expect(400);
     await agent.put('/api/backup/auto').send({ enabled: true, time: '02:00', keep: 0 }).expect(400);

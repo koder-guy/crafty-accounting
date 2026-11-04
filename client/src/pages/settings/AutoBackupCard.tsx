@@ -1,8 +1,16 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { Clock, Download } from 'lucide-react';
+import { useQueryClient } from '@tanstack/react-query';
+import { Clock, Download, History } from 'lucide-react';
 import type { AutoBackupStatus } from '@crafty/shared';
+
+type AutoBackupFile = AutoBackupStatus['backups'][number];
+import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { Alert, Button, Card, CardHeader, Field, Spinner } from '../../components/ui';
+import { api } from '../../lib/api';
 import { useAutoBackup, useAutoBackupMutations } from '../../lib/queries';
+
+const ICON_BUTTON =
+  'inline-flex size-8 shrink-0 items-center justify-center rounded-md text-muted transition-colors hover:bg-accent-bg hover:text-accent-soft';
 
 const SHOWN_BACKUPS = 10;
 
@@ -27,6 +35,16 @@ export function AutoBackupCard() {
   const [time, setTime] = useState('02:00');
   const [keep, setKeep] = useState('30');
   const [saved, setSaved] = useState(false);
+  const qc = useQueryClient();
+  const [restoring, setRestoring] = useState<AutoBackupFile | null>(null);
+  const [restored, setRestored] = useState<string | null>(null);
+
+  const restore = async () => {
+    const backup = restoring!;
+    await api.post(`/backup/auto/files/${encodeURIComponent(backup.name)}/restore`);
+    setRestored(dateTime(backup.createdAt));
+    await qc.invalidateQueries();
+  };
 
   useEffect(() => {
     if (!status) return;
@@ -42,123 +60,166 @@ export function AutoBackupCard() {
   };
 
   return (
-    <Card>
-      <CardHeader icon={<Clock className="size-5 text-accent-soft" />} title="Automatic backups" />
-      <div className="space-y-5 px-5 pb-6 sm:px-6">
-        {isLoading ? (
-          <Spinner />
-        ) : error || !status ? (
-          <Alert>{error?.message ?? 'Could not load the automatic backup settings'}</Alert>
-        ) : (
-          <>
-            <p className="text-sm text-muted">
-              A full backup (.zip with documents) is saved to the backup folder once a day. If nothing has changed since the last one,
-              that day is skipped. Older backups are deleted once there are more than you keep.
-            </p>
+    <>
+      <Card>
+        <CardHeader icon={<Clock className="size-5 text-accent-soft" />} title="Automatic backups" />
+        <div className="space-y-5 px-5 pb-6 sm:px-6">
+          {isLoading ? (
+            <Spinner />
+          ) : error || !status ? (
+            <Alert>{error?.message ?? 'Could not load the automatic backup settings'}</Alert>
+          ) : (
+            <>
+              <p className="text-sm text-muted">
+                A full backup (.zip with documents) is saved to the backup folder once a day. If nothing has changed since the last one,
+                that day is skipped. Older backups are deleted once there are more than you keep.
+              </p>
 
-            {!status.folderWritable && (
-              <Alert>
-                The backup folder <code>{status.folder}</code> can't be written to, so automatic backups can't be saved. Check the folder
-                exists and its permissions (see the README).
-              </Alert>
-            )}
+              {!status.folderWritable && (
+                <Alert>
+                  The backup folder <code>{status.folder}</code> can't be written to, so automatic backups can't be saved. Check the folder
+                  exists and its permissions (see the README). Until then you can{' '}
+                  <a href="/api/backup.zip" download className="font-medium underline">
+                    download a full backup
+                  </a>{' '}
+                  instead.
+                </Alert>
+              )}
 
-            <form onSubmit={submit} noValidate className="space-y-4">
-              <label className="flex items-center gap-3 text-sm text-ink">
-                <input
-                  type="checkbox"
-                  className="size-4 accent-[var(--color-accent)]"
-                  checked={enabled}
-                  onChange={(e) => setEnabled(e.target.checked)}
-                />
-                Back up automatically every day
-              </label>
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-end">
-                <Field label="Time of day" htmlFor="backup-time" className="sm:w-40">
+              <form onSubmit={submit} noValidate className="space-y-4">
+                <label className="flex items-center gap-3 text-sm text-ink">
                   <input
-                    id="backup-time"
-                    type="time"
-                    className="field"
-                    value={time}
-                    disabled={!enabled}
-                    onChange={(e) => setTime(e.target.value)}
+                    type="checkbox"
+                    className="size-4 accent-[var(--color-accent)]"
+                    checked={enabled}
+                    onChange={(e) => setEnabled(e.target.checked)}
                   />
-                </Field>
-                <Field label="Backups to keep" htmlFor="backup-keep" className="sm:w-40">
-                  <input
-                    id="backup-keep"
-                    type="number"
-                    min={1}
-                    max={365}
-                    className="field"
-                    value={keep}
-                    onChange={(e) => setKeep(e.target.value)}
-                  />
-                </Field>
-                <Button type="submit" variant="primary" busy={save.isPending}>
-                  Save
+                  Back up automatically every day
+                </label>
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-end">
+                  <Field label="Time of day" htmlFor="backup-time" className="sm:w-40">
+                    <input
+                      id="backup-time"
+                      type="time"
+                      className="field"
+                      value={time}
+                      disabled={!enabled}
+                      onChange={(e) => setTime(e.target.value)}
+                    />
+                  </Field>
+                  <Field label="Backups to keep" htmlFor="backup-keep" className="sm:w-40">
+                    <input
+                      id="backup-keep"
+                      type="number"
+                      min={1}
+                      max={365}
+                      className="field"
+                      value={keep}
+                      onChange={(e) => setKeep(e.target.value)}
+                    />
+                  </Field>
+                  <Button type="submit" variant="primary" busy={save.isPending}>
+                    Save
+                  </Button>
+                </div>
+                {save.error && <Alert>{save.error.message}</Alert>}
+                {saved && !save.error && <Alert tone="success">Settings saved.</Alert>}
+              </form>
+
+              <dl className="grid gap-3 border-t border-line pt-5 text-sm sm:grid-cols-[160px_1fr]">
+                <dt className="text-muted">Last backup</dt>
+                <dd>
+                  <LastRun status={status} />
+                </dd>
+                <dt className="text-muted">Next backup</dt>
+                <dd>{status.nextRunAt ? dateTime(status.nextRunAt) : <span className="text-muted">Automatic backups are off</span>}</dd>
+                <dt className="text-muted">Backup folder</dt>
+                <dd className="break-all">
+                  <code>{status.folder}</code>
+                </dd>
+              </dl>
+
+              <div className="flex flex-wrap items-center gap-3">
+                <Button onClick={() => runNow.mutate()} busy={runNow.isPending} disabled={!status.folderWritable}>
+                  Back up now
                 </Button>
+                {runNow.error && <span className="text-sm text-out-soft">{runNow.error.message}</span>}
               </div>
-              {save.error && <Alert>{save.error.message}</Alert>}
-              {saved && !save.error && <Alert tone="success">Settings saved.</Alert>}
-            </form>
 
-            <dl className="grid gap-3 border-t border-line pt-5 text-sm sm:grid-cols-[160px_1fr]">
-              <dt className="text-muted">Last backup</dt>
-              <dd>
-                <LastRun status={status} />
-              </dd>
-              <dt className="text-muted">Next backup</dt>
-              <dd>{status.nextRunAt ? dateTime(status.nextRunAt) : <span className="text-muted">Automatic backups are off</span>}</dd>
-              <dt className="text-muted">Backup folder</dt>
-              <dd className="break-all">
-                <code>{status.folder}</code>
-              </dd>
-            </dl>
-
-            <div className="flex flex-wrap items-center gap-3">
-              <Button onClick={() => runNow.mutate()} busy={runNow.isPending} disabled={!status.folderWritable}>
-                Back up now
-              </Button>
-              {runNow.error && <span className="text-sm text-out-soft">{runNow.error.message}</span>}
-            </div>
-
-            {status.backups.length > 0 && (
-              <div>
-                <h3 className="eyebrow mb-2">
-                  Saved backups ({status.backups.length} of up to {status.keep})
-                </h3>
-                <ul className="divide-y divide-line rounded-lg border border-line text-sm">
-                  {status.backups.slice(0, SHOWN_BACKUPS).map((b) => (
-                    <li key={b.name} className="flex items-center justify-between gap-4 px-4 py-2.5">
-                      <div className="min-w-0">
-                        <div className="truncate text-ink">{dateTime(b.createdAt)}</div>
-                        <div className="truncate text-xs text-faint">
-                          {b.name} · {fileSize(b.sizeBytes)}
+              {status.backups.length > 0 && (
+                <div>
+                  <h3 className="eyebrow mb-2">
+                    Saved backups ({status.backups.length} of up to {status.keep})
+                  </h3>
+                  <ul className="divide-y divide-line rounded-lg border border-line text-sm">
+                    {status.backups.slice(0, SHOWN_BACKUPS).map((b) => (
+                      <li key={b.name} className="flex items-center justify-between gap-4 px-4 py-2.5">
+                        <div className="min-w-0">
+                          <div className="truncate text-ink">{dateTime(b.createdAt)}</div>
+                          <div className="truncate text-xs text-faint">
+                            {b.name} · {fileSize(b.sizeBytes)}
+                          </div>
                         </div>
-                      </div>
-                      <a
-                        href={`/api/backup/auto/files/${encodeURIComponent(b.name)}`}
-                        download={b.name}
-                        aria-label={`Download ${b.name}`}
-                        title="Download"
-                        className="inline-flex size-8 shrink-0 items-center justify-center rounded-md text-muted transition-colors hover:bg-accent-bg hover:text-accent-soft"
-                      >
-                        <Download className="size-4" aria-hidden />
-                      </a>
-                    </li>
-                  ))}
-                </ul>
-                {status.backups.length > SHOWN_BACKUPS && (
-                  <p className="mt-2 text-xs text-muted">
-                    {status.backups.length - SHOWN_BACKUPS} older backups are in the backup folder.
-                  </p>
-                )}
-              </div>
-            )}
-          </>
-        )}
-      </div>
-    </Card>
+                        <div className="flex shrink-0 items-center gap-1">
+                          <a
+                            href={`/api/backup/auto/files/${encodeURIComponent(b.name)}`}
+                            download={b.name}
+                            aria-label={`Download ${b.name}`}
+                            title="Download"
+                            className={ICON_BUTTON}
+                          >
+                            <Download className="size-4" aria-hidden />
+                          </a>
+                          <button
+                            type="button"
+                            aria-label={`Restore ${b.name}`}
+                            title="Restore"
+                            className={ICON_BUTTON}
+                            onClick={() => {
+                              setRestored(null);
+                              setRestoring(b);
+                            }}
+                          >
+                            <History className="size-4" aria-hidden />
+                          </button>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                  {status.backups.length > SHOWN_BACKUPS && (
+                    <p className="mt-2 text-xs text-muted">
+                      {status.backups.length - SHOWN_BACKUPS} older backups are in the backup folder.
+                    </p>
+                  )}
+                  {restored && (
+                    <div className="mt-3">
+                      <Alert tone="success">Restored the backup from {restored}.</Alert>
+                    </div>
+                  )}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      </Card>
+
+      <ConfirmDialog
+        open={restoring !== null}
+        title="Replace all data with this backup?"
+        confirmLabel="Restore backup"
+        requireText="RESTORE"
+        onClose={() => setRestoring(null)}
+        onConfirm={restore}
+      >
+        <p>
+          Everything currently in the app, including all attached documents, will be replaced by the backup from{' '}
+          <strong className="text-ink">{restoring && dateTime(restoring.createdAt)}</strong>.
+        </p>
+        <p>
+          Later backups stay in the backup folder. Use Back up now first if you might need the current data, as it may not be in a
+          saved backup yet.
+        </p>
+      </ConfirmDialog>
+    </>
   );
 }

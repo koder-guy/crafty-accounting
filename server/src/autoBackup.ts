@@ -76,6 +76,10 @@ export function backupDirWritable(dir: string): boolean {
   }
 }
 
+// crafty-accounting-auto-YYYY-MM-DD-HHMM
+const STEM_LENGTH = AUTO_BACKUP_PREFIX.length + 'YYYY-MM-DD-HHMM'.length;
+const sameMinuteNumber = (name: string) => Number(/^-(\d+)\.zip$/.exec(name.slice(STEM_LENGTH))?.[1] ?? 1);
+
 export function listAutoBackups(dir: string): AutoBackupFile[] {
   let names: string[];
   try {
@@ -88,7 +92,8 @@ export function listAutoBackups(dir: string): AutoBackupFile[] {
       const stat = fs.statSync(path.join(dir, name));
       return { name, sizeBytes: stat.size, createdAt: stat.mtime.toISOString() };
     })
-    .sort((a, b) => b.name.localeCompare(a.name));
+    // Newest first, by name: date and time, then the -2, -3… of later backups in the same minute.
+    .sort((a, b) => b.name.slice(0, STEM_LENGTH).localeCompare(a.name.slice(0, STEM_LENGTH)) || sameMinuteNumber(b.name) - sameMinuteNumber(a.name));
 }
 
 const pad = (n: number) => String(n).padStart(2, '0');

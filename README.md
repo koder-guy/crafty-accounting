@@ -21,7 +21,7 @@ Self-hosted bookkeeping for UK sole traders on the cash basis. Keep your income 
 - **Making Tax Digital**: each quarter's figures as a CSV for bridging software, and a record of each submission (see [Making Tax Digital](#making-tax-digital)).
 - **People**: everyone signs in with their own name and password. **Editors** can change anything; **Read-only** people can view, export and print but not change the books or download backups. Transactions show who added and last changed them.
 - **Working together**: changes appear in every open browser within a second. If two people edit the same transaction, the second save is refused and the form offers to load the other version.
-- **Backups**: daily automatic backups, plus manual download and restore (see [Backups](#backups)).
+- **Backups**: daily automatic backups, each one downloadable or restorable in a click (see [Backups](#backups)).
 - Reports and the year-end summary print or save as PDF.
 
 ## Quick install (macOS and Linux)
@@ -133,9 +133,9 @@ Settings go in a `.env` file next to the app (the installers write one). Only in
 
 **Automatic:** every day at 02:00 the app writes a full `.zip` backup to the backup folder (`BACKUP_HOST_DIR` with Docker). Days without changes are skipped, the newest 30 are kept, and a missed backup runs when the app next starts. Change this, or use **Back up now**, in **Settings → Backup and Restore**, which also says if the folder can't be written to (usually its permissions). The folder is outside the Docker volume; keep it on another disk or a NAS, or copy it elsewhere regularly.
 
-**Manual**, in **Settings → Backup and Restore**:
-- **Full backup (.zip)**: the database and every document. Restoring it replaces both.
-- **Database only (.sql)**: restoring it replaces the database and leaves documents alone.
+Also in **Settings → Backup and Restore**:
+- **Saved backups**: download any of the latest ten, or restore one in place after you type `RESTORE`. It replaces the database and every document; later backups stay in the folder.
+- **Restore from a backup file**: a `.zip` replaces the database and every document; an older `.sql` backup replaces the database and leaves documents alone.
 - **Start again with an empty database** deletes the books after you type `RESET`; the old database and documents are kept until the next reset.
 
 A restore is checked in a separate database before anything is replaced, and older backups are upgraded automatically. Backups don't include the people who can sign in, so a restore keeps them as they are.
