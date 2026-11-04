@@ -1,7 +1,7 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { BrowserRouter, Navigate, Route, Routes } from 'react-router';
+import { createBrowserRouter, Navigate, Route, RouterProvider, Routes } from 'react-router';
 import './index.css';
 import { setUnauthorizedHandler } from './lib/api';
 import { useMe } from './lib/queries';
@@ -138,12 +138,13 @@ function App() {
   );
 }
 
+// A data router, so forms can ask before the page is left (useBlocker); the routes themselves stay in App.
+const router = createBrowserRouter([{ path: '*', element: <App /> }]);
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
-      <BrowserRouter>
-        <App />
-      </BrowserRouter>
+      <RouterProvider router={router} />
     </QueryClientProvider>
   </StrictMode>,
 );

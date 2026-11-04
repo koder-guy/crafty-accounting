@@ -320,7 +320,7 @@ export function ExportMenu({ href }: { href: (format: ExportFormat) => string })
       const at = items.indexOf(document.activeElement as HTMLElement);
       const focus = (i: number) => items[(i + items.length) % items.length]?.focus({ preventScroll: true });
       if (e.key === 'Escape' || e.key === 'Tab') {
-        // Escape would also leave a form (EscapeToCancel) unless handled here.
+        // Escape would also leave a form (useLeaveGuard) unless handled here.
         if (e.key === 'Escape') e.preventDefault();
         close(e.key === 'Escape');
       } else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
@@ -678,7 +678,7 @@ export function PaymentMethodPicker({
       const at = items.indexOf(document.activeElement as HTMLElement);
       const focus = (i: number) => items[(i + items.length) % items.length]?.focus({ preventScroll: true });
       if (e.key === 'Escape' || e.key === 'Tab') {
-        // Escape also leaves the form (EscapeToCancel) unless handled here.
+        // Escape also leaves the form (useLeaveGuard) unless handled here.
         if (e.key === 'Escape') e.preventDefault();
         close(e.key === 'Escape');
       } else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {

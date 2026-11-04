@@ -4,7 +4,7 @@ import { useNavigate, useParams, useSearchParams } from 'react-router';
 import { displayTaxYear, formatDisplayDate, isDateInTaxYear, parsePoundsToPence, penceToPounds, todayIso, type Income, type PaymentMethod } from '@crafty/shared';
 import { CategoryOptions } from '../components/CategoryOptions';
 import { DateInput } from '../components/DateInput';
-import { BackLink, ChangedElsewhere, CopiedFrom, EscapeToCancel, dateInYear, duplicateDate, yearRangeHint } from '../components/FormShell';
+import { BackLink, ChangedElsewhere, CopiedFrom, dateInYear, duplicateDate, useLeaveGuard, yearRangeHint } from '../components/FormShell';
 import { NoTaxYear } from '../components/NoTaxYear';
 import { PageBody, PageHeader } from '../components/PageHeader';
 import { DocumentField, PaymentMethodPicker } from '../components/transactions';
@@ -139,7 +139,7 @@ export function IncomeForm() {
     save.mutate(
       { id: id ?? undefined, form: transactionForm(payload, files) },
       {
-        onSuccess: (saved) => navigate(`/income/${saved.id}`),
+        onSuccess: (saved) => leave(`/income/${saved.id}`),
         onError: (err) => {
           // Someone else saved first: fetch their version so the form can offer it.
           if (err instanceof ApiError && err.status === 409) refetchExisting();
@@ -155,6 +155,11 @@ export function IncomeForm() {
 
   const title = id ? 'Edit income' : copyId ? 'Duplicate income' : 'Add income';
   const backTo = id ? `/income/${id}` : copyId ? `/income/${copyId}` : '/income';
+  const { guard, leave } = useLeaveGuard({
+    dirty: isDirty || files.length > 0 || removeIds.length > 0,
+    busy: save.isPending || preparingPhoto,
+    onCancel: () => navigate(backTo),
+  });
 
   if (yearLoading || loadingCategories || (id && loadingExisting) || (copyId && loadingOriginal)) {
     return (
@@ -199,11 +204,7 @@ export function IncomeForm() {
       />
       <PageBody>
         <BackLink to={backTo}>Back</BackLink>
-        <EscapeToCancel
-          dirty={isDirty || files.length > 0 || removeIds.length > 0}
-          busy={save.isPending || preparingPhoto}
-          onCancel={() => navigate(backTo)}
-        />
+        {guard}
         {original && (
           <div className="max-w-[876px]">
             <CopiedFrom what={original.description} date={original.date} notCopied="The reference and any attached document aren't copied." />

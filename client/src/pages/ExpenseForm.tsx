@@ -16,7 +16,7 @@ import {
   type PaymentMethod,
 } from '@crafty/shared';
 import { CategoryOptions } from '../components/CategoryOptions';
-import { BackLink, ChangedElsewhere, CopiedFrom, EscapeToCancel, dateInYear, duplicateDate, yearRangeHint } from '../components/FormShell';
+import { BackLink, ChangedElsewhere, CopiedFrom, dateInYear, duplicateDate, useLeaveGuard, yearRangeHint } from '../components/FormShell';
 import { NoTaxYear } from '../components/NoTaxYear';
 import { PageBody, PageHeader } from '../components/PageHeader';
 import { DateInput } from '../components/DateInput';
@@ -199,7 +199,7 @@ export function ExpenseForm() {
     save.mutate(
       { id: id ?? undefined, form: transactionForm(payload, files) },
       {
-        onSuccess: (saved) => navigate(`/expenses/${saved.id}`),
+        onSuccess: (saved) => leave(`/expenses/${saved.id}`),
         onError: (err) => {
           // Someone else saved first: fetch their version so the form can offer it.
           if (err instanceof ApiError && err.status === 409) refetchExisting();
@@ -213,6 +213,11 @@ export function ExpenseForm() {
 
   const title = id ? 'Edit expense' : copyId ? 'Duplicate expense' : 'Add expense';
   const backTo = id ? `/expenses/${id}` : copyId ? `/expenses/${copyId}` : '/expenses';
+  const { guard, leave } = useLeaveGuard({
+    dirty: isDirty || files.length > 0 || removeIds.length > 0,
+    busy: save.isPending || preparingPhoto,
+    onCancel: () => navigate(backTo),
+  });
 
   if (yearLoading || loadingCategories || (id && loadingExisting) || (copyId && loadingOriginal)) {
     return (
@@ -257,11 +262,7 @@ export function ExpenseForm() {
       />
       <PageBody>
         <BackLink to={backTo}>Back</BackLink>
-        <EscapeToCancel
-          dirty={isDirty || files.length > 0 || removeIds.length > 0}
-          busy={save.isPending || preparingPhoto}
-          onCancel={() => navigate(backTo)}
-        />
+        {guard}
         {original && (
           <div className="max-w-[876px]">
             <CopiedFrom

@@ -1,6 +1,6 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, type ReactNode } from 'react';
 import { ArrowLeft, RefreshCw } from 'lucide-react';
-import { Link } from 'react-router';
+import { Link, useBlocker, useNavigate } from 'react-router';
 import { displayTaxYear, formatDisplayDate, isDateInTaxYear, todayIso, type TaxYear } from '@crafty/shared';
 import { ConfirmDialog } from './ConfirmDialog';
 import { Alert, Button } from './ui';
@@ -15,12 +15,19 @@ export function BackLink({ to, children }: { to: string; children: ReactNode }) 
 }
 
 /**
- * Makes Escape leave a form, as its Cancel button does, asking first if there are changes to lose. It listens on
- * window so that what's open over the form gets the key first: a calendar or menu on document, which marks it
- * handled, or a dialog.
+ * Keeps a form's changes from being lost by leaving it. Any way of leaving to another page (Cancel, Back, the
+ * sidebar, the browser's back button) asks first while there are changes, and closing or reloading the tab gets the
+ * browser's own warning. Escape leaves the form as Cancel does; the guard listens on window so that what's open over
+ * the form gets the key first: a calendar or menu on document, which marks it handled, or a dialog.
+ *
+ * Returns the dialog to render and `leave`, for leaving without asking once the changes are saved.
  */
-export function EscapeToCancel({ dirty, busy, onCancel }: { dirty: boolean; busy: boolean; onCancel: () => void }) {
-  const [asking, setAsking] = useState(false);
+export function useLeaveGuard({ dirty, busy, onCancel }: { dirty: boolean; busy: boolean; onCancel: () => void }) {
+  const navigate = useNavigate();
+  const leaving = useRef(false);
+  const blocker = useBlocker(
+    ({ currentLocation, nextLocation }) => dirty && !leaving.current && currentLocation.pathname !== nextLocation.pathname,
+  );
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -28,25 +35,47 @@ export function EscapeToCancel({ dirty, busy, onCancel }: { dirty: boolean; busy
       if (document.querySelector('dialog[open]')) return;
       // Otherwise the browser's own Escape handling closes the dialog this opens, straight away.
       e.preventDefault();
-      if (dirty) setAsking(true);
-      else onCancel();
+      onCancel();
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [dirty, busy, onCancel]);
+  }, [busy, onCancel]);
 
-  return (
+  useEffect(() => {
+    if (!dirty) return;
+    const onBeforeUnload = (e: BeforeUnloadEvent) => e.preventDefault();
+    window.addEventListener('beforeunload', onBeforeUnload);
+    return () => window.removeEventListener('beforeunload', onBeforeUnload);
+  }, [dirty]);
+
+  const guard = (
     <ConfirmDialog
-      open={asking}
+      open={blocker.state === 'blocked'}
       title="Discard your changes?"
       confirmLabel="Discard changes"
       cancelLabel="Keep editing"
-      onConfirm={onCancel}
-      onClose={() => setAsking(false)}
+      onConfirm={() => {
+        leaving.current = true;
+        blocker.proceed?.();
+      }}
+      onClose={() => {
+        // Also called after Discard changes, once the page is already on its way.
+        if (!leaving.current) blocker.reset?.();
+      }}
     >
       <p>What you’ve entered on this form hasn’t been saved.</p>
     </ConfirmDialog>
   );
+
+  const leave = useCallback(
+    (to: string) => {
+      leaving.current = true;
+      navigate(to);
+    },
+    [navigate],
+  );
+
+  return { guard, leave };
 }
 
 /** react-hook-form validator for a transaction date. */
