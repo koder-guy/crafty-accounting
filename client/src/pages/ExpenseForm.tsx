@@ -263,7 +263,7 @@ export function ExpenseForm() {
           onCancel={() => navigate(backTo)}
         />
         {original && (
-          <div className="max-w-[808px]">
+          <div className="max-w-[896px]">
             <CopiedFrom
               what={original.payee}
               date={original.date}
@@ -272,7 +272,7 @@ export function ExpenseForm() {
           </div>
         )}
         {existing && loaded && existing.updatedAt !== loaded.updatedAt && (
-          <div className="max-w-[808px]">
+          <div className="max-w-[896px]">
             <ChangedElsewhere
               by={existing.updatedBy}
               onLoad={() => {
@@ -282,7 +282,7 @@ export function ExpenseForm() {
             />
           </div>
         )}
-        <form onSubmit={onSubmit} noValidate className="max-w-[808px] space-y-6">
+        <form onSubmit={onSubmit} noValidate className="max-w-[896px] space-y-6">
           <Card className="p-5 sm:p-6">
             <div className="grid gap-5 sm:grid-cols-2">
               <Field label="Date" htmlFor="date" error={errors.date?.message} hint={yearRangeHint(taxYear)}>
