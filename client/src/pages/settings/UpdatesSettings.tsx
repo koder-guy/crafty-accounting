@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { CircleArrowUp, Copy, ExternalLink, RefreshCw } from 'lucide-react';
-import { APP_VERSION, type UpdateStatus } from '@crafty/shared';
+import type { UpdateStatus } from '@crafty/shared';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { Alert, Button, Card, CardHeader, Spinner } from '../../components/ui';
 import { useCanEdit, useUpdateMutations, useUpdates } from '../../lib/queries';
@@ -79,14 +79,8 @@ function HowToUpdate({ status, version }: { status: UpdateStatus; version: strin
         onConfirm={() => apply.mutateAsync(version)}
         onClose={() => setConfirming(false)}
       >
-        <p>
-          A backup of your books is saved first. The new version is then downloaded and built, which takes a few minutes; the app keeps
-          working meanwhile.
-        </p>
-        <p className="mt-3">
-          At the end the app restarts, which takes a few seconds, and this page reloads by itself. If anything goes wrong before then,
-          version {APP_VERSION} keeps running.
-        </p>
+        <p>A backup of your accounts will be saved first before the new version is downloaded and installed.</p>
+        <p className="mt-3">The app will then automatically reload and you'll be all up-to-date.</p>
       </ConfirmDialog>
     </>
   );
