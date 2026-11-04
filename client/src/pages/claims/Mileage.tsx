@@ -208,7 +208,7 @@ export function Mileage() {
                 <RatesUsed
                   rates={[
                     { label: `Car or van, first ${rates.car.thresholdMiles.toLocaleString('en-GB')}`, rate: `${rates.car.firstPence}p` },
-                    { label: 'Car or van, after that', rate: `${rates.car.afterPence}p` },
+                    { label: 'After that', rate: `${rates.car.afterPence}p` },
                     { label: 'Motorcycle', rate: `${rates.motorcycle}p` },
                     { label: 'Bicycle', rate: `${rates.bicycle}p` },
                   ]}
