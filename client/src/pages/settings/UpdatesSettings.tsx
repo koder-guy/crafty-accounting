@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { CircleArrowUp, Copy, ExternalLink, RefreshCw } from 'lucide-react';
 import { APP_VERSION, type UpdateStatus } from '@crafty/shared';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
@@ -92,8 +92,40 @@ function HowToUpdate({ status, version }: { status: UpdateStatus; version: strin
   );
 }
 
+/** Minutes and seconds since the update started, ticking. */
+function useElapsed(since: string) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, []);
+  const seconds = Math.max(0, Math.floor((now - Date.parse(since)) / 1000));
+  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
+}
+
+/** At the top of the page while an update runs, so it's clear something is happening. */
+function UpdateProgress({ applying, restarting }: { applying: NonNullable<UpdateStatus['applying']>; restarting: boolean }) {
+  const elapsed = useElapsed(applying.startedAt);
+  return (
+    <div role="status" className="flex gap-4 rounded-xl border border-accent/40 bg-accent-bg px-5 py-4">
+      <RefreshCw className="mt-0.5 size-6 shrink-0 animate-spin text-accent-soft" aria-hidden />
+      <div className="min-w-0 flex-1 text-sm">
+        <p className="font-medium text-ink">
+          {restarting ? 'Restarting with' : 'Updating to'} version {applying.version}…
+          <span className="ml-2 font-normal tabular-nums text-muted">{elapsed}</span>
+        </p>
+        <p className="mt-1 text-muted">
+          {restarting
+            ? "The app is restarting, which takes a few seconds. This page reloads by itself once the new version answers."
+            : `Started ${dateTime(applying.startedAt)}. Downloading and building the new version takes a few minutes; you can keep working meanwhile. The page reloads by itself once it's running.`}
+        </p>
+      </div>
+    </div>
+  );
+}
+
 export function UpdatesSettings() {
-  const { data: status, isLoading, error } = useUpdates();
+  const { data: status, isLoading, error, failureCount } = useUpdates();
   const { check } = useUpdateMutations();
   const canEdit = useCanEdit();
 
@@ -103,6 +135,9 @@ export function UpdatesSettings() {
   return (
     <div className="space-y-6">
       <SettingsHeading title="Updates" description="New versions of Crafty Accounting, and how to install them." />
+
+      {/* While the server restarts, requests fail and the last status (still applying) is kept. */}
+      {status?.applying && <UpdateProgress applying={status.applying} restarting={failureCount > 0} />}
 
       <Card>
         <CardHeader icon={<RefreshCw className="size-5 text-accent-soft" />} title="This version" />
@@ -182,14 +217,7 @@ export function UpdatesSettings() {
               </div>
             )}
 
-            {status.applying ? (
-              <Alert tone="info">
-                Updating to version {status.applying.version}, started {dateTime(status.applying.startedAt)}. This takes a few minutes; the
-                page reloads by itself once the new version is running.
-              </Alert>
-            ) : (
-              <HowToUpdate status={status} version={available.version} />
-            )}
+            {!status.applying && <HowToUpdate status={status} version={available.version} />}
           </div>
         </Card>
       )}
