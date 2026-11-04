@@ -160,14 +160,6 @@ export function AutoBackupCard() {
                         </div>
                       </div>
                       <div className="flex shrink-0 items-center gap-2">
-                        <a
-                          href={`/api/backup/auto/files/${encodeURIComponent(b.name)}`}
-                          download={b.name}
-                          className={buttonClasses()}
-                        >
-                          <Download className="size-4" aria-hidden />
-                          Download
-                        </a>
                         <Button
                           variant="softDanger"
                           onClick={() => {
@@ -178,6 +170,14 @@ export function AutoBackupCard() {
                           <History className="size-4" aria-hidden />
                           Restore…
                         </Button>
+                        <a
+                          href={`/api/backup/auto/files/${encodeURIComponent(b.name)}`}
+                          download={b.name}
+                          className={buttonClasses()}
+                        >
+                          <Download className="size-4" aria-hidden />
+                          Download
+                        </a>
                         <IconButton
                           label="Delete"
                           tone="danger"
