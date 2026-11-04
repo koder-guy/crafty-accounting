@@ -6,13 +6,17 @@ export function ClaimStats({ children }: { children: ReactNode }) {
   return <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">{children}</div>;
 }
 
+/**
+ * One box. Anything in `children` sits at the bottom of the box, so extra detail lines up across a row
+ * of boxes (all stretched to the tallest) when one box's `sub` wraps onto more lines than another's.
+ */
 export function Stat({ label, value, sub, children }: { label: string; value: string; sub: string; children?: ReactNode }) {
   return (
-    <Card className="p-5">
+    <Card className="flex flex-col p-5">
       <div className="eyebrow">{label}</div>
       <div className="tabular mt-2 text-2xl font-bold text-white">{value}</div>
       <div className="mt-1 text-xs text-muted">{sub}</div>
-      {children}
+      {children && <div className="mt-auto">{children}</div>}
     </Card>
   );
 }
