@@ -205,12 +205,12 @@ export function IncomeForm() {
           onCancel={() => navigate(backTo)}
         />
         {original && (
-          <div className="max-w-[896px]">
+          <div className="max-w-[876px]">
             <CopiedFrom what={original.description} date={original.date} notCopied="The reference and any attached document aren't copied." />
           </div>
         )}
         {existing && loaded && existing.updatedAt !== loaded.updatedAt && (
-          <div className="max-w-[896px]">
+          <div className="max-w-[876px]">
             <ChangedElsewhere
               by={existing.updatedBy}
               onLoad={() => {
@@ -221,7 +221,7 @@ export function IncomeForm() {
           </div>
         )}
         <form onSubmit={onSubmit} noValidate>
-          <Card className="max-w-[896px] p-5 sm:p-6">
+          <Card className="max-w-[876px] p-5 sm:p-6">
             <div className="grid gap-5 sm:grid-cols-2">
               <Field label="Date" htmlFor="date" error={errors.date?.message} hint={yearRangeHint(taxYear)}>
                 <Controller
@@ -261,7 +261,21 @@ export function IncomeForm() {
                 </select>
               </Field>
               <Field label="Payment method" htmlFor="paymentMethod" error={errors.paymentMethod?.message}>
-                <PaymentMethodPicker registration={register('paymentMethod', { required: 'Choose a payment method' })} />
+                <Controller
+                  control={control}
+                  name="paymentMethod"
+                  rules={{ required: 'Choose a payment method' }}
+                  render={({ field }) => (
+                    <PaymentMethodPicker
+                      id="paymentMethod"
+                      value={field.value}
+                      onChange={field.onChange}
+                      onBlur={field.onBlur}
+                      ref={field.ref}
+                      invalid={!!errors.paymentMethod}
+                    />
+                  )}
+                />
               </Field>
               <Field label="Reference" htmlFor="reference" hint="Optional, e.g. a payout or receipt number" className="sm:col-span-2">
                 <input id="reference" className="field" {...register('reference', { maxLength: 100 })} />

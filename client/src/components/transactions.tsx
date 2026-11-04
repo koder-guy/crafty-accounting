@@ -1,12 +1,12 @@
 // Building blocks shared by the Income and Expenses pages.
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type DragEvent as ReactDragEvent, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type DragEvent as ReactDragEvent, type ReactNode, type Ref, type RefObject } from 'react';
 import { createPortal } from 'react-dom';
-import type { UseFormRegisterReturn } from 'react-hook-form';
 import { Link, useSearchParams } from 'react-router';
 import {
   ArrowLeftRight,
   Banknote,
   Camera,
+  Check,
   ChevronDown,
   ChevronsUpDown,
   ChevronUp,
@@ -466,11 +466,11 @@ export function DocDownloadLink({ documents }: { documents: TransactionDocument[
 
 // ---- Payment method picker ----
 
-// Picked colours match the payment badges: cash amber, card teal, bank transfer indigo.
-const PICKED: Record<PaymentMethod, string> = {
-  cash: 'has-checked:border-amber-400/60 has-checked:bg-amber-400/15 has-checked:text-amber-300',
-  card: 'has-checked:border-teal/60 has-checked:bg-teal-bg has-checked:text-teal',
-  bank_transfer: 'has-checked:border-indigo-400/60 has-checked:bg-indigo-400/15 has-checked:text-indigo-300',
+// Icon colours match the payment badges: cash amber, card teal, bank transfer indigo.
+const PAYMENT_ICON_COLOURS: Record<PaymentMethod, string> = {
+  cash: 'text-amber-300',
+  card: 'text-teal',
+  bank_transfer: 'text-indigo-300',
 };
 
 const PAYMENT_ICONS: Record<PaymentMethod, LucideIcon> = {
@@ -479,25 +479,184 @@ const PAYMENT_ICONS: Record<PaymentMethod, LucideIcon> = {
   bank_transfer: ArrowLeftRight,
 };
 
-/** Cash / Card / Bank transfer as one tap each (a row of radio buttons); the first has id "paymentMethod" for its label. */
-/** `fit`: every button as wide as the widest one, rather than together filling the row. */
-export function PaymentMethodPicker({ registration, fit = false }: { registration: UseFormRegisterReturn; fit?: boolean }) {
+function PaymentMethodLabel({ method }: { method: PaymentMethod }) {
+  const Icon = PAYMENT_ICONS[method];
   return (
-    <div className={`${fit ? 'inline-grid max-w-full sm:[&>label]:px-5' : 'grid'} grid-cols-3 gap-2`} role="radiogroup">
-      {PAYMENT_METHODS.map((m, i) => {
-        const Icon = PAYMENT_ICONS[m];
-        return (
-          <label
-            key={m}
-            className={`flex cursor-pointer items-center justify-center gap-2 rounded-lg border border-line-strong bg-surface-2 px-2 py-2.5 text-center text-sm font-medium text-muted transition-colors hover:text-ink has-focus-visible:ring-2 has-focus-visible:ring-accent-soft ${PICKED[m]}`}
+    <>
+      <Icon className={`size-4 shrink-0 ${PAYMENT_ICON_COLOURS[method]}`} aria-hidden />
+      {PAYMENT_METHOD_LABELS[method]}
+    </>
+  );
+}
+
+/**
+ * Cash / Card / Bank transfer as a popup menu: a button the height of a field showing the choice,
+ * which opens a list below it (or above, near the bottom of the window). Used through react-hook-form's
+ * `Controller`. The button is as wide as the longest choice, so it doesn't change size when picked.
+ */
+export function PaymentMethodPicker({
+  id,
+  value,
+  onChange,
+  onBlur,
+  ref,
+  invalid = false,
+}: {
+  id: string;
+  value: PaymentMethod | '';
+  onChange: (method: PaymentMethod) => void;
+  onBlur?: () => void;
+  ref?: Ref<HTMLButtonElement>;
+  invalid?: boolean;
+}) {
+  const [anchor, setAnchor] = useState<DOMRect | null>(null);
+  const [position, setPosition] = useState<{ top: number; left: number } | null>(null);
+  const buttonRef = useRef<HTMLButtonElement | null>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+  const listId = `${id}-list`;
+  const open = () => setAnchor(buttonRef.current!.getBoundingClientRect());
+  const close = (refocus = false) => {
+    setAnchor(null);
+    setPosition(null);
+    if (refocus) buttonRef.current?.focus();
+  };
+  const pick = (m: PaymentMethod) => {
+    onChange(m);
+    close(true);
+  };
+
+  useLayoutEffect(() => {
+    const list = listRef.current;
+    if (!anchor || !list) return;
+    const gap = 4;
+    const margin = 8;
+    const below = anchor.bottom + gap + list.offsetHeight <= window.innerHeight - margin;
+    setPosition({
+      top: below ? anchor.bottom + gap : Math.max(margin, anchor.top - gap - list.offsetHeight),
+      left: Math.max(margin, Math.min(anchor.left, window.innerWidth - margin - list.offsetWidth)),
+    });
+  }, [anchor]);
+
+  // Once it's placed, start on the current choice (or the first).
+  const placed = position !== null;
+  useEffect(() => {
+    if (!placed) return;
+    const list = listRef.current;
+    (list?.querySelector<HTMLElement>('[aria-selected=true]') ?? list?.querySelector<HTMLElement>('[role=option]'))?.focus({
+      preventScroll: true,
+    });
+  }, [placed]);
+
+  useEffect(() => {
+    if (!anchor) return;
+    const onPointer = (e: PointerEvent) => {
+      const target = e.target as Node;
+      if (!listRef.current?.contains(target) && !buttonRef.current?.contains(target)) dismissWithoutClicking(e, () => close());
+    };
+    const onKey = (e: KeyboardEvent) => {
+      const items = [...(listRef.current?.querySelectorAll<HTMLElement>('[role=option]') ?? [])];
+      const at = items.indexOf(document.activeElement as HTMLElement);
+      const focus = (i: number) => items[(i + items.length) % items.length]?.focus({ preventScroll: true });
+      if (e.key === 'Escape' || e.key === 'Tab') {
+        // Escape also leaves the form (EscapeToCancel) unless handled here.
+        if (e.key === 'Escape') e.preventDefault();
+        close(e.key === 'Escape');
+      } else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        focus(at + (e.key === 'ArrowDown' ? 1 : -1));
+      } else if (e.key === 'Home' || e.key === 'End') {
+        e.preventDefault();
+        focus(e.key === 'Home' ? 0 : items.length - 1);
+      }
+    };
+    const onMove = (e: Event) => {
+      if (!listRef.current?.contains(e.target as Node)) close();
+    };
+    document.addEventListener('pointerdown', onPointer, true);
+    document.addEventListener('keydown', onKey);
+    window.addEventListener('scroll', onMove, true);
+    window.addEventListener('resize', onMove);
+    return () => {
+      document.removeEventListener('pointerdown', onPointer, true);
+      document.removeEventListener('keydown', onKey);
+      window.removeEventListener('scroll', onMove, true);
+      window.removeEventListener('resize', onMove);
+    };
+  }, [anchor]);
+
+  return (
+    <>
+      <button
+        ref={(el) => {
+          buttonRef.current = el;
+          if (typeof ref === 'function') ref(el);
+          else if (ref) (ref as RefObject<HTMLButtonElement | null>).current = el;
+        }}
+        id={id}
+        type="button"
+        aria-haspopup="listbox"
+        aria-expanded={anchor !== null}
+        aria-controls={anchor ? listId : undefined}
+        aria-invalid={invalid || undefined}
+        onClick={() => (anchor ? close() : open())}
+        onKeyDown={(e) => {
+          if (!anchor && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
+            e.preventDefault();
+            open();
+          }
+        }}
+        onBlur={onBlur}
+        className={`inline-grid h-[2.375rem] max-w-full grid-cols-[auto_1rem] items-center gap-2 rounded-lg border bg-surface-2 px-3.5 text-left text-sm font-medium text-ink transition-colors hover:border-accent-soft/60 focus-visible:ring-2 focus-visible:ring-accent-soft focus-visible:outline-none ${
+          invalid ? 'border-out/70' : 'border-line-strong'
+        } ${anchor ? 'border-accent-soft/60' : ''}`}
+      >
+        {/* Every choice in one cell, all but the current one hidden, sets the width. */}
+        <span className="grid">
+          {(['', ...PAYMENT_METHODS] as const).map((m) => (
+            <span
+              key={m}
+              aria-hidden={m !== value || undefined}
+              className={`col-start-1 row-start-1 flex items-center gap-2 whitespace-nowrap ${m === value ? '' : 'invisible'}`}
+            >
+              {m ? <PaymentMethodLabel method={m} /> : <span className="text-muted">Choose…</span>}
+            </span>
+          ))}
+        </span>
+        <ChevronsUpDown className="size-4 text-muted" aria-hidden />
+      </button>
+      {anchor &&
+        createPortal(
+          <div
+            ref={listRef}
+            id={listId}
+            role="listbox"
+            aria-label="Payment method"
+            style={{ position: 'fixed', top: position?.top ?? anchor.bottom + 4, left: position?.left ?? anchor.left, minWidth: anchor.width }}
+            className={`z-50 w-max rounded-lg border border-line-strong bg-surface p-1 shadow-2xl ${position ? '' : 'invisible'}`}
           >
-            <input type="radio" value={m} id={i === 0 ? 'paymentMethod' : undefined} className="sr-only" {...registration} />
-            <Icon className="size-4 shrink-0" aria-hidden />
-            {PAYMENT_METHOD_LABELS[m]}
-          </label>
-        );
-      })}
-    </div>
+            {PAYMENT_METHODS.map((m) => (
+              <div
+                key={m}
+                role="option"
+                tabIndex={-1}
+                aria-selected={m === value}
+                onClick={() => pick(m)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    pick(m);
+                  }
+                }}
+                className="flex cursor-pointer items-center gap-2 rounded-md py-2 pr-3 pl-2 text-sm text-ink outline-none hover:bg-surface-2 focus-visible:bg-surface-2"
+              >
+                <Check className={`size-4 shrink-0 text-accent-soft ${m === value ? '' : 'invisible'}`} aria-hidden />
+                <PaymentMethodLabel method={m} />
+              </div>
+            ))}
+          </div>,
+          document.body,
+        )}
+    </>
   );
 }
 
