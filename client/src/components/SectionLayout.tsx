@@ -32,13 +32,13 @@ export function SectionLayout({
           tabs={
             // One page needs no tabs; they appear once there's a second.
             sections.length > 1 && (
-              <nav aria-label={title} className="flex gap-1 overflow-x-auto border-b border-line px-4 sm:px-8 print:hidden">
+              <nav aria-label={title} className="flex gap-1 overflow-x-auto overflow-y-hidden px-4 shadow-[inset_0_-1px_0_var(--color-line)] sm:px-8 print:hidden">
                 {sections.map(({ to, label, icon: Icon }) => (
                   <NavLink
                     key={to}
                     to={to}
                     className={({ isActive }) =>
-                      `-mb-px flex shrink-0 items-center gap-2 border-b-2 px-3 py-3 text-sm whitespace-nowrap transition-colors ${
+                      `flex shrink-0 items-center gap-2 border-b-2 px-3 py-3 text-sm whitespace-nowrap transition-colors ${
                         isActive ? 'border-accent font-medium text-accent-soft' : 'border-transparent text-muted hover:border-line-strong hover:text-ink'
                       }`
                     }
