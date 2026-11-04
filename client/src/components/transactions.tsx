@@ -646,7 +646,7 @@ export function PaymentMethodPicker({
                     pick(m);
                   }
                 }}
-                className="flex cursor-pointer items-center gap-2 rounded-md py-2 pr-3 pl-2 text-sm text-ink outline-none focus-visible:bg-surface-2"
+                className="flex cursor-pointer items-center gap-2 rounded-md py-2 pr-3 pl-2 text-sm text-ink outline-none hover:bg-surface-2 focus-visible:bg-surface-2"
               >
                 <Check className={`size-4 shrink-0 text-accent-soft ${m === value ? '' : 'invisible'}`} aria-hidden />
                 <PaymentMethodLabel method={m} />
