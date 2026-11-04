@@ -5,7 +5,7 @@ import type { AutoBackupStatus } from '@crafty/shared';
 
 type AutoBackupFile = AutoBackupStatus['backups'][number];
 import { ConfirmDialog } from '../../components/ConfirmDialog';
-import { Alert, Button, buttonClasses, Card, CardHeader, Field, Spinner } from '../../components/ui';
+import { Alert, Button, buttonClasses, Card, CardHeader, Field, IconButton, Spinner } from '../../components/ui';
 import { api } from '../../lib/api';
 import { useAutoBackup, useAutoBackupMutations } from '../../lib/queries';
 
@@ -178,10 +178,10 @@ export function AutoBackupCard() {
                           <History className="size-4" aria-hidden />
                           Restore…
                         </Button>
-                        <Button
-                          variant="softDanger"
-                          className="px-2.5"
-                          title="Delete"
+                        <IconButton
+                          label="Delete"
+                          tone="danger"
+                          className="ml-2"
                           aria-label={`Delete the backup from ${dateTime(b.createdAt)}`}
                           onClick={() => {
                             setRestored(null);
@@ -189,7 +189,7 @@ export function AutoBackupCard() {
                           }}
                         >
                           <Trash2 className="size-4" aria-hidden />
-                        </Button>
+                        </IconButton>
                       </div>
                     </li>
                     ))}
