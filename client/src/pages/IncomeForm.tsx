@@ -205,12 +205,12 @@ export function IncomeForm() {
           onCancel={() => navigate(backTo)}
         />
         {original && (
-          <div className="max-w-3xl">
+          <div className="max-w-[808px]">
             <CopiedFrom what={original.description} date={original.date} notCopied="The reference and any attached document aren't copied." />
           </div>
         )}
         {existing && loaded && existing.updatedAt !== loaded.updatedAt && (
-          <div className="max-w-3xl">
+          <div className="max-w-[808px]">
             <ChangedElsewhere
               by={existing.updatedBy}
               onLoad={() => {
@@ -221,7 +221,7 @@ export function IncomeForm() {
           </div>
         )}
         <form onSubmit={onSubmit} noValidate>
-          <Card className="max-w-3xl p-5 sm:p-6">
+          <Card className="max-w-[808px] p-5 sm:p-6">
             <div className="grid gap-5 sm:grid-cols-2">
               <Field label="Date" htmlFor="date" error={errors.date?.message} hint={yearRangeHint(taxYear)}>
                 <Controller

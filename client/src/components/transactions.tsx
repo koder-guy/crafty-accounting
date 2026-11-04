@@ -480,9 +480,10 @@ const PAYMENT_ICONS: Record<PaymentMethod, LucideIcon> = {
 };
 
 /** Cash / Card / Bank transfer as one tap each (a row of radio buttons); the first has id "paymentMethod" for its label. */
-export function PaymentMethodPicker({ registration }: { registration: UseFormRegisterReturn }) {
+/** `fit`: every button as wide as the widest one, rather than together filling the row. */
+export function PaymentMethodPicker({ registration, fit = false }: { registration: UseFormRegisterReturn; fit?: boolean }) {
   return (
-    <div className="grid grid-cols-3 gap-2" role="radiogroup">
+    <div className={`${fit ? 'inline-grid max-w-full sm:[&>label]:px-5' : 'grid'} grid-cols-3 gap-2`} role="radiogroup">
       {PAYMENT_METHODS.map((m, i) => {
         const Icon = PAYMENT_ICONS[m];
         return (
