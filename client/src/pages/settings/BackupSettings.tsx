@@ -1,8 +1,8 @@
 import { useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { DatabaseBackup, Download, FileArchive, FileCode, RotateCcw, Upload } from 'lucide-react';
+import { BellRing, DatabaseBackup, Download, FileArchive, FileCode, RotateCcw, Upload } from 'lucide-react';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
-import { Alert, Button, Card, CardHeader } from '../../components/ui';
+import { Alert, Button, Card, CardHeader, dismissedNoticeCount, showDismissedNotices } from '../../components/ui';
 import { api } from '../../lib/api';
 import { AutoBackupCard } from './AutoBackupCard';
 import { SettingsHeading } from './SettingsLayout';
@@ -34,6 +34,8 @@ export function BackupSettings() {
   const [done, setDone] = useState(false);
   const [confirmingReset, setConfirmingReset] = useState(false);
   const [resetDone, setResetDone] = useState(false);
+  const [dismissedCount, setDismissedCount] = useState(dismissedNoticeCount);
+  const [noticesShown, setNoticesShown] = useState(false);
 
   const reset = async () => {
     await api.post('/reset', { confirm: 'RESET' });
@@ -106,6 +108,30 @@ export function BackupSettings() {
               </Button>
             </div>
             {done && <Alert tone="success">Backup restored.</Alert>}
+          </div>
+        </Card>
+
+        <Card>
+          <CardHeader icon={<BellRing className="size-5 text-accent-soft" />} title="Dismissed notices" />
+          <div className="space-y-4 px-5 pb-6 sm:px-6">
+            <p className="text-sm text-muted">
+              Notices you close, such as the warnings on Mileage and Use of Home, stay closed in this browser only. Restoring or
+              resetting doesn't bring them back; this does, for this browser.{' '}
+              {dismissedCount === 0
+                ? 'None are dismissed here at the moment.'
+                : `${dismissedCount} ${dismissedCount === 1 ? 'is' : 'are'} dismissed here.`}
+            </p>
+            <Button
+              disabled={dismissedCount === 0}
+              onClick={() => {
+                showDismissedNotices();
+                setDismissedCount(dismissedNoticeCount());
+                setNoticesShown(true);
+              }}
+            >
+              Show dismissed notices again
+            </Button>
+            {noticesShown && <Alert tone="success">Dismissed notices will show again in this browser.</Alert>}
           </div>
         </Card>
 

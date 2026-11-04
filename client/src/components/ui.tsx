@@ -145,6 +145,31 @@ export function Alert({
 
 const DISMISSED_PREFIX = 'crafty.dismissed.';
 
+/** The storage keys of notices dismissed in this browser. */
+function dismissedKeys(): string[] {
+  try {
+    return Object.keys(localStorage).filter((k) => k.startsWith(DISMISSED_PREFIX));
+  } catch {
+    return [];
+  }
+}
+
+/** How many notices have been dismissed in this browser. */
+export function dismissedNoticeCount(): number {
+  return dismissedKeys().length;
+}
+
+/** Brings back every notice dismissed in this browser. */
+export function showDismissedNotices(): void {
+  for (const key of dismissedKeys()) {
+    try {
+      localStorage.removeItem(key);
+    } catch {
+      // Nothing more to do.
+    }
+  }
+}
+
 /**
  * An Alert with a close button that stays closed in this browser (localStorage, under `id`),
  * so it comes back on another device or browser.
