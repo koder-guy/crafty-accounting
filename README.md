@@ -23,46 +23,49 @@ Self-hosted bookkeeping for UK sole traders on the cash basis. Keep your income 
 - **Working together**: changes appear in every open browser within a second. If two people edit the same transaction, the second save is refused and the form offers to load the other version.
 - **Backups**: daily automatic backups, each one downloadable or restorable in a click (see [Backups](#backups)).
 - Reports and the year-end summary print or save as PDF.
-- **Updates**: the app checks for new versions twice a day and says so at the bottom of the menu. **Settings → Updates** lists what's changed and, for the quick install, installs it in a click after saving a backup. For Docker it shows the command to run.
+- **Updates**: the app checks for new versions twice a day and says so at the bottom of the menu. **Settings → Updates** lists what's changed and, for the Linux quick install, installs it in a click after saving a backup. For Docker it shows the command to run.
 
-## Quick install (macOS and Linux)
+## Quick install (Linux server)
 
-```bash
-/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/koder-guy/crafty-accounting/main/install.sh)"
-```
-
-[`install.sh`](install.sh) works on macOS and on Linux distributions such as Ubuntu, Debian and Fedora (Intel/AMD or ARM), and needs only `curl` and `tar`. It needs no administrator password: everything goes in `~/crafty-accounting`, including its own copy of Node 22 and of [Caddy](https://caddyserver.com) for HTTPS. It starts the app and prints the `https://` addresses to open.
-
-**Which account:** run the installer, and later `crafty`, as the ordinary user who will own the app: not as root (the installer refuses) and without `sudo`. That user needs no administrator rights. On a fresh Linux server or container where you only have root, such as a Proxmox LXC, create the user first and switch to it (minimal Debian images may also need `apt install curl`, as root):
+For a Linux server or container, such as a Proxmox LXC running Debian or Ubuntu. Run this **as root**:
 
 ```bash
-adduser crafty
-su - crafty
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/koder-guy/crafty-accounting/main/install.sh)"
 ```
 
-The app keeps running when the terminal closes, but doesn't start by itself after a restart:
+[`install.sh`](install.sh) does everything in one go:
+- creates a `crafty` account (or uses the one that's there), which owns and runs the app;
+- as that account, downloads the latest release with its own Node 22 and [Caddy](https://caddyserver.com) into `/home/crafty/crafty-accounting`, builds it and writes the settings;
+- sets up two services, `crafty-accounting` (the app) and `crafty-caddy` (HTTPS on ports 80 and 443), which start now, on every boot, and again if they stop;
+- prints the `https://` addresses to open.
 
-```bash
-~/crafty-accounting/crafty start
-```
-
-`crafty` also takes `stop`, `restart`, `status`, `log` and `update`. Installs and updates use the latest release. An update (also in **Settings → Updates**) keeps your books and settings, and leaves the running copy alone if it fails. Settings are in `~/crafty-accounting/.env`, the books in `~/crafty-accounting/data`. On a new install you can set `CRAFTY_DIR` or `CRAFTY_PORT` before `/bin/bash`.
+It needs Linux with systemd (Debian, Ubuntu, Fedora and most others) on Intel/AMD or ARM. On a Mac, on Alpine, or without systemd, use [Docker](#quick-install-with-docker).
 
 **Signing in for the first time:** use the username `Admin` and the password `admin`. You'll be asked to choose your own password before anything else; change your username and add other people in **Settings → People**.
 
-**HTTPS:** the app is served through Caddy with a private certificate. Browsers warn about it until each device trusts `~/crafty-accounting/crafty-root.crt` once (see [HTTPS](#https)); the installer prints the command for a Mac. It uses ports 80 and 443 where it can. Linux only lets administrators use those, so there it normally uses 8080 and 8443, and the addresses end in `:8443` (choose with `CRAFTY_HTTP_PORT` and `CRAFTY_HTTPS_PORT`, or see [HTTPS](#https) to allow 80 and 443). For plain HTTP instead, set `CRAFTY_HTTPS=false` before `/bin/bash`; the same with `true` or `false` switches an existing install.
+**HTTPS:** Caddy serves the app with a private certificate, so browsers warn about it until each device trusts `/home/crafty/crafty-accounting/crafty-root.crt` once (see [HTTPS](#https)). Only Caddy is allowed to use ports 80 and 443; the app itself answers only on the server. If those ports are taken, choose others with `CRAFTY_HTTP_PORT` and `CRAFTY_HTTPS_PORT` before `bash`.
 
-On Alpine and other musl-based Linux, use Docker.
+**Updates:** **Settings → Updates** installs new versions in a click, or run the install command again as root. Either way your books and settings stay, and a failed update leaves the running version alone.
+
+**Day to day**, as root or as `crafty` (`su - crafty`):
+
+```bash
+/home/crafty/crafty-accounting/crafty status
+```
+
+`crafty` also takes `log`, `restart` (after changing the settings in `/home/crafty/crafty-accounting/.env`) and `update`. To stop or start the app, as root: `systemctl stop crafty-accounting crafty-caddy` (or `start`).
+
+**From an earlier quick install** (version 1.8 or before, run with `crafty start`): run the install command as root. It reuses your `crafty` account, books and settings, moves HTTPS to ports 80 and 443, stops the copy started with `crafty start` and removes a `@reboot` crontab line for it. An update from **Settings → Updates** can't make that change, so do this first.
 
 ## Quick install with Docker
 
-Needs Docker: on a Mac, [Docker Desktop](https://www.docker.com/products/docker-desktop/) or OrbStack. On Linux the script offers to install Docker if it's missing.
+For a Mac, or any Linux. Needs Docker: on a Mac, [Docker Desktop](https://www.docker.com/products/docker-desktop/) or OrbStack. On Linux the script offers to install Docker if it's missing.
 
 ```bash
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/koder-guy/crafty-accounting/main/install-docker.sh)"
 ```
 
-[`install-docker.sh`](install-docker.sh) sets everything up in `~/crafty-accounting`, starts the containers and prints the `https://` addresses to open. Sign in as `Admin` / `admin` and choose your own password. It uses ports 80 and 443, or 8080 and 8443 if those are taken (choose with `CRAFTY_HTTP_PORT` and `CRAFTY_HTTPS_PORT`). It saves Caddy's certificate as `crafty-root.crt` and prints the command to trust it on a Mac; for other devices see [HTTPS](#https). To update, run `~/crafty-accounting/install-docker.sh` again. The Docker and non-Docker installs share that folder, so to have both, give one another folder with `CRAFTY_DIR`.
+[`install-docker.sh`](install-docker.sh) sets everything up in `~/crafty-accounting`, starts the containers and prints the `https://` addresses to open. Sign in as `Admin` / `admin` and choose your own password. It uses ports 80 and 443, or 8080 and 8443 if those are taken (choose with `CRAFTY_HTTP_PORT` and `CRAFTY_HTTPS_PORT`). It saves Caddy's certificate as `crafty-root.crt` and prints the command to trust it on a Mac; for other devices see [HTTPS](#https). To update, run `~/crafty-accounting/install-docker.sh` again.
 
 ## Run with Docker Compose by hand
 
@@ -99,9 +102,9 @@ Caddy (`crafty-caddy`) provides HTTPS in front of the app (`crafty-accounting`).
 
 ### HTTPS
 
-Both installs serve HTTPS through Caddy (the quick install unless it was set up with `CRAFTY_HTTPS=false`). `TLS_ISSUER` in `.env` chooses how Caddy gets its certificate. After changing it, or `SITE_ADDRESS`, run `~/crafty-accounting/crafty restart` (quick install) or `docker compose up -d` (Docker).
+Both installs serve HTTPS through Caddy. `TLS_ISSUER` in `.env` chooses how Caddy gets its certificate. After changing it, or `SITE_ADDRESS`, run `/home/crafty/crafty-accounting/crafty restart` (Linux quick install) or `docker compose up -d` (Docker).
 
-**Home network (`TLS_ISSUER=internal`, the default).** Caddy creates its own certificate authority, which each device must trust once. Both installers save it as `~/crafty-accounting/crafty-root.crt`. With Docker Compose by hand, copy it out of the container:
+**Home network (`TLS_ISSUER=internal`, the default).** Caddy creates its own certificate authority, which each device must trust once. The installers save it as `crafty-root.crt` in the install's folder. With Docker Compose by hand, copy it out of the container:
 
 ```bash
 docker compose cp caddy:/data/caddy/pki/authorities/local/root.crt ./crafty-root.crt
@@ -113,22 +116,11 @@ Then install `crafty-root.crt` on each device:
 - **iPhone/iPad:** install the profile in **Settings → General → VPN & Device Management**, then turn it on in **Settings → General → About → Certificate Trust Settings**.
 - **Android:** **Settings → Security → Encryption & credentials → Install a certificate → CA certificate**.
 
-The authority lasts 10 years. The quick install keeps it in `~/crafty-accounting/caddy/data`, Docker in the `caddy-data` volume; removing it creates a new one, which you'd have to trust again.
+The authority lasts 10 years. The Linux quick install keeps it in `/home/crafty/crafty-accounting/caddy/data`, Docker in the `caddy-data` volume; removing it creates a new one, which you'd have to trust again.
 
 **Public domain (`TLS_ISSUER=you@example.com`).** Point your domain at your home IP, forward ports 80 and 443 to the server, and set `SITE_ADDRESS` to the domain. Caddy then gets a Let's Encrypt certificate, with nothing to install on devices. Use strong passwords if the app can be reached from the internet.
 
 If ports 80 and 443 are taken, change `HTTP_PORT` and `HTTPS_PORT`; the address then needs the port, such as `https://crafty.local:8443`.
-
-On Linux, the quick install runs as a normal user, who can't use ports below 1024, so it uses 8080 and 8443. To use 80 and 443 (needed for Let's Encrypt, and the addresses then need no port):
-
-1. Allow them once as **root**: from the root account (such as a Proxmox container's console), or with `su -` and the root password. The app's user usually can't use `sudo`, and doesn't need to. In a Proxmox container, run it inside the container.
-
-   ```bash
-   echo 'net.ipv4.ip_unprivileged_port_start=80' > /etc/sysctl.d/50-crafty-ports.conf && sysctl -p /etc/sysctl.d/50-crafty-ports.conf
-   ```
-
-   On an account that does have `sudo`, the same is `echo 'net.ipv4.ip_unprivileged_port_start=80' | sudo tee /etc/sysctl.d/50-crafty-ports.conf && sudo sysctl -p /etc/sysctl.d/50-crafty-ports.conf`.
-2. Back as the app's user, set `HTTP_PORT=80` and `HTTPS_PORT=443` in `~/crafty-accounting/.env`, then run `~/crafty-accounting/crafty restart`.
 
 ## Configuration
 
@@ -139,17 +131,16 @@ Settings go in a `.env` file next to the app (the installers write one). Only in
 | `ADMIN_NAME` / `ADMIN_PASSWORD` | `Admin` / `admin` | The first person's username and password, created when nobody exists yet; ignored after that. With the default password they must choose their own when they first sign in. |
 | `SESSION_SECRET` | generated | Signs the session cookie; one is generated and kept with the data if empty |
 | `PORT` | `3000` | Port the app listens on (behind Caddy with HTTPS) |
-| `HOST` | all addresses | Address the app listens on; the quick install sets `127.0.0.1` with HTTPS, so only Caddy reaches it |
-| `HTTPS` | `true` on a new quick install | Quick install: run Caddy in front for HTTPS. Switch with the installer's `CRAFTY_HTTPS` rather than by hand. |
+| `HOST` | all addresses | Address the app listens on; the Linux quick install sets `127.0.0.1`, so only Caddy reaches it |
 | `SITE_ADDRESS` | `localhost` | HTTPS: address(es) you browse to, comma separated |
 | `SITE_IP` | `localhost` | HTTPS: the IP address in `SITE_ADDRESS` that browsers use, if any |
 | `TLS_ISSUER` | `internal` | HTTPS: `internal`, or your email address for Let's Encrypt |
-| `HTTP_PORT` / `HTTPS_PORT` | `80` / `443` | HTTPS: ports Caddy listens on (8080 / 8443 on Linux for the quick install) |
+| `HTTP_PORT` / `HTTPS_PORT` | `80` / `443` | HTTPS: ports Caddy listens on |
 | `MAX_UPLOAD_MB` | `20` | Largest document you can attach |
-| `COOKIE_SECURE` / `TRUST_PROXY` | `false` (`true` with HTTPS) | HTTPS-only cookie; trust the proxy's forwarded headers |
+| `COOKIE_SECURE` / `TRUST_PROXY` | `false` (`true` in both installs) | HTTPS-only cookie; trust the proxy's forwarded headers |
 | `DATA_DIR` | `./data` (`/data` in Docker) | Database and documents |
 | `BACKUP_HOST_DIR` | `./backups` | Docker: the folder on the server for automatic backups |
-| `BACKUP_DIR` | `DATA_DIR/backups` | Without Docker: where automatic backups go |
+| `BACKUP_DIR` | `DATA_DIR/backups` | Without Docker: where automatic backups go (the `crafty` account must be able to write there) |
 | `TZ` | `Europe/London` | Time zone for the daily backup |
 | `UPDATE_CHECK` | `true` | `false` stops the app checking GitHub for new versions by itself; **Settings → Updates** can still check |
 
