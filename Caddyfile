@@ -36,9 +36,21 @@
 	@compressible not path /api/events
 	encode @compressible zstd gzip
 	header -Server
-	reverse_proxy {$CRAFTY_UPSTREAM:crafty-accounting:3000} {
-		# The browser's port, for HMRC's fraud prevention headers.
-		header_up X-Client-Port {http.request.remote.port}
+	# Caddy's private certificate authority, for devices to download and trust (see "HTTPS"
+	# in the README). Only the certificate: its key stays in the folder. Missing (404) when
+	# the certificate comes from Let's Encrypt.
+	handle /crafty-root.crt {
+		root * {$XDG_DATA_HOME:/data}/caddy/pki/authorities/local
+		rewrite * /root.crt
+		header Content-Type application/x-x509-ca-cert
+		header Content-Disposition "attachment; filename=crafty-root.crt"
+		file_server
+	}
+	handle {
+		reverse_proxy {$CRAFTY_UPSTREAM:crafty-accounting:3000} {
+			# The browser's port, for HMRC's fraud prevention headers.
+			header_up X-Client-Port {http.request.remote.port}
+		}
 	}
 }
 

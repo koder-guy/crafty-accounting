@@ -104,11 +104,7 @@ Caddy (`crafty-caddy`) provides HTTPS in front of the app (`crafty-accounting`).
 
 Both installs serve HTTPS through Caddy. `TLS_ISSUER` in `.env` chooses how Caddy gets its certificate. After changing it, or `SITE_ADDRESS`, run `/home/crafty/crafty-accounting/crafty restart` (Linux quick install) or `docker compose up -d` (Docker).
 
-**Home network (`TLS_ISSUER=internal`, the default).** Caddy creates its own certificate authority, which each device must trust once. The installers save it as `crafty-root.crt` in the install's folder. With Docker Compose by hand, copy it out of the container:
-
-```bash
-docker compose cp caddy:/data/caddy/pki/authorities/local/root.crt ./crafty-root.crt
-```
+**Home network (`TLS_ISSUER=internal`, the default).** Caddy creates its own certificate authority, which each device must trust once. Each device can download it from `https://<server address>/crafty-root.crt` (past the browser's warning, this once). The installers also save it as `crafty-root.crt` in the install's folder, and print its SHA-256 fingerprint, a command to paste into a Mac's Terminal that downloads it, checks the fingerprint and trusts it, and, on a first install, the certificate itself to copy into a file. As the download isn't checked, compare the fingerprint before trusting it; Keychain Access shows it under **SHA-256**.
 
 Then install `crafty-root.crt` on each device:
 - **Mac:** add it to the System keychain, then in Keychain Access set **Trust → When using this certificate** to **Always Trust**.

@@ -194,8 +194,13 @@ EOF
     if [ "$OS" = darwin ]; then
       echo "To trust it on this Mac (asks for your password):"
       echo "  sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain \"$CERT\""
+      local other
+      other="$(other_address "$(env_value SITE_ADDRESS)" "$HTTPS_PORT")"
+      [ -n "$other" ] && echo "Other devices can download it from https://$other/crafty-root.crt"
+      echo "For other devices, see \"HTTPS\" in the README."
+    else
+      cert_help "$CERT" "$(other_address "$(env_value SITE_ADDRESS)" "$HTTPS_PORT")" "$NEW_INSTALL"
     fi
-    echo "For other devices, see \"HTTPS\" in the README."
   fi
   cat <<EOF
 
@@ -208,6 +213,51 @@ Docker starts it again whenever Docker itself starts.
   Settings:    $ENV_FILE
   Backups:     $DIR/backups (daily); the books are in the crafty-data Docker volume
 EOF
+}
+
+# The SHA-256 fingerprint of certificate $1, as AB:CD:… (what Keychain Access and openssl show).
+cert_fingerprint() {
+  local sum="sha256sum"
+  command -v sha256sum >/dev/null 2>&1 || sum="shasum -a 256"
+  grep -v -- '-----' "$1" | tr -d '\r\n' | base64 -d 2>/dev/null | $sum | cut -d' ' -f1 \
+    | tr 'a-f' 'A-F' | sed 's/../&:/g; s/:$//'
+}
+
+# How to get certificate $1 onto other devices, served by Caddy at https://$2/crafty-root.crt
+# ($2 empty when the only address is this computer's own). On a new install ($3 = 1) it
+# also prints the certificate itself, to copy into a file.
+cert_help() {
+  local cert="$1" addr="$2" new_install="$3" fp
+  fp="$(cert_fingerprint "$cert")"
+  echo "Its SHA-256 fingerprint is"
+  echo "  $fp"
+  if [ -n "$addr" ]; then
+    echo
+    echo "To trust it on a Mac, paste this into Terminal there. It downloads the certificate,"
+    echo "checks the fingerprint, and asks for the Mac's password:"
+    echo
+    echo "  curl -fsSk https://$addr/crafty-root.crt -o /tmp/crafty-root.crt && openssl x509 -in /tmp/crafty-root.crt -noout -fingerprint -sha256 | grep -q '$fp' && sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain /tmp/crafty-root.crt && echo Trusted. || echo Not trusted."
+    echo
+    echo "On other devices, open https://$addr/crafty-root.crt (past the warning) and"
+    echo "install it, checking the fingerprint (see \"HTTPS\" in the README)."
+  fi
+  if [ "$new_install" = 1 ]; then
+    echo
+    echo "Or copy the certificate from here into a file named crafty-root.crt:"
+    echo
+    cat "$cert"
+  fi
+}
+
+# The first address in SITE_ADDRESS ($1) that other devices can use, with the HTTPS port
+# ($2) unless it's 443 or the address has one.
+other_address() {
+  local addr
+  for addr in $(printf '%s' "$1" | tr ',' ' '); do
+    case "$addr" in localhost | 127.* | ::1 | "[::1]") continue ;; esac
+    case "$addr" in *:[0-9]*) echo "$addr" ;; *) if [ "${2:-443}" = 443 ]; then echo "$addr"; else echo "$addr:$2"; fi ;; esac
+    return
+  done
 }
 
 step() { printf '\n%s==> %s%s\n' "$bold" "$1" "$reset"; }
