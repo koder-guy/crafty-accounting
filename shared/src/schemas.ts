@@ -208,7 +208,7 @@ export const loginSchema = z.object({
   password: z.string().min(1, 'Enter your password'),
 });
 
-/** Editors can change everything; read-only people can view, export and print, but not change the books. */
+/** Editors can change everything; read-only users can view, export and print, but not change the books. */
 export const ROLES = ['editor', 'viewer'] as const;
 export type Role = (typeof ROLES)[number];
 
@@ -218,7 +218,7 @@ export const ROLE_LABELS: Record<Role, string> = {
 };
 
 export const ROLE_DESCRIPTIONS: Record<Role, string> = {
-  editor: 'Can add, change and delete anything, manage people and settings, and download backups',
+  editor: 'Can add, change and delete anything, manage users and settings, and download backups',
   viewer: 'Can view everything, export CSVs and print reports, but not change anything or download backups',
 };
 

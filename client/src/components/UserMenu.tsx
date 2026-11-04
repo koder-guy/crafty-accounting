@@ -101,7 +101,7 @@ export function UserMenu({ compact = false }: { compact?: boolean }) {
           <div className="my-1 h-px bg-line" />
           <Link
             role="menuitem"
-            to="/settings/people"
+            to="/settings/users"
             onClick={() => setOpen(false)}
             className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-ink hover:bg-surface-2"
           >

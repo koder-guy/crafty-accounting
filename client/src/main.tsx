@@ -33,7 +33,7 @@ import { SettingsLayout } from './pages/settings/SettingsLayout';
 import { TaxYearsSettings } from './pages/settings/TaxYearsSettings';
 import { CustomCategories } from './pages/settings/CustomCategories';
 import { BackupSettings } from './pages/settings/BackupSettings';
-import { People } from './pages/settings/People';
+import { Users } from './pages/settings/Users';
 import { HmrcSettings } from './pages/settings/HmrcSettings';
 import { UpdatesSettings } from './pages/settings/UpdatesSettings';
 import { NotFound } from './pages/NotFound';
@@ -117,7 +117,8 @@ function App() {
         <Route path="settings" element={<SettingsLayout />}>
           <Route path="tax-years" element={<TaxYearsSettings />} />
           <Route path="categories" element={<CustomCategories />} />
-          <Route path="people" element={<People />} />
+          <Route path="users" element={<Users />} />
+          <Route path="people" element={<Navigate to="/settings/users" replace />} />
           <Route path="hmrc" element={<HmrcSettings />} />
           <Route
             path="backup"

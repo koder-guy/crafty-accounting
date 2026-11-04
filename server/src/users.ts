@@ -62,7 +62,7 @@ export const DEFAULT_ADMIN_PASSWORD = 'admin';
  * On a new install, creates the first person from ADMIN_NAME (default Admin)
  * and ADMIN_PASSWORD. Without ADMIN_PASSWORD they get the default password,
  * which they must change when they first sign in. After that, people are
- * managed in Settings → People and these variables are ignored. The first
+ * managed in Settings → Users and these variables are ignored. The first
  * person is always an editor.
  */
 export function ensureFirstUser(db: Db, name: string, password: string | null): void {

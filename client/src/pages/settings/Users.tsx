@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react';
-import { KeyRound, Pencil, Trash2, UserPlus, Users } from 'lucide-react';
+import { KeyRound, Pencil, Trash2, UserPlus, Users as UsersIcon } from 'lucide-react';
 import { formatDisplayDate, ROLE_DESCRIPTIONS, ROLE_LABELS, ROLES, type Role, type User } from '@crafty/shared';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { Alert, Badge, Button, Card, CardHeader, Field, IconButton, Spinner } from '../../components/ui';
@@ -13,7 +13,7 @@ function RoleChoice({
 }: {
   value: Role;
   onChange: (role: Role) => void;
-  /** The person is the only editor, so they can't be made read-only. */
+  /** The user is the only editor, so they can't be made read-only. */
   mustStayEditor: boolean;
 }) {
   return (
@@ -31,7 +31,7 @@ function RoleChoice({
             >
               <input
                 type="radio"
-                name="person-role"
+                name="user-role"
                 value={role}
                 aria-label={ROLE_LABELS[role]}
                 className="mt-0.5 accent-indigo-500"
@@ -54,8 +54,8 @@ function RoleChoice({
   );
 }
 
-/** Adds a person, or edits someone: username, access and optionally a new password. */
-function PersonForm({ editing, editorCount, onDone }: { editing: User | null; editorCount: number; onDone: () => void }) {
+/** Adds a user, or edits one: username, access and optionally a new password. */
+function UserForm({ editing, editorCount, onDone }: { editing: User | null; editorCount: number; onDone: () => void }) {
   const { create, update } = useUserMutations();
   const { data: me } = useMe();
   const [name, setName] = useState(editing?.name ?? '');
@@ -86,9 +86,9 @@ function PersonForm({ editing, editorCount, onDone }: { editing: User | null; ed
   return (
     <form onSubmit={submit} noValidate className="space-y-4 px-5 pb-6 sm:px-6">
       <div className="grid gap-4 md:grid-cols-2">
-        <Field label="Username" htmlFor="person-name" hint="What they type to sign in">
+        <Field label="Username" htmlFor="user-name" hint="What they type to sign in">
           <input
-            id="person-name"
+            id="user-name"
             className="field"
             maxLength={50}
             autoComplete="off"
@@ -98,11 +98,11 @@ function PersonForm({ editing, editorCount, onDone }: { editing: User | null; ed
         </Field>
         <Field
           label={editing ? 'New password' : 'Password'}
-          htmlFor="person-password"
+          htmlFor="user-password"
           hint={editing ? `Leave blank to keep ${isMe ? 'your' : 'their'} current password` : 'At least 8 characters'}
         >
           <input
-            id="person-password"
+            id="user-password"
             type="password"
             className="field"
             autoComplete="new-password"
@@ -115,7 +115,7 @@ function PersonForm({ editing, editorCount, onDone }: { editing: User | null; ed
       {(error || mutation.error) && <Alert>{error ?? mutation.error?.message}</Alert>}
       <div className="flex gap-2">
         <Button type="submit" variant="primary" busy={mutation.isPending}>
-          {editing ? 'Save changes' : 'Add person'}
+          {editing ? 'Save changes' : 'Add user'}
         </Button>
         {editing && (
           <Button type="button" variant="ghost" onClick={onDone}>
@@ -127,7 +127,7 @@ function PersonForm({ editing, editorCount, onDone }: { editing: User | null; ed
   );
 }
 
-/** For read-only people, who can change their own password but nothing else. */
+/** For read-only users, who can change their own password but nothing else. */
 function OwnPasswordForm({ me }: { me: User }) {
   const { update } = useUserMutations();
   const [password, setPassword] = useState('');
@@ -173,7 +173,7 @@ function OwnPasswordForm({ me }: { me: User }) {
   );
 }
 
-export function People() {
+export function Users() {
   const { data: users, isLoading, error } = useUsers();
   const { data: me } = useMe();
   const canEdit = useCanEdit();
@@ -184,8 +184,8 @@ export function People() {
   return (
     <div className="space-y-6">
       <SettingsHeading
-        title="People"
-        description="Everyone who can sign in to these books. Each person has their own password and active tax year, and transactions show who added and last changed them. Editors can change anything; read-only people can view, export and print."
+        title="Users"
+        description="Everyone who can sign in to these books. Each user has their own password and active tax year, and transactions show who added and last changed them. Editors can change anything; read-only users can view, export and print."
       />
 
       {isLoading ? (
@@ -198,9 +198,9 @@ export function People() {
             <Card>
               <CardHeader
                 icon={editing ? <Pencil className="size-5 text-accent-soft" /> : <UserPlus className="size-5 text-accent-soft" />}
-                title={editing ? `Edit ${editing.name}` : 'Add a person'}
+                title={editing ? `Edit ${editing.name}` : 'Add a user'}
               />
-              <PersonForm
+              <UserForm
                 key={editing?.id ?? 'new'}
                 editing={editing}
                 editorCount={(users ?? []).filter((u) => u.role === 'editor').length}
@@ -217,7 +217,7 @@ export function People() {
           )}
 
           <Card>
-            <CardHeader icon={<Users className="size-5 text-accent-soft" />} title="Who can sign in" />
+            <CardHeader icon={<UsersIcon className="size-5 text-accent-soft" />} title="Who can sign in" />
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead className="text-xs tracking-wide text-muted uppercase">

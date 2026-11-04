@@ -19,7 +19,7 @@ Self-hosted bookkeeping for UK sole traders on the cash basis. Keep your income 
   - **Tax estimate**: Income Tax and Class 4 National Insurance on the year's profit, using the trading allowance if that's better. It shows what to put aside and when it's due, including payments on account, and can allow for a salary or pension. Rates are for England, Wales and Northern Ireland.
 - **Self Assessment → Year-end summary**: the figures for each box of the SA103S (self-employment, short), with disallowable amounts listed and a trading allowance comparison. Business entertaining is always disallowable, in every total. Depreciation isn't offered for new expenses, because on the cash basis you claim equipment when you buy it. Record the date you filed, and the app warns if the figures change afterwards.
 - **Making Tax Digital**: each quarter's figures as a CSV for bridging software, and a record of each submission (see [Making Tax Digital](#making-tax-digital)).
-- **People**: everyone signs in with their own name and password. **Editors** can change anything; **Read-only** people can view, export and print but not change the books or download backups. Transactions show who added and last changed them.
+- **Users**: everyone signs in with their own name and password. **Editors** can change anything; **Read-only** users can view, export and print but not change the books or download backups. Transactions show who added and last changed them.
 - **Working together**: changes appear in every open browser within a second. If two people edit the same transaction, the second save is refused and the form offers to load the other version.
 - **Backups**: daily automatic backups, each one downloadable or restorable in a click (see [Backups](#backups)).
 - Reports and the year-end summary print or save as PDF.
@@ -41,7 +41,7 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/koder-guy/crafty-account
 
 It needs Linux with systemd (Debian, Ubuntu, Fedora and most others) on Intel/AMD or ARM. On a Mac, on Alpine, or without systemd, use [Docker](#quick-install-with-docker).
 
-**Signing in for the first time:** use the username `Admin` and the password `admin`. You'll be asked to choose your own password before anything else; change your username and add other people in **Settings → People**.
+**Signing in for the first time:** use the username `Admin` and the password `admin`. You'll be asked to choose your own password before anything else; change your username and add other users in **Settings → Users**.
 
 **HTTPS:** Caddy serves the app with a private certificate, so browsers warn about it until each device trusts `/home/crafty/crafty-accounting/crafty-root.crt` once (see [HTTPS](#https)). Only Caddy is allowed to use ports 80 and 443; the app itself answers only on the server. If those ports are taken, choose others with `CRAFTY_HTTP_PORT` and `CRAFTY_HTTPS_PORT` before `bash`.
 

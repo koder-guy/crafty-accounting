@@ -39,7 +39,7 @@ export function usersRouter(ctx: AppContext): Router {
       throw new HttpError(403, 'Your account is read-only. You can change your own password, but nothing else.');
     }
     if (role === 'viewer' && person.role === 'editor' && editorCount(ctx.db) === 1) {
-      throw new HttpError(422, 'Someone needs to stay an editor, so make another person an editor first.');
+      throw new HttpError(422, 'Someone needs to stay an editor, so make another user an editor first.');
     }
     if (role !== undefined) ctx.db.prepare('UPDATE users SET role = ? WHERE id = ?').run(role, id);
     if (name !== undefined) {
