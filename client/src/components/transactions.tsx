@@ -3,7 +3,23 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState, type DragEvent a
 import { createPortal } from 'react-dom';
 import type { UseFormRegisterReturn } from 'react-hook-form';
 import { Link, useSearchParams } from 'react-router';
-import { Camera, ChevronDown, ChevronsUpDown, ChevronUp, Download, Eye, FileText, Paperclip, Pencil, Search, Trash2 } from 'lucide-react';
+import {
+  ArrowLeftRight,
+  Banknote,
+  Camera,
+  ChevronDown,
+  ChevronsUpDown,
+  ChevronUp,
+  CreditCard,
+  Download,
+  Eye,
+  FileText,
+  Paperclip,
+  Pencil,
+  Search,
+  Trash2,
+  type LucideIcon,
+} from 'lucide-react';
 import {
   MAX_DOCUMENTS,
   PAYMENT_METHOD_LABELS,
@@ -456,19 +472,29 @@ const PICKED: Record<PaymentMethod, string> = {
   bank_transfer: 'has-checked:border-indigo-400/60 has-checked:bg-indigo-400/15 has-checked:text-indigo-300',
 };
 
+const PAYMENT_ICONS: Record<PaymentMethod, LucideIcon> = {
+  cash: Banknote,
+  card: CreditCard,
+  bank_transfer: ArrowLeftRight,
+};
+
 /** Cash / Card / Bank transfer as one tap each (a row of radio buttons); the first has id "paymentMethod" for its label. */
 export function PaymentMethodPicker({ registration }: { registration: UseFormRegisterReturn }) {
   return (
     <div className="grid grid-cols-3 gap-2" role="radiogroup">
-      {PAYMENT_METHODS.map((m, i) => (
-        <label
-          key={m}
-          className={`flex cursor-pointer items-center justify-center rounded-lg border border-line-strong bg-surface-2 px-2 py-2.5 text-center text-sm font-medium text-muted transition-colors hover:text-ink has-focus-visible:ring-2 has-focus-visible:ring-accent-soft ${PICKED[m]}`}
-        >
-          <input type="radio" value={m} id={i === 0 ? 'paymentMethod' : undefined} className="sr-only" {...registration} />
-          {PAYMENT_METHOD_LABELS[m]}
-        </label>
-      ))}
+      {PAYMENT_METHODS.map((m, i) => {
+        const Icon = PAYMENT_ICONS[m];
+        return (
+          <label
+            key={m}
+            className={`flex cursor-pointer items-center justify-center gap-2 rounded-lg border border-line-strong bg-surface-2 px-2 py-2.5 text-center text-sm font-medium text-muted transition-colors hover:text-ink has-focus-visible:ring-2 has-focus-visible:ring-accent-soft ${PICKED[m]}`}
+          >
+            <input type="radio" value={m} id={i === 0 ? 'paymentMethod' : undefined} className="sr-only" {...registration} />
+            <Icon className="size-4 shrink-0" aria-hidden />
+            {PAYMENT_METHOD_LABELS[m]}
+          </label>
+        );
+      })}
     </div>
   );
 }
