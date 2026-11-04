@@ -69,6 +69,8 @@ export interface TaxMonth {
   /** The month it starts in, in full: "April" runs 6 April to 5 May. */
   name: string;
   range: string;
+  /** "6th Jul – 5th Aug", for where the year is already known. */
+  shortRange: string;
   /** The 6th of the month. */
   startDate: string;
   /** The 5th of the next month. */
@@ -86,6 +88,7 @@ export function taxMonths(startYear: number): TaxMonth[] {
       label: `${MONTHS[monthIdx]} ${pad2(year % 100)}`,
       name: MONTH_NAMES[monthIdx],
       range: `6 ${MONTHS[monthIdx]} ${year} – 5 ${MONTHS[nextIdx]} ${nextYear}`,
+      shortRange: `6th ${MONTHS[monthIdx]} – 5th ${MONTHS[nextIdx]}`,
       startDate: `${year}-${pad2(monthIdx + 1)}-06`,
       endDate: `${nextYear}-${pad2(nextIdx + 1)}-05`,
     };

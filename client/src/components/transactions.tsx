@@ -137,9 +137,10 @@ export function FilterBar({
       </FilterSelect>
       <FilterSelect label="Tax month" tooltip={month?.range} className="xl:w-44" value={get('taxMonth')} onChange={(v) => set('taxMonth', v)}>
         <option value="">All tax months</option>
+        {/* The picked month shows its dates in the closed menu; the rest stay as names. */}
         {months.map((m) => (
           <option key={m.index} value={m.index}>
-            {m.name}
+            {m.index === month?.index ? m.shortRange : m.name}
           </option>
         ))}
       </FilterSelect>
