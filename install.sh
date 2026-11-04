@@ -491,9 +491,13 @@ restart() {
         echo "$s isn't running. As root, start it with: systemctl start $s" >&2; return 1
       fi
       kill "$pid"
-      wait_for "p=\$(main_pid $s); [ -n \"\$p\" ] && [ \"\$p\" != 0 ] && [ \"\$p\" != $pid ]" 30 || {
-        echo "$s didn't start again." >&2; return 1
-      }
+      started="p=\$(main_pid $s); [ -n \"\$p\" ] && [ \"\$p\" != 0 ] && [ \"\$p\" != $pid ]"
+      # Caddy before version 1.9.1's Caddyfile waited for open pages' connections to close,
+      # forever; anything still running after 10 seconds is stopped outright.
+      if ! wait_for "$started" 10; then
+        kill -9 "$pid" 2>/dev/null
+        wait_for "$started" 20 || { echo "$s didn't start again." >&2; return 1; }
+      fi
     done
   fi
   if ! wait_for app_up 60; then

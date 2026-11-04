@@ -25,6 +25,9 @@
 	skip_install_trust
 	# Nothing uses Caddy's admin API, and a second Caddy on the computer would clash over its port.
 	admin off
+	# On stopping, Caddy otherwise waits for every connection to finish, and each open page
+	# holds one (the live-update stream), so a restart or update would wait forever.
+	grace_period 5s
 }
 
 {$SITE_ADDRESS:localhost} {
