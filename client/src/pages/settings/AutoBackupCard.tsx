@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Clock, Download, History, Trash2 } from 'lucide-react';
-import type { AutoBackupStatus } from '@crafty/shared';
+import type { AutoBackupStatus, DiskSpace } from '@crafty/shared';
 
 type AutoBackupFile = AutoBackupStatus['backups'][number];
 import { ConfirmDialog } from '../../components/ConfirmDialog';
@@ -17,6 +17,27 @@ const dateTime = (iso: string) =>
 
 const fileSize = (bytes: number) =>
   bytes < 1024 * 1024 ? `${Math.max(1, Math.round(bytes / 1024))} KB` : `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+
+const diskSize = (bytes: number) => {
+  const gb = bytes / 1024 ** 3;
+  if (gb >= 1024) return `${(gb / 1024).toFixed(1)} TB`;
+  if (gb >= 1) return `${gb.toFixed(1)} GB`;
+  return `${Math.round(bytes / 1024 ** 2)} MB`;
+};
+
+const GB = 1024 ** 3;
+
+/** Free space on a disk, flagged when it's under 1 GB or too little for three more backups like the newest. */
+function FreeSpace({ space, backupBytes }: { space: DiskSpace | null; backupBytes: number }) {
+  if (!space) return <span className="text-muted">Can't be read</span>;
+  const low = space.freeBytes < Math.max(GB, 3 * backupBytes);
+  return (
+    <span className={low ? 'text-out-soft' : undefined}>
+      {diskSize(space.freeBytes)} free of {diskSize(space.totalBytes)}
+      {low && ', running low'}
+    </span>
+  );
+}
 
 function LastRun({ status }: { status: AutoBackupStatus }) {
   const last = status.lastRun;
@@ -136,6 +157,18 @@ export function AutoBackupCard() {
                 <dd className="break-all">
                   <code>{status.folder}</code>
                 </dd>
+                <dt className="text-muted">{status.storage.sameDisk ? 'Free space' : 'Free space for data'}</dt>
+                <dd>
+                  <FreeSpace space={status.storage.data} backupBytes={status.backups[0]?.sizeBytes ?? 0} />
+                </dd>
+                {!status.storage.sameDisk && (
+                  <>
+                    <dt className="text-muted">Free space for backups</dt>
+                    <dd>
+                      <FreeSpace space={status.storage.backups} backupBytes={status.backups[0]?.sizeBytes ?? 0} />
+                    </dd>
+                  </>
+                )}
               </dl>
 
               <div className="flex flex-wrap items-center gap-3">

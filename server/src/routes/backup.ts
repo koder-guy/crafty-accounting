@@ -5,12 +5,14 @@ import multer from 'multer';
 import { autoBackupSettingsSchema, type AutoBackupStatus } from '@crafty/shared';
 import {
   backupDirWritable,
+  diskSpace,
   getAutoBackupSettings,
   isAutoBackupName,
   lastAutoBackup,
   listAutoBackups,
   nextAutoBackup,
   runAutoBackup,
+  sameDisk,
   saveAutoBackupSettings,
 } from '../autoBackup';
 import type { AppContext } from '../context';
@@ -73,6 +75,11 @@ export function backupRouter(ctx: AppContext): Router {
       nextRunAt: nextAutoBackup(settings, new Date(), getSetting(ctx.db, 'auto_backup_last_run_date')),
       lastRun: lastAutoBackup(ctx.db),
       backups: listAutoBackups(ctx.paths.backupDir),
+      storage: {
+        data: diskSpace(ctx.config.dataDir),
+        backups: diskSpace(ctx.paths.backupDir),
+        sameDisk: sameDisk(ctx.config.dataDir, ctx.paths.backupDir),
+      },
     };
   };
 

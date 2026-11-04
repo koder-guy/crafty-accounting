@@ -299,6 +299,18 @@ export interface AutoBackupStatus {
     error: string | null;
   } | null;
   backups: { name: string; sizeBytes: number; createdAt: string }[];
+  /** Space on the disks holding the data and the backup folder; null where it can't be read. */
+  storage: {
+    data: DiskSpace | null;
+    backups: DiskSpace | null;
+    /** Whether the backup folder is on the same disk as the data, so `backups` repeats `data`. */
+    sameDisk: boolean;
+  };
+}
+
+export interface DiskSpace {
+  freeBytes: number;
+  totalBytes: number;
 }
 
 export interface ApiErrorBody {

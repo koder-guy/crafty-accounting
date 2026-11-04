@@ -1449,6 +1449,11 @@ describe('automatic backups', () => {
     expect(body).toMatchObject({ enabled: true, time: '02:00', keep: 2, folderWritable: true });
     expect(body.lastRun).toMatchObject({ status: 'created', file: 'crafty-accounting-auto-2026-10-28-0200.zip' });
     expect(body.backups).toHaveLength(2);
+    // The test's backup folder is inside its data folder.
+    expect(body.storage.sameDisk).toBe(true);
+    expect(body.storage.data.totalBytes).toBeGreaterThan(0);
+    expect(body.storage.data.freeBytes).toBeGreaterThan(0);
+    expect(body.storage.data.freeBytes).toBeLessThanOrEqual(body.storage.data.totalBytes);
   });
 
   it('backs up on demand, downloads files and restores from them', async () => {

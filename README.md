@@ -142,7 +142,7 @@ Settings go in a `.env` file next to the app (the installers write one). Only in
 
 ## Backups
 
-**Automatic:** every day at 02:00 the app writes a full `.zip` backup to the backup folder (`BACKUP_HOST_DIR` with Docker). Days without changes are skipped, the newest 30 are kept, and a missed backup runs when the app next starts. Change this, or use **Back up now**, in **Settings → Backup and Restore**, which also says if the folder can't be written to (usually its permissions). The folder is outside the Docker volume; keep it on another disk or a NAS, or copy it elsewhere regularly.
+**Automatic:** every day at 02:00 the app writes a full `.zip` backup to the backup folder (`BACKUP_HOST_DIR` with Docker). Days without changes are skipped, the newest 30 are kept, and a missed backup runs when the app next starts. Change this, or use **Back up now**, in **Settings → Backup and Restore**, which also says if the folder can't be written to (usually its permissions) and how much free space is left for the books and the backups, in red when it's running low. The folder is outside the Docker volume; keep it on another disk or a NAS, or copy it elsewhere regularly.
 
 Also in **Settings → Backup and Restore**:
 - **Saved backups**: download any of the latest ten, or restore one in place after you type `RESTORE`. It replaces the database and every document; later backups stay in the folder.

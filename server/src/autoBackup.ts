@@ -4,6 +4,7 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
+import type { DiskSpace } from '@crafty/shared';
 import type { AppContext } from './context';
 import { getSetting, setSetting, type Db } from './db';
 import { dumpSql, writeZipBackup } from './backup';
@@ -73,6 +74,25 @@ export function backupDirWritable(dir: string): boolean {
     return true;
   } catch {
     return false;
+  }
+}
+
+/** Free (to this process) and total space on the disk holding `dir`, or null if it can't be read. */
+export function diskSpace(dir: string): DiskSpace | null {
+  try {
+    const s = fs.statfsSync(dir);
+    return { freeBytes: s.bavail * s.bsize, totalBytes: s.blocks * s.bsize };
+  } catch {
+    return null;
+  }
+}
+
+/** Whether two folders are on the same disk (true if either can't be read, so it's shown once). */
+export function sameDisk(a: string, b: string): boolean {
+  try {
+    return fs.statSync(a).dev === fs.statSync(b).dev;
+  } catch {
+    return true;
   }
 }
 
