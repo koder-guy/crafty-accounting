@@ -22,7 +22,14 @@ export function useLiveUpdates() {
     const refetch = (area?: string) =>
       qc.invalidateQueries({
         predicate: (q) =>
-          q.queryKey[0] === 'me' ? area === 'users' : fromHmrc(q.queryKey[0]) ? area === 'hmrc' || area === undefined : true,
+          // An update check or the progress of an update changes nothing but its own status.
+          area === 'updates'
+            ? q.queryKey[0] === 'updates'
+            : q.queryKey[0] === 'me'
+              ? area === 'users'
+              : fromHmrc(q.queryKey[0])
+                ? area === 'hmrc' || area === undefined
+                : true,
       });
 
     const connect = () => {

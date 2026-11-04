@@ -3,12 +3,14 @@ import { createApp } from './app';
 import { startAutoBackupScheduler } from './autoBackup';
 import { loadConfig } from './config';
 import { createContext } from './context';
+import { startUpdateChecker } from './updates';
 
 const config = loadConfig();
 const ctx = createContext(config);
 const app = createApp(ctx);
 
 const stopScheduler = startAutoBackupScheduler(ctx);
+const stopUpdateChecker = startUpdateChecker(ctx);
 
 const server = app.listen(config.port, () => {
   console.log(`${APP_NAME} v${APP_VERSION} listening on port ${config.port} (data: ${config.dataDir})`);
@@ -17,6 +19,7 @@ const server = app.listen(config.port, () => {
 
 const shutdown = () => {
   stopScheduler();
+  stopUpdateChecker();
   ctx.liveUpdates.closeAll();
   server.close(() => {
     ctx.db.close();

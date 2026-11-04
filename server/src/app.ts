@@ -17,6 +17,7 @@ import { reportsRouter } from './routes/reports';
 import { sampleDataRouter } from './routes/sampleData';
 import { taxYearsRouter } from './routes/taxYears';
 import { expensesRouter, incomesRouter } from './routes/transactions';
+import { updatesRouter } from './routes/updates';
 import { usersRouter } from './routes/users';
 
 /** Identifies one open browser tab, so it isn't told about its own changes. */
@@ -94,6 +95,7 @@ export function createApp(ctx: AppContext) {
   app.use('/api/hmrc', hmrcRouter(ctx));
   app.use('/api/reports', reportsRouter(ctx));
   app.use('/api/sample-data', sampleDataRouter(ctx));
+  app.use('/api/updates', updatesRouter(ctx));
   app.use('/api', backupRouter(ctx));
   app.use('/api', (_req, _res, next) => next(new HttpError(404, 'Not found')));
 

@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
-import type { HmrcEnvironment } from '@crafty/shared';
+import type { HmrcEnvironment, InstallKind } from '@crafty/shared';
 
 export interface Config {
   dataDir: string;
@@ -23,6 +23,13 @@ export interface Config {
     clientSecret: string | null;
     /** Overrides the redirect URI worked out from the address the app is reached at. */
     redirectUri: string | null;
+  };
+  updates: {
+    /** Check GitHub for new releases twice a day (UPDATE_CHECK); Check now works either way. */
+    autoCheck: boolean;
+    install: InstallKind;
+    /** The install's folder: install.sh's ~/crafty-accounting, or CRAFTY_DIR from install-docker.sh's .env. */
+    installDir: string | null;
   };
 }
 
@@ -52,7 +59,21 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
       clientSecret: env.HMRC_CLIENT_SECRET?.trim() || null,
       redirectUri: env.HMRC_REDIRECT_URI?.trim() || null,
     },
+    updates: { autoCheck: !/^(false|0)$/i.test(env.UPDATE_CHECK?.trim() ?? ''), ...installKind(env) },
   };
+}
+
+/**
+ * How this copy was installed. install.sh runs the app from <folder>/app, next to its
+ * crafty script and its own Node; install-docker.sh's compose file sets CRAFTY_INSTALL.
+ */
+function installKind(env: NodeJS.ProcessEnv): { install: InstallKind; installDir: string | null } {
+  if (env.CRAFTY_INSTALL === 'docker') return { install: 'docker', installDir: env.CRAFTY_DIR?.trim() || null };
+  const dir = path.dirname(process.cwd());
+  if (path.basename(process.cwd()) === 'app' && fs.existsSync(path.join(dir, 'crafty')) && fs.existsSync(path.join(dir, 'node', 'bin', 'node'))) {
+    return { install: 'native', installDir: dir };
+  }
+  return { install: 'manual', installDir: null };
 }
 
 /** HMRC's test service unless HMRC_ENV says otherwise, so nothing reaches the live service by accident. */

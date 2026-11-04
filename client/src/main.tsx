@@ -35,6 +35,7 @@ import { CustomCategories } from './pages/settings/CustomCategories';
 import { BackupSettings } from './pages/settings/BackupSettings';
 import { People } from './pages/settings/People';
 import { HmrcSettings } from './pages/settings/HmrcSettings';
+import { UpdatesSettings } from './pages/settings/UpdatesSettings';
 import { NotFound } from './pages/NotFound';
 
 const queryClient = new QueryClient({
@@ -126,6 +127,7 @@ function App() {
               </EditorOnly>
             }
           />
+          <Route path="updates" element={<UpdatesSettings />} />
         </Route>
         <Route path="backup" element={<Navigate to="/settings/backup" replace />} />
         <Route path="tax-years" element={<Navigate to="/settings/tax-years" replace />} />

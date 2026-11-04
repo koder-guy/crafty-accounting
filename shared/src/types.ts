@@ -502,3 +502,33 @@ export type HmrcCalculationResponse =
   /** Asked for, but HMRC hasn't finished working it out. */
   | { state: 'pending'; calculationId: string }
   | { state: 'ready'; calculation: HmrcCalculation };
+
+/**
+ * How this copy was installed, which decides how Settings → Updates applies an update:
+ * `native` (install.sh) updates itself, `docker` (install-docker.sh) shows the command to run,
+ * `manual` (a checkout run by hand) explains the steps.
+ */
+export type InstallKind = 'native' | 'docker' | 'manual';
+
+export interface UpdateStatus {
+  /** The version the server is running; differs from the page's own after an update. */
+  currentVersion: string;
+  install: InstallKind;
+  /** The install's folder on the host, when known (for the Docker update command). */
+  installDir: string | null;
+  /** Whether the server checks for new versions by itself (UPDATE_CHECK). */
+  autoCheck: boolean;
+  checkedAt: string | null;
+  checkError: string | null;
+  /** The newest release, when it's newer than the running version. */
+  available: {
+    version: string;
+    url: string;
+    /** Commit summaries since the running version, newest first. */
+    changes: string[];
+  } | null;
+  /** An update running now (install.sh installs only). */
+  applying: { version: string; startedAt: string } | null;
+  /** The last update that failed, with the end of its log. The running version is unchanged. */
+  failed: { version: string; at: string; log: string } | null;
+}

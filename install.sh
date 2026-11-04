@@ -16,15 +16,13 @@
 # Optional settings, given as environment variables before the command:
 #   CRAFTY_DIR             where to install (default ~/crafty-accounting)
 #   CRAFTY_PORT            port to serve on (default 3000)
-#   CRAFTY_BRANCH          branch or tag to install (default main)
+#   CRAFTY_BRANCH          branch or tag to install (default: the latest release)
 #   CRAFTY_TARBALL         URL of the app's source .tar.gz, instead of GitHub's for CRAFTY_BRANCH
 #   CRAFTY_REPO            GitHub repository to install from (default koder-guy/crafty-accounting)
 
 set -euo pipefail
 
 REPO="${CRAFTY_REPO:-koder-guy/crafty-accounting}"
-BRANCH="${CRAFTY_BRANCH:-main}"
-TARBALL="${CRAFTY_TARBALL:-https://github.com/$REPO/archive/$BRANCH.tar.gz}"
 DIR="${CRAFTY_DIR:-$HOME/crafty-accounting}"
 NODE_DIST="https://nodejs.org/dist/latest-v22.x"
 
@@ -50,6 +48,16 @@ esac
 if [ "$OS" = linux ] && ldd --version 2>&1 | grep -qi musl; then
   fail "this Linux uses musl (Alpine?), which nodejs.org has no Node build for. Use Docker Compose (see the README)."
 fi
+
+# The newest release tag (vX.Y.Z), or main if the repository has none. Installs follow
+# releases so the version the app shows is the code it runs.
+latest_release() {
+  local tags
+  tags="$(curl -fsSL -H 'Accept: application/vnd.github+json' "https://api.github.com/repos/$REPO/tags?per_page=100")" \
+    || fail "couldn't find the latest release on GitHub. Run this again, or give CRAFTY_BRANCH (e.g. CRAFTY_BRANCH=main)."
+  printf '%s\n' "$tags" | sed -n 's/.*"name": *"\(v[0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\)".*/\1/p' \
+    | sort -t. -k1.2,1n -k2,2n -k3,3n | tail -n 1 | grep . || echo main
+}
 
 sha256() {
   if command -v sha256sum >/dev/null 2>&1; then sha256sum "$1" | cut -d' ' -f1; else shasum -a 256 "$1" | cut -d' ' -f1; fi
@@ -84,6 +92,8 @@ fi
 export PATH="$DIR/node/bin:$PATH"
 
 # ---- The app, built next to the running copy so a failed update leaves it working ----
+if [ -n "${CRAFTY_BRANCH:-}" ]; then BRANCH="$CRAFTY_BRANCH"; elif [ -n "${CRAFTY_TARBALL:-}" ]; then BRANCH="from $CRAFTY_TARBALL"; else BRANCH="$(latest_release)"; fi
+TARBALL="${CRAFTY_TARBALL:-https://github.com/$REPO/archive/$BRANCH.tar.gz}"
 step "Downloading the app ($BRANCH)"
 rm -rf app.new && mkdir app.new
 curl -fsSL "$TARBALL" | tar -xz -C app.new --strip-components=1 || fail "couldn't download the app ($BRANCH) from $TARBALL."

@@ -5,7 +5,7 @@ import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import request from 'supertest';
 import Database from 'better-sqlite3';
-import { mtdPayload, photoFilename, type Category, type SubmissionMethod } from '@crafty/shared';
+import { APP_VERSION, mtdPayload, photoFilename, type Category, type SubmissionMethod } from '@crafty/shared';
 import { createApp } from './app';
 import { dumpSql } from './backup';
 import { NEXT_UPDATED_AT, nextTimestamp } from './repo';
@@ -17,6 +17,7 @@ import { createContext, type AppContext } from './context';
 import { documentNameProblem } from './documents';
 import { fraudPreventionHeaders, parseBrowserData, publicIp } from './fraudPrevention';
 import { hmrcAccessToken } from './hmrc';
+import { changeSummaries, newestTag } from './updates';
 import { clearData, generateSampleData } from './sampleData';
 
 const NAME = 'Admin';
@@ -2827,5 +2828,107 @@ describe('document names', () => {
     expect(documentNameProblem('.hidden.pdf')).not.toBeNull();
     expect(documentNameProblem('file.svg')).not.toBeNull();
     expect(documentNameProblem('bad\u0000.pdf')).not.toBeNull();
+  });
+});
+
+describe('updates', () => {
+  const [major, minor, patch] = APP_VERSION.split('.').map(Number);
+  const newer = `${major}.${minor}.${patch + 1}`;
+  const githubRequests: string[] = [];
+
+  function github({ tags = [`v${APP_VERSION}`, `v${newer}`, 'v0.9.0', 'nightly'], tagsStatus = 200 }: { tags?: string[]; tagsStatus?: number } = {}) {
+    githubRequests.length = 0;
+    ctx.fetch = vi.fn(async (url: string | URL | Request) => {
+      const u = String(url);
+      githubRequests.push(u);
+      if (u.includes('/tags')) return new Response(JSON.stringify(tags.map((name) => ({ name }))), { status: tagsStatus });
+      if (u.includes('/compare/')) {
+        const messages = ['Add the Updates page\n\nLonger description', `Version ${newer}`, 'Fix the sidebar notice'];
+        return Response.json({ commits: messages.map((message) => ({ commit: { message } })) });
+      }
+      return new Response('{}', { status: 404 });
+    }) as typeof fetch;
+  }
+
+  it('picks the newest release tag and summarises the changes', () => {
+    expect(newestTag(['v1.9.2', 'v1.10.0', 'v1.9.10', 'main', '2.0.0', 'v2.0.0-beta'])).toBe('v1.10.0');
+    expect(newestTag(['latest'])).toBeNull();
+    expect(changeSummaries(['First\n\nbody', 'Version 1.2.3', "Merge branch 'x'", 'Second'])).toEqual(['Second', 'First']);
+  });
+
+  it('reports nothing until checked, then a newer release with its changes', async () => {
+    const before = (await agent.get('/api/updates').expect(200)).body;
+    expect(before).toMatchObject({ currentVersion: APP_VERSION, install: 'manual', checkedAt: null, available: null, applying: null });
+
+    github();
+    const checked = (await agent.post('/api/updates/check').expect(200)).body;
+    expect(checked.checkError).toBeNull();
+    expect(checked.checkedAt).toEqual(expect.any(String));
+    expect(checked.available).toEqual({
+      version: newer,
+      url: `https://github.com/koder-guy/crafty-accounting/releases/tag/v${newer}`,
+      changes: ['Fix the sidebar notice', 'Add the Updates page'],
+    });
+    expect(githubRequests).toEqual([
+      'https://api.github.com/repos/koder-guy/crafty-accounting/tags?per_page=100',
+      `https://api.github.com/repos/koder-guy/crafty-accounting/compare/v${APP_VERSION}...v${newer}`,
+    ]);
+    expect((await agent.get('/api/updates').expect(200)).body.available.version).toBe(newer);
+  });
+
+  it('says when this is the newest version, and when GitHub could not be asked', async () => {
+    github({ tags: [`v${APP_VERSION}`, 'v0.1.0'] });
+    const latest = (await agent.post('/api/updates/check').expect(200)).body;
+    expect(latest.available).toBeNull();
+    expect(latest.checkError).toBeNull();
+
+    github({ tagsStatus: 403 });
+    const failed = (await agent.post('/api/updates/check').expect(200)).body;
+    expect(failed.available).toBeNull();
+    expect(failed.checkError).toMatch(/limiting/);
+  });
+
+  it("doesn't update a copy the installer didn't make, or let read-only people check or update", async () => {
+    github();
+    await agent.post('/api/updates/check').expect(200);
+    const res = await agent.post('/api/updates/apply').send({ version: newer }).expect(409);
+    expect(res.body.error).toMatch(/can't update itself/);
+
+    const viewer = await addPerson('Accountant', 'read-only-password', 'viewer');
+    expect((await viewer.get('/api/updates').expect(200)).body.available.version).toBe(newer);
+    await viewer.post('/api/updates/check').expect(403);
+    await viewer.post('/api/updates/apply').send({ version: newer }).expect(403);
+  });
+
+  it('backs up and runs the installer for the confirmed version, and reports a failed update', async () => {
+    const installDir = fs.mkdtempSync(path.join(os.tmpdir(), 'crafty-install-'));
+    ctx.config.updates = { ...ctx.config.updates, install: 'native', installDir };
+    let finish!: (code: number) => void;
+    const runs: { dir: string; tag: string; log: string }[] = [];
+    ctx.updates.runUpdater = (dir, tag, log) => {
+      runs.push({ dir, tag, log });
+      fs.writeFileSync(log, '\x1b[1m==> Downloading the app\x1b[0m\nError: the build failed\n');
+      return new Promise((resolve) => (finish = resolve));
+    };
+    try {
+      github();
+      await agent.post('/api/updates/apply').send({ version: newer }).expect(409); // not checked yet
+      await agent.post('/api/updates/check').expect(200);
+      await agent.post('/api/updates/apply').send({ version: '9.9.9' }).expect(409);
+
+      const started = (await agent.post('/api/updates/apply').send({ version: newer }).expect(202)).body;
+      expect(started.applying).toMatchObject({ version: newer });
+      expect(runs).toEqual([{ dir: installDir, tag: `v${newer}`, log: path.join(installDir, 'logs', 'update.log') }]);
+      expect(fs.readdirSync(ctx.paths.backupDir).filter((n) => n.endsWith('.zip'))).toHaveLength(1);
+      await agent.post('/api/updates/apply').send({ version: newer }).expect(409); // already running
+
+      finish(1);
+      await new Promise((resolve) => setImmediate(resolve));
+      const after = (await agent.get('/api/updates').expect(200)).body;
+      expect(after.applying).toBeNull();
+      expect(after.failed).toMatchObject({ version: newer, log: '==> Downloading the app\nError: the build failed' });
+    } finally {
+      fs.rmSync(installDir, { recursive: true, force: true });
+    }
   });
 });

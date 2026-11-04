@@ -23,6 +23,7 @@ Self-hosted bookkeeping for UK sole traders on the cash basis. Keep your income 
 - **Working together**: changes appear in every open browser within a second. If two people edit the same transaction, the second save is refused and the form offers to load the other version.
 - **Backups**: daily automatic backups, each one downloadable or restorable in a click (see [Backups](#backups)).
 - Reports and the year-end summary print or save as PDF.
+- **Updates**: the app checks for new versions twice a day and says so at the bottom of the menu. **Settings → Updates** lists what's changed and, for the quick install, installs it in a click after saving a backup. For Docker it shows the command to run.
 
 ## Quick install (macOS and Linux)
 
@@ -38,7 +39,7 @@ The app keeps running when the terminal closes, but doesn't start by itself afte
 ~/crafty-accounting/crafty start
 ```
 
-`crafty` also takes `stop`, `restart`, `status`, `log` and `update`. An update keeps your books and settings, and leaves the running copy alone if it fails. Settings are in `~/crafty-accounting/.env`, the books in `~/crafty-accounting/data`. On a new install you can set `CRAFTY_DIR` or `CRAFTY_PORT` before `/bin/bash`.
+`crafty` also takes `stop`, `restart`, `status`, `log` and `update`. Installs and updates use the latest release. An update (also in **Settings → Updates**) keeps your books and settings, and leaves the running copy alone if it fails. Settings are in `~/crafty-accounting/.env`, the books in `~/crafty-accounting/data`. On a new install you can set `CRAFTY_DIR` or `CRAFTY_PORT` before `/bin/bash`.
 
 **Signing in for the first time:** use the username `Admin` and the password `admin`. You'll be asked to choose your own password before anything else; change your username and add other people in **Settings → People**.
 
@@ -128,6 +129,7 @@ Settings go in a `.env` file next to the app (the installers write one). Only in
 | `BACKUP_HOST_DIR` | `./backups` | Docker: the folder on the server for automatic backups |
 | `BACKUP_DIR` | `DATA_DIR/backups` | Without Docker: where automatic backups go |
 | `TZ` | `Europe/London` | Time zone for the daily backup |
+| `UPDATE_CHECK` | `true` | `false` stops the app checking GitHub for new versions by itself; **Settings → Updates** can still check |
 
 ## Backups
 

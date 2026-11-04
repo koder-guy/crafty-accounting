@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import type {
   MtdExpenses,
@@ -34,8 +35,9 @@ import type {
   TransactionFilters,
   User,
   YearEndSummaryResponse,
+  UpdateStatus,
 } from '@crafty/shared';
-import { MTD_FIRST_SEND_YEAR, startYearFromLabel } from '@crafty/shared';
+import { APP_VERSION, MTD_FIRST_SEND_YEAR, startYearFromLabel } from '@crafty/shared';
 import { api, toQuery } from './api';
 
 // ---- Auth ----
@@ -329,6 +331,52 @@ export function useAutoBackupMutations() {
       mutationFn: () => api.post<AutoBackupStatus>('/backup/auto/run'),
       onSuccess,
       onError: () => qc.invalidateQueries({ queryKey: ['auto-backup'] }),
+    }),
+  };
+}
+
+// ---- Updates ----
+
+/** Set in this tab once it starts an update, so it reloads itself when the new version answers. */
+const UPDATING_KEY = 'crafty-updating';
+
+/**
+ * The server's update status. Refetched hourly for the sidebar notice, and every few seconds
+ * during an update, through the restart (when requests fail for a while).
+ */
+export const useUpdates = () => {
+  const query = useQuery({
+    queryKey: ['updates'],
+    queryFn: () => api.get<UpdateStatus>('/updates'),
+    refetchInterval: (q) => (q.state.data?.applying ? 3000 : 60 * 60 * 1000),
+    retry: (count) => count < 2 || !!sessionStorage.getItem(UPDATING_KEY),
+  });
+  const running = query.data?.currentVersion;
+  const applying = !!query.data?.applying;
+  useEffect(() => {
+    if (!running || !sessionStorage.getItem(UPDATING_KEY)) return;
+    if (running !== APP_VERSION) {
+      sessionStorage.removeItem(UPDATING_KEY);
+      window.location.reload();
+    } else if (!applying) {
+      sessionStorage.removeItem(UPDATING_KEY); // it failed, and the same version is still running
+    }
+  }, [running, applying]);
+  return query;
+};
+
+export function useUpdateMutations() {
+  const qc = useQueryClient();
+  const onSuccess = (data: UpdateStatus) => qc.setQueryData(['updates'], data);
+  return {
+    check: useMutation({ mutationFn: () => api.post<UpdateStatus>('/updates/check'), onSuccess }),
+    apply: useMutation({
+      mutationFn: (version: string) => api.post<UpdateStatus>('/updates/apply', { version }),
+      onSuccess: (data) => {
+        sessionStorage.setItem(UPDATING_KEY, data.applying?.version ?? '1');
+        onSuccess(data);
+      },
+      onError: () => qc.invalidateQueries({ queryKey: ['updates'] }),
     }),
   };
 }

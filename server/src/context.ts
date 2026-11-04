@@ -3,6 +3,7 @@ import path from 'node:path';
 import type { Config } from './config';
 import { openDatabase, type Db } from './db';
 import { LiveUpdates } from './liveUpdates';
+import { Updates } from './updates';
 import { ensureFirstUser } from './users';
 
 export interface AppContext {
@@ -16,8 +17,10 @@ export interface AppContext {
     backupDir: string;
   };
   liveUpdates: LiveUpdates;
-  /** Used for calls to HMRC; tests replace it. */
+  /** Used for calls to HMRC and GitHub; tests replace it. */
   fetch: typeof fetch;
+  /** Checking for and applying new versions (Settings → Updates). */
+  updates: Updates;
 }
 
 export function createContext(config: Config): AppContext {
@@ -32,5 +35,7 @@ export function createContext(config: Config): AppContext {
   fs.mkdirSync(paths.tmpDir, { recursive: true });
   const db = openDatabase(paths.dbFile);
   ensureFirstUser(db, config.adminName, config.adminPassword);
-  return { config, db, paths, liveUpdates: new LiveUpdates(), fetch: (...args) => globalThis.fetch(...args) };
+  const ctx = { config, db, paths, liveUpdates: new LiveUpdates(), fetch: (...args) => globalThis.fetch(...args) } as AppContext;
+  ctx.updates = new Updates(ctx);
+  return ctx;
 }

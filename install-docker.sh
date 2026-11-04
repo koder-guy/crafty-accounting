@@ -18,7 +18,7 @@
 #   CRAFTY_DIR             where to install (default ~/crafty-accounting)
 #   CRAFTY_HTTP_PORT       HTTP port (default 80, or 8080 if 80 is taken)
 #   CRAFTY_HTTPS_PORT      HTTPS port (default 443, or 8443 if 443 is taken)
-#   CRAFTY_BRANCH          branch or tag to install (default main)
+#   CRAFTY_BRANCH          branch or tag to install (default: the latest release)
 #   CRAFTY_TARBALL         URL of the app's source .tar.gz, instead of GitHub's for CRAFTY_BRANCH
 #   CRAFTY_PROJECT         Docker Compose project name (default crafty-accounting)
 #   CRAFTY_REPO            GitHub repository to install from (default koder-guy/crafty-accounting)
@@ -29,8 +29,6 @@ set -euo pipefail
 # replaces this file.
 main() {
   local REPO="${CRAFTY_REPO:-koder-guy/crafty-accounting}"
-  local BRANCH="${CRAFTY_BRANCH:-main}"
-  local TARBALL="${CRAFTY_TARBALL:-https://github.com/$REPO/archive/$BRANCH.tar.gz}"
   # Run as an install's own install-docker.sh (to update it), that install is the default.
   local default_dir="$HOME/crafty-accounting" here
   if [ -f "${BASH_SOURCE[0]:-}" ]; then
@@ -59,6 +57,9 @@ main() {
   check_docker
 
   # ---- The app's source ----
+  local BRANCH TARBALL
+  if [ -n "${CRAFTY_BRANCH:-}" ]; then BRANCH="$CRAFTY_BRANCH"; elif [ -n "${CRAFTY_TARBALL:-}" ]; then BRANCH="from $CRAFTY_TARBALL"; else BRANCH="$(latest_release "$REPO")"; fi
+  TARBALL="${CRAFTY_TARBALL:-https://github.com/$REPO/archive/$BRANCH.tar.gz}"
   step "Downloading the app ($BRANCH)"
   mkdir -p "$DIR"
   local src
@@ -114,10 +115,17 @@ HTTPS_PORT=$https_port
 MAX_UPLOAD_MB=20
 BACKUP_HOST_DIR=./backups
 TZ=Europe/London
+
+# This folder, so Settings -> Updates can show the command that updates it.
+CRAFTY_DIR=$DIR
 EOF
     )
   else
     echo "Keeping the existing settings in $ENV_FILE."
+    # Installs from before Settings -> Updates.
+    if ! grep -q '^CRAFTY_DIR=' "$ENV_FILE"; then
+      printf '\n# This folder, so Settings -> Updates can show the command that updates it.\nCRAFTY_DIR=%s\n' "$DIR" >> "$ENV_FILE"
+    fi
     # Installs from before SITE_IP: browsing by IP address failed the TLS handshake.
     if ! grep -q '^SITE_IP=' "$ENV_FILE"; then
       local site_ip
@@ -207,6 +215,16 @@ fail() { printf '\n%sError: %s%s\n' "$red" "$1" "$reset" >&2; exit 1; }
 env_value() { sed -n "s/^$1=//p" "$DIR/.env" | tail -n 1; }
 port_busy() { (exec 3<>"/dev/tcp/127.0.0.1/$1") 2>/dev/null; }
 compose() { $DOCKER_CMD compose "$@"; }
+
+# The newest release tag (vX.Y.Z) of repository $1, or main if it has none. Installs
+# follow releases so the version the app shows is the code it runs.
+latest_release() {
+  local tags
+  tags="$(curl -fsSL -H 'Accept: application/vnd.github+json' "https://api.github.com/repos/$1/tags?per_page=100")" \
+    || fail "couldn't find the latest release on GitHub. Run this again, or give CRAFTY_BRANCH (e.g. CRAFTY_BRANCH=main)."
+  printf '%s\n' "$tags" | sed -n 's/.*"name": *"\(v[0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\)".*/\1/p' \
+    | sort -t. -k1.2,1n -k2,2n -k3,3n | tail -n 1 | grep . || echo main
+}
 
 # Whether a folder holds an install made by this script.
 is_docker_install() { grep -qs '^# Written by install-docker.sh' "$1/.env"; }
