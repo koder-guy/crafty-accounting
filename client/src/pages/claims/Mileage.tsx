@@ -28,13 +28,15 @@ import { ClaimStats, RatesUsed, Stat } from './ClaimStats';
 import { Alert, Button, Card, CardHeader, EmptyState, Field, IconButton, Spinner } from '../../components/ui';
 import { useActiveTaxYear, useCanEdit, useMileage, useMileageMutations } from '../../lib/queries';
 
-/** One line per vehicle type, under a stat box's figure. */
-function VehicleBreakdown({ rows }: { rows: [Vehicle, string][] }) {
+/** One line per vehicle type, with its number of trips, under a stat box's figure. */
+function VehicleBreakdown({ rows }: { rows: { vehicle: Vehicle; trips: number; value: string }[] }) {
   return (
     <dl className="mt-3 space-y-1 border-t border-line pt-2 text-xs">
-      {rows.map(([vehicle, value]) => (
+      {rows.map(({ vehicle, trips, value }) => (
         <div key={vehicle} className="flex justify-between gap-3">
-          <dt className="text-muted">{VEHICLE_LABELS[vehicle]}</dt>
+          <dt className="text-muted">
+            {VEHICLE_LABELS[vehicle]} · {trips} {trips === 1 ? 'trip' : 'trips'}
+          </dt>
           <dd className="tabular font-semibold whitespace-nowrap text-ink">{value}</dd>
         </div>
       ))}
@@ -188,11 +190,12 @@ export function Mileage() {
   const latest = editing ? data?.trips.find((t) => t.id === editing.id) : undefined;
   const rates = mileageRatesFor(taxYear?.label ?? '');
   const carMilesLeft = data ? Math.max(0, rates.car.thresholdMiles * 10 - data.totals.carDistanceTenths) : 0;
-  // Miles and claim per vehicle type, in VEHICLES order, for the types used this year.
+  // Trips, miles and claim per vehicle type, in VEHICLES order, for the types used this year.
   const byVehicle = VEHICLES.map((vehicle) => {
     const trips = (data?.trips ?? []).filter((t) => t.vehicle === vehicle);
     return {
       vehicle,
+      trips: trips.length,
       tenths: trips.reduce((sum, t) => sum + t.distanceTenths, 0),
       pence: trips.reduce((sum, t) => sum + t.claimPence, 0),
     };
@@ -222,10 +225,10 @@ export function Mileage() {
             <>
               <ClaimStats>
                 <Stat label="Business miles" value={formatMiles(data.totals.distanceTenths)} sub={`${data.trips.length} trips this tax year`}>
-                  {byVehicle.length > 1 && <VehicleBreakdown rows={byVehicle.map((v) => [v.vehicle, formatMiles(v.tenths)])} />}
+                  {byVehicle.length > 1 && <VehicleBreakdown rows={byVehicle.map((v) => ({ vehicle: v.vehicle, trips: v.trips, value: formatMiles(v.tenths) }))} />}
                 </Stat>
                 <Stat label="Mileage claim" value={formatGBP(data.totals.claimPence)} sub="Counted as car, van and travel expenses">
-                  {byVehicle.length > 1 && <VehicleBreakdown rows={byVehicle.map((v) => [v.vehicle, formatGBP(v.pence)])} />}
+                  {byVehicle.length > 1 && <VehicleBreakdown rows={byVehicle.map((v) => ({ vehicle: v.vehicle, trips: v.trips, value: formatGBP(v.pence) }))} />}
                 </Stat>
                 <Stat
                   label={`Left at ${rates.car.firstPence}p`}
