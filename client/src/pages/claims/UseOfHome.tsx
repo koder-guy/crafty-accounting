@@ -204,9 +204,7 @@ export function UseOfHome() {
                 <Stat label="Hours at home" value={data.totals.hours.toLocaleString('en-GB')} sub="Business work this tax year" />
                 <Stat label="Use of home claim" value={formatGBP(data.totals.claimPence)} sub="Counted as rent, rates, power and insurance" />
                 <RatesUsed
-                  rates={[...USE_OF_HOME_BANDS].reverse().map((b) => ({ label: b.label, rate: formatGBP(b.pence).replace(/\.00$/, '') }))}
-                  note="For each month, by the hours worked at home"
-                />
+                  rates={[...USE_OF_HOME_BANDS].reverse().map((b) => ({ label: b.label, rate: formatGBP(b.pence).replace(/\.00$/, '') }))}                />
               </ClaimStats>
 
               <Alert tone="warning">
