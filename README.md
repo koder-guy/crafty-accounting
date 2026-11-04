@@ -56,17 +56,28 @@ Needs Docker: on a Mac, [Docker Desktop](https://www.docker.com/products/docker-
 
 ## Run with Docker Compose by hand
 
-Clone the repository and start it from inside the folder:
+Clone the repository:
 
 ```bash
 git clone https://github.com/koder-guy/crafty-accounting.git
 cd crafty-accounting
+```
+
+**On a server, or to use it from other devices**, first tell it the addresses you'll browse to, in a `.env` file in that folder. Without one, only `https://localhost` on the same computer works, and any other address gets a page saying what to set. For a server at 192.168.1.50 (on Linux, `hostname -I` shows its address):
+
+```bash
+printf 'SITE_ADDRESS=localhost, 192.168.1.50\nSITE_IP=192.168.1.50\n' > .env
+```
+
+`SITE_ADDRESS` can also list names, such as `localhost, crafty.local, 192.168.1.50`; `SITE_IP` is the IP address in it. Then start it:
+
+```bash
 docker compose up -d --build
 ```
 
-Open `https://localhost`, sign in as `Admin` / `admin` and choose your own password. Browsers warn about the certificate until you trust it (see [HTTPS](#https)).
+Open `https://localhost`, or the server's address, sign in as `Admin` / `admin` and choose your own password. Browsers warn about the certificate until you trust it (see [HTTPS](#https)).
 
-Everything has a default, so a `.env` file in the same folder is only needed for what you change (see [Configuration](#configuration)). Usually that's `SITE_ADDRESS`, so other devices can reach it, such as `SITE_ADDRESS=localhost, crafty.local, 192.168.1.50`, plus `SITE_IP=192.168.1.50` to browse by IP address. Run `docker compose up -d` after changing it.
+Everything else has a default (see [Configuration](#configuration)). Run `docker compose up -d` after changing `.env`.
 
 Automatic backups go to `./backups`, or to `BACKUP_HOST_DIR` (ideally another disk or a NAS share). On Linux, let the container's user write there:
 
