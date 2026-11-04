@@ -15,10 +15,24 @@ declare global {
   }
 }
 
+/**
+ * Marks sessions made since the sign-in cookie became a browser-session cookie
+ * (no expiry, gone when the browser quits). Cookies from before then kept a
+ * 30-day expiry, so they're refused and the person signs in once more.
+ */
+const SESSION_VERSION = 2;
+
+/** The signed-in person's id, or null for no session or one from an older version. */
+function sessionUserId(req: Express.Request): number | null {
+  const s = req.session;
+  return s?.v === SESSION_VERSION && typeof s.userId === 'number' ? s.userId : null;
+}
+
 /** Loads the signed-in user on every request, so a removed user is signed out straight away. */
 export function requireAuth(ctx: AppContext): RequestHandler {
   return (req, _res, next) => {
-    const user = typeof req.session?.userId === 'number' ? getUser(ctx.db, req.session.userId) : null;
+    const userId = sessionUserId(req);
+    const user = userId === null ? null : getUser(ctx.db, userId);
     if (!user) {
       req.session = null;
       next(new HttpError(401, 'Please sign in'));
@@ -87,7 +101,7 @@ export function authRouter(ctx: AppContext): Router {
     const { name, password } = parseWith(loginSchema, req.body);
     const user = authenticate(ctx.db, name, password);
     if (!user) throw new HttpError(401, 'Incorrect username or password');
-    req.session = { userId: user.id };
+    req.session = { userId: user.id, v: SESSION_VERSION };
     res.json(meResponse(user.id));
   });
 
@@ -97,7 +111,9 @@ export function authRouter(ctx: AppContext): Router {
   });
 
   router.get('/me', (req, res) => {
-    res.json(meResponse(typeof req.session?.userId === 'number' ? req.session.userId : null));
+    const userId = sessionUserId(req);
+    if (userId === null && req.session?.userId !== undefined) req.session = null;
+    res.json(meResponse(userId));
   });
 
   return router;

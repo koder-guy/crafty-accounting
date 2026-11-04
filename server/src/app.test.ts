@@ -101,6 +101,20 @@ describe('auth', () => {
     for (const c of session) expect(c).not.toMatch(/expires=|max-age=/i);
   });
 
+  it('refuses a sign-in cookie from before 1.9.4, which had a 30-day expiry', async () => {
+    // Signed the way cookie-session (keygrip) does, with the session's contents back then.
+    const value = Buffer.from(JSON.stringify({ userId: 1 })).toString('base64');
+    const sig = crypto
+      .createHmac('sha1', ctx.config.sessionSecret)
+      .update(`crafty_session=${value}`)
+      .digest('base64')
+      .replace(/\/|\+|=/g, (c) => ({ '/': '_', '+': '-', '=': '' })[c]!);
+    const cookie = `crafty_session=${value}; crafty_session.sig=${sig}`;
+    const app = createApp(ctx);
+    await request(app).get('/api/tax-years').set('Cookie', cookie).expect(401);
+    expect((await request(app).get('/api/auth/me').set('Cookie', cookie)).body.authenticated).toBe(false);
+  });
+
   it('creates Admin / admin on a new install, who must choose a new password first', async () => {
     const emptyDir = fs.mkdtempSync(path.join(os.tmpdir(), 'crafty-test-'));
     const fresh = createContext(loadConfig({ DATA_DIR: emptyDir, CLIENT_DIST: path.join(emptyDir, 'none') }));
