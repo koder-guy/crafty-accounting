@@ -137,20 +137,48 @@ export function TaxYearsSettings() {
               {canEdit ? 'Create one above to start recording transactions.' : 'An editor needs to create one.'}
             </EmptyState>
           ) : (
-            <ul className="divide-y divide-line border-t border-line">
+            // Each year is its own panel, so a long list doesn't run together.
+            <ul className="space-y-3 px-5 pb-5 sm:px-6 sm:pb-6">
               {data.taxYears.map((year) => {
                 const isActive = year.id === data.activeTaxYearId;
                 return (
-                  <li key={year.id} className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:px-6">
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="text-base font-semibold text-white">{displayTaxYear(year.label)}</span>
-                        {isActive && <Badge tone="accent">Active</Badge>}
-                        {Number(year.label.slice(0, 4)) === currentStart && <Badge>Current</Badge>}
+                  <li
+                    key={year.id}
+                    className={`overflow-hidden rounded-xl border ${isActive ? 'border-accent/60' : 'border-line-strong'}`}
+                  >
+                    <div
+                      className={`flex flex-col gap-3 border-b px-4 py-3 sm:flex-row sm:items-center sm:px-5 ${
+                        isActive ? 'border-accent/30 bg-accent-bg' : 'border-line bg-surface-2'
+                      }`}
+                    >
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h3 className="text-base font-semibold text-white">{displayTaxYear(year.label)}</h3>
+                          {isActive && <Badge tone="accent">Active</Badge>}
+                          {Number(year.label.slice(0, 4)) === currentStart && <Badge>Current</Badge>}
+                        </div>
+                        <p className="mt-0.5 text-sm whitespace-nowrap text-muted">
+                          {formatDisplayDate(year.startDate)} – {formatDisplayDate(year.endDate)}
+                        </p>
                       </div>
-                      <p className="mt-1 text-sm text-muted">
-                        {formatDisplayDate(year.startDate)} – {formatDisplayDate(year.endDate)} · {year.incomeCount} income ·{' '}
-                        {year.expenseCount} expenses · {year.documentCount} documents
+                      <div className="flex gap-2">
+                        {!isActive && (
+                          <Button onClick={() => setActive.mutate(year.id)} disabled={setActive.isPending}>
+                            <CircleCheck className="size-4" aria-hidden />
+                            Make active
+                          </Button>
+                        )}
+                        {canEdit && (
+                          <Button variant="softDanger" onClick={() => setToDelete(year)}>
+                            <Trash2 className="size-4" aria-hidden />
+                            Delete
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                    <div className="px-4 py-4 sm:px-5">
+                      <p className="text-sm text-muted">
+                        {year.incomeCount} income · {year.expenseCount} expenses · {year.documentCount} documents
                       </p>
                       <YearMethod
                         year={year}
@@ -175,20 +203,6 @@ export function TaxYearsSettings() {
                         <div className="mt-2">
                           <Alert>{setMtdExpenses.error.message}</Alert>
                         </div>
-                      )}
-                    </div>
-                    <div className="flex gap-2">
-                      {!isActive && (
-                        <Button onClick={() => setActive.mutate(year.id)} disabled={setActive.isPending}>
-                          <CircleCheck className="size-4" aria-hidden />
-                          Make active
-                        </Button>
-                      )}
-                      {canEdit && (
-                        <Button variant="softDanger" onClick={() => setToDelete(year)}>
-                          <Trash2 className="size-4" aria-hidden />
-                          Delete
-                        </Button>
                       )}
                     </div>
                   </li>
