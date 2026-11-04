@@ -20,7 +20,7 @@ import { BackLink, ChangedElsewhere, CopiedFrom, EscapeToCancel, dateInYear, dup
 import { NoTaxYear } from '../components/NoTaxYear';
 import { PageBody, PageHeader } from '../components/PageHeader';
 import { DateInput } from '../components/DateInput';
-import { DocumentField, PaymentMethodPicker } from '../components/transactions';
+import { DocumentField, PaymentMethodSelect } from '../components/transactions';
 import { SubmittedFiguresNotice } from '../components/SubmittedFiguresNotice';
 import { Alert, Button, Card, CardHeader, Field, IconButton, Spinner } from '../components/ui';
 import { ApiError, transactionForm } from '../lib/api';
@@ -309,27 +309,8 @@ export function ExpenseForm() {
               <Field label="Order number" htmlFor="orderNumber" hint="Optional">
                 <input id="orderNumber" className="field" {...register('orderNumber', { maxLength: 100 })} />
               </Field>
-              <Field
-                label="Payment method"
-                htmlFor="paymentMethod"
-                error={errors.paymentMethod?.message}
-                className="sm:col-span-2"
-              >
-                <Controller
-                  control={control}
-                  name="paymentMethod"
-                  rules={{ required: 'Choose a payment method' }}
-                  render={({ field }) => (
-                    <PaymentMethodPicker
-                      id="paymentMethod"
-                      value={field.value}
-                      onChange={field.onChange}
-                      onBlur={field.onBlur}
-                      ref={field.ref}
-                      invalid={!!errors.paymentMethod}
-                    />
-                  )}
-                />
+              <Field label="Payment method" htmlFor="paymentMethod" error={errors.paymentMethod?.message}>
+                <PaymentMethodSelect registration={register('paymentMethod', { required: 'Choose a payment method' })} />
               </Field>
             </div>
           </Card>
