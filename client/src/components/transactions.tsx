@@ -13,6 +13,8 @@ import {
   CreditCard,
   Download,
   Eye,
+  FileBraces,
+  FileSpreadsheet,
   FileText,
   Paperclip,
   Pencil,
@@ -265,16 +267,134 @@ function IconLink({ to, label, children }: { to: string; label: string; children
   );
 }
 
-export function ExportCsvButton({ href }: { href: string }) {
+export type ExportFormat = 'csv' | 'json';
+
+const EXPORT_FORMATS: { format: ExportFormat; label: string; hint: string; icon: LucideIcon }[] = [
+  { format: 'csv', label: 'CSV', hint: 'For a spreadsheet', icon: FileSpreadsheet },
+  { format: 'json', label: 'JSON', hint: 'Full detail, for other software', icon: FileBraces },
+];
+
+/**
+ * The Export button: a menu of the formats to download, each a link to `href(format)`.
+ * Drawn over the page, right-aligned under the button (or above it near the bottom
+ * of the window), and closed by a click elsewhere, Esc, Tab or scrolling.
+ */
+export function ExportMenu({ href }: { href: (format: ExportFormat) => string }) {
+  const [anchor, setAnchor] = useState<DOMRect | null>(null);
+  const [position, setPosition] = useState<{ top: number; left: number } | null>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const open = () => setAnchor(buttonRef.current!.getBoundingClientRect());
+  const close = (refocus = false) => {
+    setAnchor(null);
+    setPosition(null);
+    if (refocus) buttonRef.current?.focus();
+  };
+
+  useLayoutEffect(() => {
+    const menu = menuRef.current;
+    if (!anchor || !menu) return;
+    const gap = 4;
+    const margin = 8;
+    const below = anchor.bottom + gap + menu.offsetHeight <= window.innerHeight - margin;
+    setPosition({
+      top: below ? anchor.bottom + gap : Math.max(margin, anchor.top - gap - menu.offsetHeight),
+      left: Math.max(margin, Math.min(anchor.right - menu.offsetWidth, window.innerWidth - margin - menu.offsetWidth)),
+    });
+  }, [anchor]);
+
+  // Once it's placed (and visible), start keyboard users on the first format.
+  const placed = position !== null;
+  useEffect(() => {
+    if (placed) menuRef.current?.querySelector<HTMLElement>('[role=menuitem]')?.focus({ preventScroll: true });
+  }, [placed]);
+
+  useEffect(() => {
+    if (!anchor) return;
+    const onPointer = (e: PointerEvent) => {
+      const target = e.target as Node;
+      if (!menuRef.current?.contains(target) && !buttonRef.current?.contains(target)) dismissWithoutClicking(e, () => close());
+    };
+    const onKey = (e: KeyboardEvent) => {
+      const items = [...(menuRef.current?.querySelectorAll<HTMLElement>('[role=menuitem]') ?? [])];
+      const at = items.indexOf(document.activeElement as HTMLElement);
+      const focus = (i: number) => items[(i + items.length) % items.length]?.focus({ preventScroll: true });
+      if (e.key === 'Escape' || e.key === 'Tab') {
+        // Escape would also leave a form (EscapeToCancel) unless handled here.
+        if (e.key === 'Escape') e.preventDefault();
+        close(e.key === 'Escape');
+      } else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        focus(at + (e.key === 'ArrowDown' ? 1 : -1));
+      } else if (e.key === 'Home' || e.key === 'End') {
+        e.preventDefault();
+        focus(e.key === 'Home' ? 0 : items.length - 1);
+      }
+    };
+    const onMove = () => close();
+    document.addEventListener('pointerdown', onPointer, true);
+    document.addEventListener('keydown', onKey);
+    window.addEventListener('scroll', onMove, true);
+    window.addEventListener('resize', onMove);
+    return () => {
+      document.removeEventListener('pointerdown', onPointer, true);
+      document.removeEventListener('keydown', onKey);
+      window.removeEventListener('scroll', onMove, true);
+      window.removeEventListener('resize', onMove);
+    };
+  }, [anchor]);
+
   return (
-    <a
-      href={href}
-      download
-      className="inline-flex items-center gap-2 rounded-lg border border-line-strong bg-surface-2 px-3.5 py-2 text-sm font-medium whitespace-nowrap text-ink transition-colors hover:border-accent-soft/60 hover:text-white"
-    >
-      <Download className="size-4" aria-hidden />
-      Export CSV
-    </a>
+    <>
+      <button
+        ref={buttonRef}
+        type="button"
+        aria-haspopup="menu"
+        aria-expanded={anchor !== null}
+        onClick={() => (anchor ? close() : open())}
+        onKeyDown={(e) => {
+          if (!anchor && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
+            e.preventDefault();
+            open();
+          }
+        }}
+        className={`inline-flex items-center gap-2 rounded-lg border bg-surface-2 px-3.5 py-2 text-sm font-medium whitespace-nowrap text-ink transition-colors hover:border-accent-soft/60 hover:text-white ${
+          anchor ? 'border-accent-soft/60 text-white' : 'border-line-strong'
+        }`}
+      >
+        <Download className="size-4" aria-hidden />
+        Export
+        <ChevronDown className={`size-4 text-muted transition-transform ${anchor ? 'rotate-180' : ''}`} aria-hidden />
+      </button>
+      {anchor &&
+        createPortal(
+          <div
+            ref={menuRef}
+            role="menu"
+            aria-label="Export as"
+            style={{ position: 'fixed', top: position?.top ?? anchor.bottom + 4, left: position?.left ?? anchor.left }}
+            className={`z-50 w-max min-w-56 rounded-lg border border-line-strong bg-surface p-1 shadow-2xl ${position ? '' : 'invisible'}`}
+          >
+            {EXPORT_FORMATS.map(({ format, label, hint, icon: Icon }) => (
+              <a
+                key={format}
+                role="menuitem"
+                href={href(format)}
+                download
+                onClick={() => close(true)}
+                className="flex items-center gap-2.5 rounded-md py-2 pr-3 pl-2.5 text-sm text-ink outline-none hover:bg-surface-2 focus-visible:bg-surface-2"
+              >
+                <Icon className="size-4 shrink-0 text-accent-soft" aria-hidden />
+                <span className="flex flex-col">
+                  <span className="font-medium">{label}</span>
+                  <span className="text-xs text-muted">{hint}</span>
+                </span>
+              </a>
+            ))}
+          </div>,
+          document.body,
+        )}
+    </>
   );
 }
 

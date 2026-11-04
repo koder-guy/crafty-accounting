@@ -18,7 +18,7 @@ import {
 } from '@crafty/shared';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { MileageCheckAlert } from '../../components/MileageCheckAlert';
-import { ExportCsvButton } from '../../components/transactions';
+import { ExportMenu } from '../../components/transactions';
 import { DateInput } from '../../components/DateInput';
 import { ChangedElsewhere, dateInYear, duplicateDate, recordedBy, yearRangeHint } from '../../components/FormShell';
 import { NoTaxYear } from '../../components/NoTaxYear';
@@ -208,7 +208,7 @@ export function Mileage() {
             taxYear &&
             data &&
             data.trips.length > 0 && (
-              <ExportCsvButton href={`/api/mileage/export.csv?taxYearId=${taxYear.id}`} />
+              <ExportMenu href={(format) => `/api/mileage/export.${format}?taxYearId=${taxYear.id}`} />
             )
           }
         />

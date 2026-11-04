@@ -26,6 +26,7 @@ import {
 } from '@crafty/shared';
 import type { AppContext } from '../context';
 import { toCsv } from '../csv';
+import { sendJsonExport } from '../jsonExport';
 import type { Db } from '../db';
 import { HttpError, parseId, parseWith } from '../http';
 import { getTaxYear, yearEntries } from '../repo';
@@ -227,6 +228,29 @@ export function mtdRouter(ctx: AppContext): Router {
         : mtdCsv(q.period, q.startDate, q.endDate, expenses);
     const label = basis === 'cumulative' ? 'year-to-date' : 'quarter-only';
     res.attachment(`crafty-mtd-${taxYear.label}-Q${quarter}-${label}.csv`).type('text/csv').send(csv);
+  });
+
+  /** The same figures as HMRC's own quarterly update body (so in pounds, unlike the other JSON exports). */
+  router.get('/quarters/:taxYearId/:quarter/export.json', (req, res) => {
+    const taxYear = getTaxYear(ctx.db, parseId(req.params.taxYearId));
+    if (!taxYear) throw new HttpError(404, 'Tax year not found');
+    const quarter = parseQuarter(req.params.quarter);
+    const { basis } = parseWith(exportSchema, req.query);
+    const quarters = quarterSummaries(ctx.db, taxYear, ctx.config.hmrc.environment);
+    const q = quarters[quarter - 1];
+    const expenses = mtdExpensesSent(taxYear, quarters);
+    const payload =
+      basis === 'cumulative'
+        ? mtdPayload(q.cumulative, taxYear.startDate, q.endDate, expenses)
+        : mtdPayload(q.period, q.startDate, q.endDate, expenses);
+    const label = basis === 'cumulative' ? 'year-to-date' : 'quarter-only';
+    sendJsonExport(res, `crafty-mtd-${taxYear.label}-Q${quarter}-${label}.json`, {
+      taxYear: taxYear.label,
+      quarter,
+      basis,
+      amountsIn: 'GBP',
+      payload,
+    });
   });
 
   router.put('/quarters/:taxYearId/:quarter/submission', (req, res) => {

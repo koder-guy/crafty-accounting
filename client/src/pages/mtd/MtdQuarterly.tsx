@@ -25,7 +25,7 @@ import {
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { NoTaxYear } from '../../components/NoTaxYear';
 import { SectionHeading } from '../../components/SectionLayout';
-import { ExportCsvButton } from '../../components/transactions';
+import { ExportMenu } from '../../components/transactions';
 import { DateInput } from '../../components/DateInput';
 import { Alert, Badge, Button, Card, CardHeader, Field, Spinner, type BadgeTone } from '../../components/ui';
 import {
@@ -557,7 +557,7 @@ export function MtdQuarterly() {
                   </>
                 ) : (
                   <>
-                    To keep a digital link, use <span className="text-ink">Export CSV</span> on the year-to-date figures and import
+                    To keep a digital link, use <span className="text-ink">Export → CSV</span> on the year-to-date figures and import
                     the file into your MTD bridging software, then record each submission here.
                     {hmrc?.configured && (
                       <>
@@ -663,7 +663,7 @@ export function MtdQuarterly() {
                     </span>
                   </span>
                 }
-                action={<ExportCsvButton href={`/api/mtd/quarters/${taxYear.id}/${q.quarter}/export.csv?basis=${view}`} />}
+                action={<ExportMenu href={(format) => `/api/mtd/quarters/${taxYear.id}/${q.quarter}/export.${format}?basis=${view}`} />}
               />
               <div className="px-5 pb-4 sm:px-6">
                 <div role="radiogroup" aria-label="Figures to show" className="inline-flex rounded-lg border border-line-strong bg-surface-2 p-1">

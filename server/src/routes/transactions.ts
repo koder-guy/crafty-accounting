@@ -17,6 +17,7 @@ import {
 } from '@crafty/shared';
 import type { AppContext } from '../context';
 import { toCsv } from '../csv';
+import { sendJsonExport } from '../jsonExport';
 import { createUploader, removeDocumentFile, saveWithDocuments, uploadedFiles } from '../documents';
 import { HttpError, parseId, parseWith, readPayload } from '../http';
 import { getCategory, getExpense, getIncome, getTaxYear, listExpenses, listIncomes, NEXT_UPDATED_AT } from '../repo';
@@ -94,7 +95,7 @@ function storeDocuments(
 
 const documentNames = (t: { documents: TransactionDocument[] }) => t.documents.map((d) => d.filename);
 
-const csvFilename = (kind: string, year: TaxYear | null) => `${kind}-${year?.label ?? 'export'}.csv`;
+const exportFilename = (kind: string, year: TaxYear | null, ext: 'csv' | 'json') => `${kind}-${year?.label ?? 'export'}.${ext}`;
 
 export function incomesRouter(ctx: AppContext): Router {
   const router = Router();
@@ -122,7 +123,28 @@ export function incomesRouter(ctx: AppContext): Router {
       ['Date', 'Description', 'Source', 'Reference', 'Category', 'HMRC code', 'Payment method', 'Amount (GBP)', 'Documents', 'Notes'],
       rows,
     );
-    res.attachment(csvFilename('income', getTaxYear(ctx.db, filters.taxYearId))).type('text/csv').send(csv);
+    res.attachment(exportFilename('income', getTaxYear(ctx.db, filters.taxYearId), 'csv')).type('text/csv').send(csv);
+  });
+
+  router.get('/export.json', (req, res) => {
+    const filters = parseWith(transactionFiltersSchema, req.query);
+    const year = getTaxYear(ctx.db, filters.taxYearId);
+    const incomes = listIncomes(ctx.db, filters).map((i) => ({
+      id: i.id,
+      date: i.date,
+      description: i.description,
+      source: i.source,
+      reference: i.reference,
+      category: i.categoryName,
+      hmrcCode: i.hmrcCode,
+      paymentMethod: i.paymentMethod,
+      amountPence: i.amountPence,
+      documents: documentNames(i),
+      notes: i.notes,
+      createdBy: i.createdBy,
+      updatedBy: i.updatedBy,
+    }));
+    sendJsonExport(res, exportFilename('income', year, 'json'), { taxYear: year?.label ?? null, incomes });
   });
 
   router.get('/:id', (req, res) => {
@@ -241,7 +263,35 @@ export function expensesRouter(ctx: AppContext): Router {
       ['Date', 'Payee', 'Invoice number', 'Order number', 'Payment method', 'Amount (GBP)', 'Disallowable (GBP)', 'Documents', 'Notes'],
       rows,
     );
-    res.attachment(csvFilename('expenses', getTaxYear(ctx.db, filters.taxYearId))).type('text/csv').send(csv);
+    res.attachment(exportFilename('expenses', getTaxYear(ctx.db, filters.taxYearId), 'csv')).type('text/csv').send(csv);
+  });
+
+  router.get('/export.json', (req, res) => {
+    const filters = parseWith(transactionFiltersSchema, req.query);
+    const year = getTaxYear(ctx.db, filters.taxYearId);
+    const expenses = listExpenses(ctx.db, filters).map((e) => ({
+      id: e.id,
+      date: e.date,
+      payee: e.payee,
+      invoiceNumber: e.invoiceNumber,
+      orderNumber: e.orderNumber,
+      paymentMethod: e.paymentMethod,
+      totalPence: e.totalPence,
+      allowablePence: e.totalPence - e.disallowablePence,
+      disallowablePence: e.disallowablePence,
+      lineItems: e.lineItems.map((li) => ({
+        description: li.description,
+        category: li.categoryName,
+        hmrcCode: li.hmrcCode,
+        amountPence: li.amountPence,
+        disallowable: li.disallowable,
+      })),
+      documents: documentNames(e),
+      notes: e.notes,
+      createdBy: e.createdBy,
+      updatedBy: e.updatedBy,
+    }));
+    sendJsonExport(res, exportFilename('expenses', year, 'json'), { taxYear: year?.label ?? null, expenses });
   });
 
   router.get('/:id', (req, res) => {

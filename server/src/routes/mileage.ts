@@ -10,6 +10,7 @@ import {
 } from '@crafty/shared';
 import type { AppContext } from '../context';
 import { toCsv } from '../csv';
+import { sendJsonExport } from '../jsonExport';
 import { HttpError, parseId, parseWith } from '../http';
 import { getMileageTrip, getTaxYear, listMileage, mileageCheck, NEXT_UPDATED_AT } from '../repo';
 import { checkTaxYearAndDate, checkUnchanged } from './transactions';
@@ -47,6 +48,25 @@ export function mileageRouter(ctx: AppContext): Router {
       .map((t) => [t.date, t.description, VEHICLE_LABELS[t.vehicle], tenthsToMiles(t.distanceTenths), penceToPounds(t.claimPence), t.notes]);
     const csv = toCsv(['Date', 'Journey', 'Vehicle', 'Miles', 'Claim (GBP)', 'Notes'], rows);
     res.attachment(`mileage-${year?.label ?? 'export'}.csv`).type('text/csv').send(csv);
+  });
+
+  router.get('/export.json', (req, res) => {
+    const { taxYearId } = parseWith(querySchema, req.query);
+    const year = getTaxYear(ctx.db, taxYearId);
+    const trips = listMileage(ctx.db, [taxYearId])
+      .reverse()
+      .map((t) => ({
+        id: t.id,
+        date: t.date,
+        journey: t.description,
+        vehicle: t.vehicle,
+        miles: t.distanceTenths / 10,
+        claimPence: t.claimPence,
+        notes: t.notes,
+        createdBy: t.createdBy,
+        updatedBy: t.updatedBy,
+      }));
+    sendJsonExport(res, `mileage-${year?.label ?? 'export'}.json`, { taxYear: year?.label ?? null, trips });
   });
 
   router.post('/', (req, res) => {

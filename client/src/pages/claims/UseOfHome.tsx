@@ -14,7 +14,7 @@ import { ChangedElsewhere, recordedBy } from '../../components/FormShell';
 import { NoTaxYear } from '../../components/NoTaxYear';
 import { SectionHeading } from '../../components/SectionLayout';
 import { SubmittedFiguresNotice } from '../../components/SubmittedFiguresNotice';
-import { ExportCsvButton } from '../../components/transactions';
+import { ExportMenu } from '../../components/transactions';
 import { Alert, Button, Card, CardHeader, Spinner } from '../../components/ui';
 import { useActiveTaxYear, useCanEdit, useSaveUseOfHome, useUseOfHome } from '../../lib/queries';
 import { ClaimStats, RatesUsed, Stat } from './ClaimStats';
@@ -187,7 +187,7 @@ export function UseOfHome() {
             taxYear &&
             data &&
             data.totals.hours > 0 && (
-              <ExportCsvButton href={`/api/use-of-home/export.csv?taxYearId=${taxYear.id}`} />
+              <ExportMenu href={(format) => `/api/use-of-home/export.${format}?taxYearId=${taxYear.id}`} />
             )
           }
         />

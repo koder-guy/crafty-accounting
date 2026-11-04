@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { penceToPounds, useOfHomeInputSchema } from '@crafty/shared';
 import type { AppContext } from '../context';
 import { toCsv } from '../csv';
+import { sendJsonExport } from '../jsonExport';
 import { HttpError, parseWith } from '../http';
 import { getTaxYear, getUseOfHome, nextTimestamp } from '../repo';
 
@@ -29,6 +30,16 @@ export function useOfHomeRouter(ctx: AppContext): Router {
       .map((m) => [m.startDate, m.endDate, m.hours, penceToPounds(m.claimPence)]);
     const csv = toCsv(['From', 'To', 'Hours', 'Claim (GBP)'], rows);
     res.attachment(`use-of-home-${taxYear.label}.csv`).type('text/csv').send(csv);
+  });
+
+  router.get('/export.json', (req, res) => {
+    const { taxYearId } = parseWith(querySchema, req.query);
+    const taxYear = getTaxYear(ctx.db, taxYearId);
+    if (!taxYear) throw new HttpError(404, 'Tax year not found');
+    const months = getUseOfHome(ctx.db, taxYear)
+      .months.filter((m) => m.hours > 0)
+      .map((m) => ({ from: m.startDate, to: m.endDate, hours: m.hours, claimPence: m.claimPence }));
+    sendJsonExport(res, `use-of-home-${taxYear.label}.json`, { taxYear: taxYear.label, months });
   });
 
   /** Replaces the year's hours in one go. */

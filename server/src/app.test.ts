@@ -319,6 +319,8 @@ describe('read-only people', () => {
     await viewer.get('/api/reports/breakdown').query({ from: '2025-04-06', to: '2026-04-05' }).expect(200);
     await viewer.get(`/api/incomes/${saved.id}`).expect(200);
     await viewer.get('/api/incomes/export.csv').query({ taxYearId: yearId }).expect(200);
+    await viewer.get('/api/incomes/export.json').query({ taxYearId: yearId }).expect(200);
+    await viewer.get('/api/expenses/export.json').query({ taxYearId: yearId }).expect(200);
     await viewer.get('/api/documents/payout.pdf').expect(200);
 
     const refused = [
@@ -728,6 +730,56 @@ describe('expenses', () => {
     expect(csv.text).not.toContain('Glass beads');
   });
 
+  it('exports transactions to JSON with their line items, in pence', async () => {
+    const yearId = await createYear();
+    await agent.post('/api/expenses').send(expense(yearId, { orderNumber: 'PO-9' })).expect(201);
+    await agent
+      .post('/api/expenses')
+      .send(expense(yearId, { date: '2025-06-01', payee: 'Glue Co', lineItems: [{ description: 'Glue', amountPence: 700, categoryId: cat('costOfGoods') }] }))
+      .expect(201);
+    const res = await agent.get('/api/expenses/export.json').query({ taxYearId: yearId }).expect(200);
+    expect(res.headers['content-type']).toContain('application/json');
+    expect(res.headers['content-disposition']).toContain('expenses-2025-26.json');
+    const body = JSON.parse(res.text);
+    expect(body.taxYear).toBe('2025-26');
+    expect(body.expenses.map((e: { payee: string }) => e.payee)).toEqual(['Glue Co', 'Bead World']);
+    const beads = body.expenses[1];
+    expect(beads).toMatchObject({
+      date: '2025-05-02',
+      payee: 'Bead World',
+      invoiceNumber: 'INV-100',
+      orderNumber: 'PO-9',
+      paymentMethod: 'card',
+      totalPence: 4550,
+      allowablePence: 3550,
+      disallowablePence: 1000,
+      documents: [],
+      createdBy: NAME,
+    });
+    expect(beads.lineItems).toEqual([
+      { description: 'Glass beads', category: expect.any(String), hmrcCode: 'costOfGoods', amountPence: 3000, disallowable: false },
+      { description: 'Postage', category: expect.any(String), hmrcCode: 'adminCosts', amountPence: 550, disallowable: false },
+      { description: 'Personal item', category: expect.any(String), hmrcCode: 'otherExpenses', amountPence: 1000, disallowable: true },
+    ]);
+    expect(body.expenses[0].lineItems).toHaveLength(1);
+
+    // Same filters as the list and the CSV.
+    const filtered = await agent.get('/api/expenses/export.json').query({ taxYearId: yearId, search: 'glue' }).expect(200);
+    expect(JSON.parse(filtered.text).expenses).toHaveLength(1);
+  });
+
+  it('exports income to JSON in pence', async () => {
+    const yearId = await createYear();
+    await agent.post('/api/incomes').send(income(yearId, { amountPence: 12345 })).expect(201);
+    const res = await agent.get('/api/incomes/export.json').query({ taxYearId: yearId }).expect(200);
+    expect(res.headers['content-disposition']).toContain('income-2025-26.json');
+    const body = JSON.parse(res.text);
+    expect(body.taxYear).toBe('2025-26');
+    expect(body.incomes).toHaveLength(1);
+    expect(body.incomes[0]).toMatchObject({ amountPence: 12345, hmrcCode: 'turnover', category: expect.any(String), documents: [] });
+    expect(body.incomes[0].date).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  });
+
   it('includes each transaction’s line items in the list', async () => {
     const yearId = await createYear();
     await agent.post('/api/expenses').send(expense(yearId)).expect(201);
@@ -797,6 +849,10 @@ describe('mileage', () => {
     expect(body.totals).toEqual({ distanceTenths: 400, claimPence: 1800, carDistanceTenths: 400 });
     const csv = (await agent.get('/api/mileage/export.csv').query({ taxYearId: yearId }).expect(200)).text;
     expect(csv).toContain('2025-06-14,Home to Abingdon Market and back,Car or van,40,18.00');
+    const json = JSON.parse((await agent.get('/api/mileage/export.json').query({ taxYearId: yearId }).expect(200)).text);
+    expect(json.trips).toEqual([
+      expect.objectContaining({ date: '2025-06-14', journey: 'Home to Abingdon Market and back', vehicle: 'car', miles: 40, claimPence: 1800 }),
+    ]);
 
     await agent.delete(`/api/mileage/${created.id}`).expect(204);
     expect((await agent.get('/api/mileage').query({ taxYearId: yearId })).body.trips).toHaveLength(0);
@@ -918,6 +974,13 @@ describe('use of home', () => {
       '2026-03-06,2026-04-05,10,0.00',
     ]);
     await agent.get('/api/use-of-home/export.csv').query({ taxYearId: 999 }).expect(404);
+    const json = await agent.get('/api/use-of-home/export.json').query({ taxYearId: yearId }).expect(200);
+    expect(json.headers['content-disposition']).toContain('use-of-home-2025-26.json');
+    expect(JSON.parse(json.text).months).toEqual([
+      { from: '2025-04-06', to: '2025-05-05', hours: 30, claimPence: 1000 },
+      { from: '2026-03-06', to: '2026-04-05', hours: 10, claimPence: 0 },
+    ]);
+    await agent.get('/api/use-of-home/export.json').query({ taxYearId: 999 }).expect(404);
   });
 
   it('refuses a save made from out-of-date hours', async () => {
@@ -1076,6 +1139,16 @@ describe('MTD quarters', () => {
 
     await agent.get(url).expect(400);
     await agent.get(`/api/mtd/quarters/${yearId}/5/export.csv`).query({ basis: 'period' }).expect(404);
+
+    const json = await agent.get(`/api/mtd/quarters/${yearId}/2/export.json`).query({ basis: 'cumulative' }).expect(200);
+    expect(json.headers['content-disposition']).toContain('crafty-mtd-2025-26-Q2-year-to-date.json');
+    const exported = JSON.parse(json.text);
+    expect(exported).toMatchObject({ taxYear: '2025-26', quarter: 2, basis: 'cumulative', amountsIn: 'GBP' });
+    expect(exported.payload.periodDates).toEqual({ periodStartDate: '2025-04-06', periodEndDate: '2025-10-05' });
+    expect(exported.payload.periodIncome.turnover).toBe(518.05);
+    expect(exported.payload.periodExpenses.otherExpenses).toBe(10);
+    expect(exported.payload.periodDisallowableExpenses.otherExpensesDisallowable).toBe(10);
+    await agent.get(`/api/mtd/quarters/${yearId}/2/export.json`).expect(400);
   });
 
   it('always saves entertainment and depreciation as disallowable', async () => {

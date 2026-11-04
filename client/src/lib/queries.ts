@@ -212,7 +212,8 @@ const filterQuery = (filters: TransactionFilters) =>
     maxPence: filters.maxPence,
   });
 
-export const exportCsvUrl = (kind: Kind, filters: TransactionFilters) => `/api/${kind}/export.csv${filterQuery(filters)}`;
+export const exportUrl = (kind: Kind, filters: TransactionFilters, format: 'csv' | 'json') =>
+  `/api/${kind}/export.${format}${filterQuery(filters)}`;
 
 export const useIncomes = (filters: TransactionFilters | null) =>
   useQuery({

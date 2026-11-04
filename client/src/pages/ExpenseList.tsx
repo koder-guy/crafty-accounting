@@ -9,7 +9,7 @@ import { PageBody, PageHeader } from '../components/PageHeader';
 import {
   attachedDocuments,
   DocDownloadLink,
-  ExportCsvButton,
+  ExportMenu,
   FilterBar,
   RowActions,
   SortTh,
@@ -18,7 +18,7 @@ import {
   useTransactionFilters,
 } from '../components/transactions';
 import { Alert, Badge, ButtonLink, Card, CardHeader, EmptyState, PaymentBadge, Spinner } from '../components/ui';
-import { exportCsvUrl, useActiveTaxYear, useCanEdit, useCategories, useDeleteTransaction, useExpandedExpenseRows, useExpenses } from '../lib/queries';
+import { exportUrl, useActiveTaxYear, useCanEdit, useCategories, useDeleteTransaction, useExpandedExpenseRows, useExpenses } from '../lib/queries';
 
 export function ExpenseList() {
   const { taxYear, isLoading: yearLoading } = useActiveTaxYear();
@@ -51,7 +51,7 @@ export function ExpenseList() {
         actions={
           taxYear && (
             <>
-              {filterState.filters && <ExportCsvButton href={exportCsvUrl('expenses', filterState.filters)} />}
+              {filterState.filters && <ExportMenu href={(format) => exportUrl('expenses', filterState.filters!, format)} />}
               {canEdit && (
                 <ButtonLink to="/expenses/new" variant="primary">
                   <Plus className="size-4" aria-hidden />
