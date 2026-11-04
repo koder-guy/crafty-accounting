@@ -144,13 +144,9 @@ export function TaxYearsSettings() {
                 return (
                   <li
                     key={year.id}
-                    className={`overflow-hidden rounded-xl border ${isActive ? 'border-accent/60' : 'border-line-strong'}`}
+                    className={`overflow-hidden rounded-xl border ${isActive ? 'border-accent' : 'border-line-strong'}`}
                   >
-                    <div
-                      className={`flex flex-col gap-3 border-b px-4 py-3 sm:flex-row sm:items-center sm:px-5 ${
-                        isActive ? 'border-accent/30 bg-accent-bg' : 'border-line bg-surface-2'
-                      }`}
-                    >
+                    <div className="flex flex-col gap-3 border-b border-line px-4 py-3 sm:flex-row sm:items-center sm:px-5">
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-2">
                           <h3 className="text-base font-semibold text-white">{displayTaxYear(year.label)}</h3>
