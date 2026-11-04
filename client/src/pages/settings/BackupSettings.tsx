@@ -136,10 +136,13 @@ export function BackupSettings() {
         onConfirm={restore}
       >
         <p>
-          Everything currently in the app will be replaced by <strong className="text-ink break-all">{file?.name}</strong>
+          Everything currently in the app will be replaced by <strong className="text-ink break-words">{file?.name}</strong>
           {isZip ? ', including all attached documents' : ''}.
         </p>
-        <p>Use Back up now first if you might need the current data.</p>
+        <p>
+          Saved backups in the backup folder stay as they are. Use Back up now first if you might need the current data, as it may
+          not be in a saved backup yet.
+        </p>
       </ConfirmDialog>
 
       <ConfirmDialog
