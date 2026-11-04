@@ -12,4 +12,4 @@ export * from './photos';
 export * from './types';
 
 export const APP_NAME = 'Crafty Accounting';
-export const APP_VERSION = '1.9.5';
+export const APP_VERSION = '1.9.6';
