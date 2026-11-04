@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { BellRing, RotateCcw, Upload } from 'lucide-react';
+import { BellRing, History, RotateCcw, Upload } from 'lucide-react';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { Alert, Button, Card, CardHeader, dismissedNoticeCount, showDismissedNotices } from '../../components/ui';
 import { api } from '../../lib/api';
@@ -72,7 +72,8 @@ export function BackupSettings() {
                 Choose backup file
               </label>
               <span className="min-w-0 flex-1 truncate text-sm text-muted">{file ? file.name : 'No file chosen'}</span>
-              <Button variant="danger" disabled={!file} onClick={() => setConfirming(true)}>
+              <Button variant="softDanger" disabled={!file} onClick={() => setConfirming(true)}>
+                <History className="size-4" aria-hidden />
                 Restore…
               </Button>
             </div>
