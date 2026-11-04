@@ -5,12 +5,10 @@ import type { AutoBackupStatus } from '@crafty/shared';
 
 type AutoBackupFile = AutoBackupStatus['backups'][number];
 import { ConfirmDialog } from '../../components/ConfirmDialog';
-import { Alert, Button, Card, CardHeader, Field, Spinner } from '../../components/ui';
+import { Alert, Button, buttonClasses, Card, CardHeader, Field, Spinner } from '../../components/ui';
 import { api } from '../../lib/api';
 import { useAutoBackup, useAutoBackupMutations } from '../../lib/queries';
 
-const ICON_BUTTON =
-  'inline-flex size-8 shrink-0 items-center justify-center rounded-md text-muted transition-colors hover:bg-accent-bg hover:text-accent-soft';
 
 const SHOWN_BACKUPS = 10;
 
@@ -153,37 +151,34 @@ export function AutoBackupCard() {
                   </h3>
                   <ul className="divide-y divide-line rounded-lg border border-line text-sm">
                     {status.backups.slice(0, SHOWN_BACKUPS).map((b) => (
-                      <li key={b.name} className="flex items-center justify-between gap-4 px-4 py-2.5">
-                        <div className="min-w-0">
-                          <div className="truncate text-ink">{dateTime(b.createdAt)}</div>
-                          <div className="truncate text-xs text-faint">
-                            {b.name} · {fileSize(b.sizeBytes)}
-                          </div>
+                      <li key={b.name} className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-2.5">
+                      <div className="min-w-0">
+                        <div className="truncate text-ink">{dateTime(b.createdAt)}</div>
+                        <div className="truncate text-xs text-faint">
+                          {b.name} · {fileSize(b.sizeBytes)}
                         </div>
-                        <div className="flex shrink-0 items-center gap-1">
-                          <a
-                            href={`/api/backup/auto/files/${encodeURIComponent(b.name)}`}
-                            download={b.name}
-                            aria-label={`Download ${b.name}`}
-                            title="Download"
-                            className={ICON_BUTTON}
-                          >
-                            <Download className="size-4" aria-hidden />
-                          </a>
-                          <button
-                            type="button"
-                            aria-label={`Restore ${b.name}`}
-                            title="Restore"
-                            className={ICON_BUTTON}
-                            onClick={() => {
-                              setRestored(null);
-                              setRestoring(b);
-                            }}
-                          >
-                            <History className="size-4" aria-hidden />
-                          </button>
-                        </div>
-                      </li>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-2">
+                        <a
+                          href={`/api/backup/auto/files/${encodeURIComponent(b.name)}`}
+                          download={b.name}
+                          className={buttonClasses()}
+                        >
+                          <Download className="size-4" aria-hidden />
+                          Download
+                        </a>
+                        <Button
+                          variant="softDanger"
+                          onClick={() => {
+                            setRestored(null);
+                            setRestoring(b);
+                          }}
+                        >
+                          <History className="size-4" aria-hidden />
+                          Restore…
+                        </Button>
+                      </div>
+                    </li>
                     ))}
                   </ul>
                   {status.backups.length > SHOWN_BACKUPS && (

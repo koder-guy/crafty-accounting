@@ -35,6 +35,9 @@ export function Button({
   );
 }
 
+/** A button's classes, for elements that can't be a Button or ButtonLink, such as a download link. */
+export const buttonClasses = (variant: Variant = 'secondary') => `${base} ${variants[variant]}`;
+
 export function ButtonLink({ variant = 'secondary', className = '', ...props }: LinkProps & { variant?: Variant }) {
   return <Link {...props} className={`${base} ${variants[variant]} ${className}`} />;
 }
