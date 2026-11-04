@@ -174,6 +174,10 @@ export function Mileage() {
   const latest = editing ? data?.trips.find((t) => t.id === editing.id) : undefined;
   const rates = mileageRatesFor(taxYear?.label ?? '');
   const carMilesLeft = data ? Math.max(0, rates.car.thresholdMiles * 10 - data.totals.carDistanceTenths) : 0;
+  // Miles per vehicle type, in VEHICLES order, for the types used this year.
+  const milesByVehicle = VEHICLES.map(
+    (v) => [v, (data?.trips ?? []).filter((t) => t.vehicle === v).reduce((sum, t) => sum + t.distanceTenths, 0)] as const,
+  ).filter(([, tenths]) => tenths > 0);
 
   return (
     <>
@@ -198,7 +202,18 @@ export function Mileage() {
           ) : (
             <>
               <ClaimStats>
-                <Stat label="Business miles" value={formatMiles(data.totals.distanceTenths)} sub={`${data.trips.length} trips this tax year`} />
+                <Stat label="Business miles" value={formatMiles(data.totals.distanceTenths)} sub={`${data.trips.length} trips this tax year`}>
+                  {milesByVehicle.length > 1 && (
+                    <dl className="mt-3 space-y-1 border-t border-line pt-2 text-xs">
+                      {milesByVehicle.map(([vehicle, tenths]) => (
+                        <div key={vehicle} className="flex justify-between gap-3">
+                          <dt className="text-muted">{VEHICLE_LABELS[vehicle]}</dt>
+                          <dd className="tabular font-semibold whitespace-nowrap text-ink">{formatMiles(tenths)}</dd>
+                        </div>
+                      ))}
+                    </dl>
+                  )}
+                </Stat>
                 <Stat label="Mileage claim" value={formatGBP(data.totals.claimPence)} sub="Counted as car, van and travel expenses" />
                 <Stat
                   label={`Left at ${rates.car.firstPence}p`}

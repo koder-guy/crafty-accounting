@@ -6,12 +6,13 @@ export function ClaimStats({ children }: { children: ReactNode }) {
   return <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">{children}</div>;
 }
 
-export function Stat({ label, value, sub }: { label: string; value: string; sub: string }) {
+export function Stat({ label, value, sub, children }: { label: string; value: string; sub: string; children?: ReactNode }) {
   return (
     <Card className="p-5">
       <div className="eyebrow">{label}</div>
       <div className="tabular mt-2 text-2xl font-bold text-white">{value}</div>
       <div className="mt-1 text-xs text-muted">{sub}</div>
+      {children}
     </Card>
   );
 }
