@@ -8,9 +8,7 @@ import {
   Car,
   FileSpreadsheet,
   ChartPie,
-  CircleArrowUp,
   Menu,
-  RefreshCw,
   Settings,
   TrendingUp,
   Wallet,
@@ -123,38 +121,6 @@ function NavItem({
   );
 }
 
-const NOTICE = 'mt-2.5 flex w-full items-center gap-2 rounded-lg border border-accent/40 bg-accent-bg px-3 py-2 text-left text-accent-soft';
-
-/** Under the version: a newer version to install, one being installed, or one already running. */
-function UpdateNotice() {
-  const { data } = useUpdates();
-  if (!data) return null;
-  if (data.currentVersion !== APP_VERSION) {
-    // The server was updated (perhaps from another browser) and this page is the old version.
-    return (
-      <button type="button" onClick={() => window.location.reload()} className={`${NOTICE} hover:border-accent-soft/70`}>
-        <RefreshCw className="size-4 shrink-0" aria-hidden />
-        <span>Updated to v{data.currentVersion}. Reload</span>
-      </button>
-    );
-  }
-  if (data.applying) {
-    return (
-      <NavLink to="/settings/updates" className={`${NOTICE} hover:border-accent-soft/70`}>
-        <RefreshCw className="size-4 shrink-0 animate-spin" aria-hidden />
-        <span>Updating to v{data.applying.version}…</span>
-      </NavLink>
-    );
-  }
-  if (!data.available) return null;
-  return (
-    <NavLink to="/settings/updates" className={`${NOTICE} hover:border-accent-soft/70`}>
-      <CircleArrowUp className="size-4 shrink-0" aria-hidden />
-      <span>Update available: v{data.available.version}</span>
-    </NavLink>
-  );
-}
-
 function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const { data } = useTaxYears();
   const active = data?.taxYears.find((y) => y.id === data.activeTaxYearId);
@@ -184,7 +150,6 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
       </nav>
       <div className="border-t border-line px-5 py-4 text-xs font-semibold text-ink/80">
         {APP_NAME} v{APP_VERSION}
-        <UpdateNotice />
       </div>
     </div>
   );
@@ -218,6 +183,8 @@ export function Layout() {
   const location = useLocation();
   useEffect(() => setMenuOpen(false), [location.pathname]);
   useLiveUpdates();
+  // Nothing shown, but a browser that started an update reloads once the new version answers.
+  useUpdates();
   useSectionFollowsYear();
 
   return (

@@ -190,7 +190,7 @@ export function startUpdateChecker(ctx: AppContext): () => void {
   const tick = async () => {
     const before = ctx.updates.status().available?.version;
     await ctx.updates.check();
-    // Only open browsers' sidebar notice depends on it.
+    // Open browsers' Settings → Updates pages depend on it; the bell has its own event.
     if (ctx.updates.status().available?.version !== before) ctx.liveUpdates.publish({ area: 'updates', by: APP_NAME }, null);
   };
   const first = setTimeout(() => void tick(), 60_000);

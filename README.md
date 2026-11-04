@@ -24,7 +24,7 @@ Self-hosted bookkeeping for UK sole traders on the cash basis. Keep your income 
 - **Backups**: daily automatic backups, each one downloadable or restorable in a click (see [Backups](#backups)).
 - Reports and the year-end summary print or save as PDF.
 - **Notifications**: a bell at the top right shows how many unread notifications you have: a new version to install, or the disk running low on space. Open one to go to the page that deals with it, or mark it read. Only editors get these two, since only they can act on them.
-- **Updates**: the app checks for new versions twice a day and says so at the bottom of the menu and under the bell. **Settings → Updates** lists what's changed and, for the Linux quick install, installs it in a click after saving a backup. For Docker it shows the command to run.
+- **Updates**: the app checks for new versions twice a day and says so under the bell. **Settings → Updates** lists what's changed and, for the Linux quick install, installs it in a click after saving a backup. For Docker it shows the command to run.
 
 ## Quick install (Linux server)
 

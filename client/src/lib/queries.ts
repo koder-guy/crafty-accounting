@@ -377,7 +377,7 @@ async function reloadWhenReady() {
 }
 
 /**
- * The server's update status. Refetched hourly for the sidebar notice, and every few seconds
+ * The server's update status. Refetched hourly, and every few seconds
  * during an update, through the restart (when requests fail for a while).
  */
 export const useUpdates = () => {
