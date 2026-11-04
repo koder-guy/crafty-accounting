@@ -151,6 +151,26 @@ Also in **Settings → Backup and Restore**:
 
 A restore is checked in a separate database before anything is replaced, and older backups are upgraded automatically. Backups don't include the people who can sign in, so a restore keeps them as they are.
 
+## Uninstalling
+
+This removes the app and everything it has saved: the books, documents, backups, settings and certificates. There's no undo, so download a backup first (**Settings → Backup and Restore**) if you might want the books again.
+
+**Linux quick install:** as root, run [`uninstall.sh`](uninstall.sh). It lists what it will remove and asks you to type `delete` first.
+
+```bash
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/koder-guy/crafty-accounting/main/uninstall.sh)"
+```
+
+It removes both services and the `crafty` account with its home folder. If `.env` moved `DATA_DIR` or `BACKUP_DIR` elsewhere, it removes those too (only the automatic backups from `BACKUP_DIR`). Give `CRAFTY_USER` if you installed with it.
+
+**Docker:** in the install's folder (`~/crafty-accounting` for the quick install), remove the containers and their volumes, then the folder and its `backups` (and `BACKUP_HOST_DIR`, if you moved them):
+
+```bash
+cd ~/crafty-accounting && docker compose down --volumes --rmi local && cd .. && rm -rf crafty-accounting
+```
+
+Then remove the trusted certificate ("Caddy Local Authority") from each device: on a Mac in Keychain Access → System, on an iPhone in **Settings → General → VPN & Device Management**.
+
 ## Making Tax Digital
 
 From the 2025/26 tax year, an MTD year goes to HMRC through bridging software. Export each quarter's figures as a CSV (or as JSON in HMRC's own update format), import them into your bridging software, submit them, then record the submission in the app. The CSV has a row of HMRC's field names and a row of values, always the same columns. Bridging tools each have their own import format, so you may need to map the columns. Disallowable amounts are in the expense columns and in their own, so don't add them all up.
