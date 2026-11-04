@@ -29,7 +29,7 @@ import { CompareYears } from './pages/reports/CompareYears';
 import { TaxEstimate } from './pages/reports/TaxEstimate';
 import { SelfAssessmentLayout } from './pages/selfAssessment/SelfAssessmentLayout';
 import { YearEndSummary } from './pages/selfAssessment/YearEndSummary';
-import { SettingsLayout } from './pages/settings/SettingsLayout';
+import { SettingsIndex, SettingsLayout } from './pages/settings/SettingsLayout';
 import { TaxYearsSettings } from './pages/settings/TaxYearsSettings';
 import { CustomCategories } from './pages/settings/CustomCategories';
 import { BackupSettings } from './pages/settings/BackupSettings';
@@ -118,7 +118,7 @@ function App() {
         </Route>
         <Route path="year-end" element={<Navigate to="/self-assessment/year-end" replace />} />
         <Route path="settings" element={<SettingsLayout />}>
-          <Route index element={<Navigate to="people" replace />} />
+          <Route index element={<SettingsIndex />} />
           <Route path="tax-years" element={<TaxYearsSettings />} />
           <Route path="categories" element={<CustomCategories />} />
           <Route path="people" element={<People />} />
