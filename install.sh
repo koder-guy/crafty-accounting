@@ -474,7 +474,13 @@ ENV_FILE="$DIR/.env"
 setting() { sed -n "s/^$1=//p" "$ENV_FILE" | tail -n 1; }
 PORT="$(setting PORT)"; PORT="${PORT:-3000}"
 HTTPS_PORT="$(setting HTTPS_PORT)"; HTTPS_PORT="${HTTPS_PORT:-443}"
-if [ "$HTTPS_PORT" = 443 ]; then URL="https://localhost"; else URL="https://localhost:$HTTPS_PORT"; fi
+# The address other devices browse to: the first in SITE_ADDRESS that isn't localhost.
+ADDRESS="$(setting SITE_ADDRESS | tr ',' '\n' | tr -d ' ' | grep -v '^localhost$' | grep . | head -n 1)"
+ADDRESS="${ADDRESS:-localhost}"
+case "$ADDRESS" in
+  *:[0-9]*) URL="https://$ADDRESS" ;;
+  *) if [ "$HTTPS_PORT" = 443 ]; then URL="https://$ADDRESS"; else URL="https://$ADDRESS:$HTTPS_PORT"; fi ;;
+esac
 SERVICES="crafty-accounting crafty-caddy"
 
 main_pid() { systemctl show -p MainPID --value "$1" 2>/dev/null; }
