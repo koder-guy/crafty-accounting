@@ -25,3 +25,22 @@
 		header_up X-Client-Port {http.request.remote.port}
 	}
 }
+
+# Any other address would otherwise get an empty page, which looks like a broken app.
+https:// {
+	tls {$TLS_ISSUER:internal}
+	header -Server
+	header Content-Type "text/plain; charset=utf-8"
+	respond 404 {
+		body "Crafty Accounting isn't set up for {http.request.host}.
+
+Add it to SITE_ADDRESS in the .env file next to docker-compose.yml (and set SITE_IP to it if it's an IP address), for example:
+
+SITE_ADDRESS=localhost, {http.request.host}
+SITE_IP={http.request.host}
+
+then run: docker compose up -d
+"
+		close
+	}
+}
