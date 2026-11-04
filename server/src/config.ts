@@ -8,6 +8,8 @@ export interface Config {
   /** Where automatic backups are written; ideally on a different disk. */
   backupDir: string;
   port: number;
+  /** Address to listen on; all of them unless set (127.0.0.1 behind the quick install's Caddy). */
+  host: string | undefined;
   /** Name and password for the first user, created when no users exist yet. */
   adminName: string;
   adminPassword: string | null;
@@ -46,6 +48,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     dataDir,
     backupDir: path.resolve(env.BACKUP_DIR || path.join(dataDir, 'backups')),
     port: Number(env.PORT ?? 3000),
+    host: env.HOST?.trim() || undefined,
     adminName: env.ADMIN_NAME?.trim() || 'Admin',
     adminPassword: env.ADMIN_PASSWORD || null,
     sessionSecret: env.SESSION_SECRET || persistedSecret(dataDir),

@@ -31,7 +31,7 @@ Self-hosted bookkeeping for UK sole traders on the cash basis. Keep your income 
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/koder-guy/crafty-accounting/main/install.sh)"
 ```
 
-[`install.sh`](install.sh) works on macOS and on Linux distributions such as Ubuntu, Debian and Fedora (Intel/AMD or ARM), and needs only `curl` and `tar`. It needs no administrator password: everything goes in `~/crafty-accounting`, including its own copy of Node 22. It starts the app and prints the addresses to open.
+[`install.sh`](install.sh) works on macOS and on Linux distributions such as Ubuntu, Debian and Fedora (Intel/AMD or ARM), and needs only `curl` and `tar`. It needs no administrator password: everything goes in `~/crafty-accounting`, including its own copy of Node 22 and of [Caddy](https://caddyserver.com) for HTTPS. It starts the app and prints the `https://` addresses to open.
 
 The app keeps running when the terminal closes, but doesn't start by itself after a restart:
 
@@ -43,7 +43,9 @@ The app keeps running when the terminal closes, but doesn't start by itself afte
 
 **Signing in for the first time:** use the username `Admin` and the password `admin`. You'll be asked to choose your own password before anything else; change your username and add other people in **Settings → People**.
 
-This serves plain HTTP, which is fine on a home network. For HTTPS, or on Alpine and other musl-based Linux, use Docker.
+**HTTPS:** the app is served through Caddy with a private certificate. Browsers warn about it until each device trusts `~/crafty-accounting/crafty-root.crt` once (see [HTTPS](#https)); the installer prints the command for a Mac. It uses ports 80 and 443 where it can. Linux only lets administrators use those, so there it normally uses 8080 and 8443, and the addresses end in `:8443` (choose with `CRAFTY_HTTP_PORT` and `CRAFTY_HTTPS_PORT`, or see [HTTPS](#https) to allow 80 and 443). For plain HTTP instead, set `CRAFTY_HTTPS=false` before `/bin/bash`; the same with `true` or `false` switches an existing install.
+
+On Alpine and other musl-based Linux, use Docker.
 
 ## Quick install with Docker
 
@@ -90,9 +92,9 @@ Caddy (`crafty-caddy`) provides HTTPS in front of the app (`crafty-accounting`).
 
 ### HTTPS
 
-`TLS_ISSUER` in `.env` chooses how Caddy gets its certificate. Run `docker compose up -d` after changing it.
+Both installs serve HTTPS through Caddy (the quick install unless it was set up with `CRAFTY_HTTPS=false`). `TLS_ISSUER` in `.env` chooses how Caddy gets its certificate. After changing it, or `SITE_ADDRESS`, run `~/crafty-accounting/crafty restart` (quick install) or `docker compose up -d` (Docker).
 
-**Home network (`TLS_ISSUER=internal`, the default).** Caddy creates its own certificate authority, which each device must trust once. Copy it out of the container:
+**Home network (`TLS_ISSUER=internal`, the default).** Caddy creates its own certificate authority, which each device must trust once. Both installers save it as `~/crafty-accounting/crafty-root.crt`. With Docker Compose by hand, copy it out of the container:
 
 ```bash
 docker compose cp caddy:/data/caddy/pki/authorities/local/root.crt ./crafty-root.crt
@@ -104,11 +106,17 @@ Then install `crafty-root.crt` on each device:
 - **iPhone/iPad:** install the profile in **Settings → General → VPN & Device Management**, then turn it on in **Settings → General → About → Certificate Trust Settings**.
 - **Android:** **Settings → Security → Encryption & credentials → Install a certificate → CA certificate**.
 
-The authority lasts 10 years and is kept in the `caddy-data` volume. Removing that volume creates a new one, which you'd have to trust again.
+The authority lasts 10 years. The quick install keeps it in `~/crafty-accounting/caddy/data`, Docker in the `caddy-data` volume; removing it creates a new one, which you'd have to trust again.
 
 **Public domain (`TLS_ISSUER=you@example.com`).** Point your domain at your home IP, forward ports 80 and 443 to the server, and set `SITE_ADDRESS` to the domain. Caddy then gets a Let's Encrypt certificate, with nothing to install on devices. Use strong passwords if the app can be reached from the internet.
 
 If ports 80 and 443 are taken, change `HTTP_PORT` and `HTTPS_PORT`; the address then needs the port, such as `https://crafty.local:8443`.
+
+On Linux, the quick install runs as a normal user, who can't use ports below 1024. To use 80 and 443 (needed for Let's Encrypt), allow them once as an administrator, then set `HTTP_PORT=80` and `HTTPS_PORT=443` in `.env` and run `~/crafty-accounting/crafty restart`:
+
+```bash
+echo 'net.ipv4.ip_unprivileged_port_start=80' | sudo tee /etc/sysctl.d/50-crafty-ports.conf && sudo sysctl --system
+```
 
 ## Configuration
 
@@ -118,13 +126,15 @@ Settings go in a `.env` file next to the app (the installers write one). Only in
 |---|---|---|
 | `ADMIN_NAME` / `ADMIN_PASSWORD` | `Admin` / `admin` | The first person's username and password, created when nobody exists yet; ignored after that. With the default password they must choose their own when they first sign in. |
 | `SESSION_SECRET` | generated | Signs the session cookie; one is generated and kept with the data if empty |
-| `PORT` | `3000` | Port the app listens on |
-| `SITE_ADDRESS` | `localhost` | Docker: address(es) for HTTPS, comma separated |
-| `SITE_IP` | `localhost` | Docker: the IP address in `SITE_ADDRESS` that browsers use, if any |
-| `TLS_ISSUER` | `internal` | Docker: `internal`, or your email address for Let's Encrypt |
-| `HTTP_PORT` / `HTTPS_PORT` | `80` / `443` | Docker: ports Caddy listens on |
+| `PORT` | `3000` | Port the app listens on (behind Caddy with HTTPS) |
+| `HOST` | all addresses | Address the app listens on; the quick install sets `127.0.0.1` with HTTPS, so only Caddy reaches it |
+| `HTTPS` | `true` on a new quick install | Quick install: run Caddy in front for HTTPS. Switch with the installer's `CRAFTY_HTTPS` rather than by hand. |
+| `SITE_ADDRESS` | `localhost` | HTTPS: address(es) you browse to, comma separated |
+| `SITE_IP` | `localhost` | HTTPS: the IP address in `SITE_ADDRESS` that browsers use, if any |
+| `TLS_ISSUER` | `internal` | HTTPS: `internal`, or your email address for Let's Encrypt |
+| `HTTP_PORT` / `HTTPS_PORT` | `80` / `443` | HTTPS: ports Caddy listens on (8080 / 8443 on Linux for the quick install) |
 | `MAX_UPLOAD_MB` | `20` | Largest document you can attach |
-| `COOKIE_SECURE` / `TRUST_PROXY` | `false` (`true` in Docker) | HTTPS-only cookie; trust the proxy's forwarded headers |
+| `COOKIE_SECURE` / `TRUST_PROXY` | `false` (`true` with HTTPS) | HTTPS-only cookie; trust the proxy's forwarded headers |
 | `DATA_DIR` | `./data` (`/data` in Docker) | Database and documents |
 | `BACKUP_HOST_DIR` | `./backups` | Docker: the folder on the server for automatic backups |
 | `BACKUP_DIR` | `DATA_DIR/backups` | Without Docker: where automatic backups go |

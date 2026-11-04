@@ -1,5 +1,5 @@
-# HTTPS front end for Crafty Accounting (used by docker-compose.yml).
-# Settings come from .env:
+# HTTPS front end for Crafty Accounting, used by docker-compose.yml and by the
+# quick install (install.sh) when HTTPS is on. Settings come from .env:
 #   SITE_ADDRESS  the address(es) you browse to, comma separated,
 #                 e.g. "crafty.local, 192.168.1.50" or "accounts.example.co.uk"
 #   TLS_ISSUER    "internal" for a private certificate from Caddy's own
@@ -7,11 +7,24 @@
 #                 to get a free Let's Encrypt certificate for a public domain.
 #   SITE_IP       the IP address in SITE_ADDRESS that browsers use, if any
 # Plain http:// requests are redirected to https:// automatically.
+#
+# The quick install also sets CADDY_HTTP_PORT (Caddy listens on it itself rather than
+# through Docker's port mapping), CRAFTY_OTHER_ADDRESSES (the catch-all below, with
+# the HTTPS port), CRAFTY_UPSTREAM (the app on this computer), and CRAFTY_ENV_PLACE and
+# CRAFTY_APPLY (where .env is and how to apply a change). Off port 443 it gives each
+# address in SITE_ADDRESS the port; https_port stays 443, as Caddy only puts the port
+# in its http->https redirect when it differs from https_port.
 
 {
 	# Browsers don't send an IP address as the server name, and Docker hides the
 	# address they connected to, so Caddy needs telling which certificate to use.
 	default_sni {$SITE_IP:localhost}
+	http_port {$CADDY_HTTP_PORT:80}
+	# Devices trust the certificate authority themselves (see "HTTPS" in the README);
+	# Caddy mustn't try to add it to this computer's trust store, which asks for a password.
+	skip_install_trust
+	# Nothing uses Caddy's admin API, and a second Caddy on the computer would clash over its port.
+	admin off
 }
 
 {$SITE_ADDRESS:localhost} {
@@ -20,26 +33,26 @@
 	@compressible not path /api/events
 	encode @compressible zstd gzip
 	header -Server
-	reverse_proxy crafty-accounting:3000 {
+	reverse_proxy {$CRAFTY_UPSTREAM:crafty-accounting:3000} {
 		# The browser's port, for HMRC's fraud prevention headers.
 		header_up X-Client-Port {http.request.remote.port}
 	}
 }
 
 # Any other address would otherwise get an empty page, which looks like a broken app.
-https:// {
+{$CRAFTY_OTHER_ADDRESSES:https://} {
 	tls {$TLS_ISSUER:internal}
 	header -Server
 	header Content-Type "text/plain; charset=utf-8"
 	respond 404 {
 		body "Crafty Accounting isn't set up for {http.request.host}.
 
-Add it to SITE_ADDRESS in the .env file next to docker-compose.yml (and set SITE_IP to it if it's an IP address), for example:
+Add it to SITE_ADDRESS in the .env file {$CRAFTY_ENV_PLACE:next to docker-compose.yml} (and set SITE_IP to it if it's an IP address), for example:
 
 SITE_ADDRESS=localhost, {http.request.host}
 SITE_IP={http.request.host}
 
-then run: docker compose up -d
+then run: {$CRAFTY_APPLY:docker compose up -d}
 "
 		close
 	}

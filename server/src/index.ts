@@ -12,10 +12,13 @@ const app = createApp(ctx);
 const stopScheduler = startAutoBackupScheduler(ctx);
 const stopUpdateChecker = startUpdateChecker(ctx);
 
-const server = app.listen(config.port, () => {
-  console.log(`${APP_NAME} v${APP_VERSION} listening on port ${config.port} (data: ${config.dataDir})`);
+const listening = () => {
+  const where = config.host ? `${config.host}:${config.port}` : `port ${config.port}`;
+  console.log(`${APP_NAME} v${APP_VERSION} listening on ${where} (data: ${config.dataDir})`);
   if (!config.clientDist) console.log('Client build not found; serving the API only.');
-});
+};
+// Without a host, Node picks all addresses (IPv6 and IPv4 where it can).
+const server = config.host ? app.listen(config.port, config.host, listening) : app.listen(config.port, listening);
 
 const shutdown = () => {
   stopScheduler();
