@@ -610,10 +610,15 @@ export function TransactionCard({
   );
 }
 
-export function DocIndicator({ documents }: { documents: TransactionDocument[] }) {
+/** A paperclip showing a transaction has documents: just a sign, not a control. `muted` for grey. */
+export function DocIndicator({ documents, muted = false }: { documents: TransactionDocument[]; muted?: boolean }) {
   if (documents.length === 0) return null;
   const label = documents.length === 1 ? `Document: ${documents[0].filename}` : `${documents.length} documents`;
-  return <Paperclip className="inline size-3.5 shrink-0 text-accent-soft" aria-label={label} />;
+  return (
+    <Paperclip className={`inline size-3.5 shrink-0 ${muted ? 'text-muted' : 'text-accent-soft'}`} role="img" aria-label={label}>
+      <title>{label}</title>
+    </Paperclip>
+  );
 }
 
 // Same box and hover as a row's action icons; the negative margin keeps the row height unchanged.
