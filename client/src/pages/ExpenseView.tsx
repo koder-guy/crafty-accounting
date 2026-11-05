@@ -5,7 +5,7 @@ import { displayTaxYear, formatDisplayDate, formatGBP } from '@crafty/shared';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { SubmittedFiguresNotice } from '../components/SubmittedFiguresNotice';
 import { BackLink, recordedBy } from '../components/FormShell';
-import { attachedDocuments, DocumentLinks } from '../components/transactions';
+import { attachedDocuments, DocumentLinks, tableUrl } from '../components/transactions';
 import { PageBody, PageHeader } from '../components/PageHeader';
 import { Alert, Badge, Button, ButtonLink, Card, CardHeader, DetailRow, PaymentBadge, Spinner } from '../components/ui';
 import { useCanEdit, useDeleteTransaction, useExpense, useTaxYears } from '../lib/queries';
@@ -46,7 +46,7 @@ export function ExpenseView() {
         }
       />
       <PageBody>
-        <BackLink to="/expenses">All expenses</BackLink>
+        <BackLink to={tableUrl('/expenses')}>All expenses</BackLink>
         {isLoading ? (
           <Spinner />
         ) : error || !expense ? (
@@ -130,7 +130,7 @@ export function ExpenseView() {
         onClose={() => setConfirming(false)}
         onConfirm={async () => {
           await remove.mutateAsync(id);
-          navigate('/expenses');
+          navigate(tableUrl('/expenses'));
         }}
       >
         <p>

@@ -1,8 +1,9 @@
-import { Fragment, useState } from 'react';
+import { Fragment, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { ArrowUpRight, ChevronRight, CircleSlash, Plus } from 'lucide-react';
 import { formatDisplayDate, formatGBP, shortCategoryName, type Expense, type ExpenseWithLineItems } from '@crafty/shared';
 import { ConfirmDialog } from '../components/ConfirmDialog';
+import { Pagination, usePagination } from '../components/Pagination';
 import { ImportButton } from '../components/ImportTransactions';
 import { SubmittedFiguresNotice } from '../components/SubmittedFiguresNotice';
 import { NoTaxYear } from '../components/NoTaxYear';
@@ -32,7 +33,7 @@ export function ExpenseList() {
   const [toDelete, setToDelete] = useState<Expense | null>(null);
   const navigate = useNavigate();
 
-  const { sorted, sort, toggle } = useSort(
+  const { sorted, sort, toggle: toggleSort } = useSort(
     data,
     {
       date: (r) => `${r.date}-${String(r.id).padStart(8, '0')}`,
@@ -44,6 +45,14 @@ export function ExpenseList() {
     'date',
     'expenses',
   );
+  const tableTop = useRef<HTMLElement>(null);
+  const pagination = usePagination(sorted, tableTop);
+  const { pageRows } = pagination;
+  // A new order starts again from the first page.
+  const toggle = (key: Parameters<typeof toggleSort>[0]) => {
+    toggleSort(key);
+    pagination.setPage(1, false);
+  };
   const total = (data ?? []).reduce((acc, r) => acc + r.totalPence, 0);
 
   return (
@@ -71,7 +80,7 @@ export function ExpenseList() {
         ) : !taxYear ? (
           <NoTaxYear />
         ) : (
-          <Card>
+          <Card ref={tableTop}>
             <CardHeader
               icon={<ArrowUpRight className="size-5 text-out-soft" />}
               title="Expenses paid"
@@ -98,7 +107,7 @@ export function ExpenseList() {
             ) : (
               <>
               <ul className="divide-y divide-line border-t border-line sm:hidden">
-                {sorted.map((row) => (
+                {pageRows.map((row) => (
                   <TransactionCard
                     key={row.id}
                     to={`/expenses/${row.id}`}
@@ -129,7 +138,7 @@ export function ExpenseList() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-line">
-                    {sorted.map((row) => {
+                    {pageRows.map((row) => {
                       const open = isExpanded(row.id);
                       return (
                         <Fragment key={row.id}>
@@ -201,6 +210,7 @@ export function ExpenseList() {
                   </tbody>
                 </table>
               </div>
+              <Pagination pagination={pagination} />
               </>
             )}
           </Card>

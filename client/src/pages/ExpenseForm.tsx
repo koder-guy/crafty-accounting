@@ -20,7 +20,7 @@ import { BackLink, ChangedElsewhere, CopiedFrom, dateInYear, duplicateDate, useL
 import { NoTaxYear } from '../components/NoTaxYear';
 import { PageBody, PageHeader } from '../components/PageHeader';
 import { DateInput } from '../components/DateInput';
-import { DocumentField, PaymentMethodPicker } from '../components/transactions';
+import { DocumentField, PaymentMethodPicker, tableUrl } from '../components/transactions';
 import { SubmittedFiguresNotice } from '../components/SubmittedFiguresNotice';
 import { Alert, Button, Card, CardHeader, Field, IconButton, Spinner } from '../components/ui';
 import { ApiError, transactionForm } from '../lib/api';
@@ -199,7 +199,7 @@ export function ExpenseForm() {
     save.mutate(
       { id: id ?? undefined, form: transactionForm(payload, files) },
       {
-        onSuccess: () => leave('/expenses'),
+        onSuccess: () => leave(tableUrl('/expenses')),
         onError: (err) => {
           // Someone else saved first: fetch their version so the form can offer it.
           if (err instanceof ApiError && err.status === 409) refetchExisting();
@@ -212,7 +212,7 @@ export function ExpenseForm() {
   });
 
   const title = id ? 'Edit expense' : copyId ? 'Duplicate expense' : 'Add expense';
-  const backTo = id ? `/expenses/${id}` : copyId ? `/expenses/${copyId}` : '/expenses';
+  const backTo = id ? `/expenses/${id}` : copyId ? `/expenses/${copyId}` : tableUrl('/expenses');
   const { guard, leave } = useLeaveGuard({
     dirty: isDirty || files.length > 0 || removeIds.length > 0,
     busy: save.isPending || preparingPhoto,

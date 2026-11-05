@@ -1,4 +1,4 @@
-import { useState, type ButtonHTMLAttributes, type ReactNode } from 'react';
+import { useState, type ButtonHTMLAttributes, type ReactNode, type Ref } from 'react';
 import { Link, type LinkProps } from 'react-router';
 import { CircleCheck, Info, LoaderCircle, TriangleAlert, X } from 'lucide-react';
 import { PAYMENT_METHOD_LABELS, type PaymentMethod } from '@crafty/shared';
@@ -64,8 +64,12 @@ export function IconButton({
   );
 }
 
-export function Card({ className = '', children }: { className?: string; children: ReactNode }) {
-  return <section className={`card ${className}`}>{children}</section>;
+export function Card({ className = '', ref, children }: { className?: string; ref?: Ref<HTMLElement>; children: ReactNode }) {
+  return (
+    <section ref={ref} className={`card ${className}`}>
+      {children}
+    </section>
+  );
 }
 
 export function CardHeader({ icon, title, action }: { icon?: ReactNode; title: ReactNode; action?: ReactNode }) {

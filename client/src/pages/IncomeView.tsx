@@ -5,7 +5,7 @@ import { displayTaxYear, formatDisplayDate, formatGBP } from '@crafty/shared';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { SubmittedFiguresNotice } from '../components/SubmittedFiguresNotice';
 import { BackLink, recordedBy } from '../components/FormShell';
-import { attachedDocuments, DocumentLinks } from '../components/transactions';
+import { attachedDocuments, DocumentLinks, tableUrl } from '../components/transactions';
 import { PageBody, PageHeader } from '../components/PageHeader';
 import { Alert, Button, ButtonLink, Card, DetailRow, PaymentBadge, Spinner } from '../components/ui';
 import { useCanEdit, useDeleteTransaction, useIncome, useTaxYears } from '../lib/queries';
@@ -46,7 +46,7 @@ export function IncomeView() {
         }
       />
       <PageBody>
-        <BackLink to="/income">All income</BackLink>
+        <BackLink to={tableUrl('/income')}>All income</BackLink>
         {isLoading ? (
           <Spinner />
         ) : error || !income ? (
@@ -87,7 +87,7 @@ export function IncomeView() {
         onClose={() => setConfirming(false)}
         onConfirm={async () => {
           await remove.mutateAsync(id);
-          navigate('/income');
+          navigate(tableUrl('/income'));
         }}
       >
         <p>

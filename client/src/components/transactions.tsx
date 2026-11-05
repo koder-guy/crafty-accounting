@@ -1,7 +1,7 @@
 // Building blocks shared by the Income and Expenses pages.
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type DragEvent as ReactDragEvent, type ReactNode, type Ref, type RefObject } from 'react';
 import { createPortal } from 'react-dom';
-import { Link, useSearchParams } from 'react-router';
+import { Link, useLocation, useSearchParams } from 'react-router';
 import {
   ArrowLeftRight,
   Banknote,
@@ -48,8 +48,30 @@ import { IconButton, PaymentBadge, SOFT_DANGER } from './ui';
 
 const FILTER_KEYS = ['search', 'taxMonth', 'categoryId', 'paymentMethod'] as const;
 
+const TABLE_SEARCH_PREFIX = 'crafty.tableSearch.';
+
+/**
+ * The Income or Expenses table as it was last left in this tab (filters and page),
+ * for links and saves that go back to it.
+ */
+export function tableUrl(path: '/income' | '/expenses'): string {
+  try {
+    return path + (sessionStorage.getItem(TABLE_SEARCH_PREFIX + path) ?? '');
+  } catch {
+    return path;
+  }
+}
+
 export function useTransactionFilters(taxYear: TaxYear | null) {
   const [params, setParams] = useSearchParams();
+  const location = useLocation();
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(TABLE_SEARCH_PREFIX + location.pathname, location.search);
+    } catch {
+      // Blocked storage: going back opens the table unfiltered.
+    }
+  }, [location.pathname, location.search]);
   const get = (key: string) => params.get(key) ?? '';
   const startYear = taxYear && startYearFromLabel(taxYear.label);
   const months = useMemo(() => (startYear ? taxMonths(startYear) : []), [startYear]);
@@ -72,9 +94,13 @@ export function useTransactionFilters(taxYear: TaxYear | null) {
   const set = (key: (typeof FILTER_KEYS)[number], value: string) =>
     setParams(
       (prev) => {
+        // Nothing changed (such as the search box settling on load): keep the page too.
+        if ((prev.get(key) ?? '') === value) return prev;
         const next = new URLSearchParams(prev);
         if (value) next.set(key, value);
         else next.delete(key);
+        // A different set of rows starts again from its first page.
+        next.delete('page');
         return next;
       },
       { replace: true },

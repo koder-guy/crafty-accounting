@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { ArrowDownRight, Plus } from 'lucide-react';
 import { formatDisplayDate, formatGBP, shortCategoryName, type Income } from '@crafty/shared';
 import { ConfirmDialog } from '../components/ConfirmDialog';
+import { Pagination, usePagination } from '../components/Pagination';
 import { ImportButton } from '../components/ImportTransactions';
 import { SubmittedFiguresNotice } from '../components/SubmittedFiguresNotice';
 import { NoTaxYear } from '../components/NoTaxYear';
@@ -31,7 +32,7 @@ export function IncomeList() {
   const [toDelete, setToDelete] = useState<Income | null>(null);
   const navigate = useNavigate();
 
-  const { sorted, sort, toggle } = useSort(
+  const { sorted, sort, toggle: toggleSort } = useSort(
     data,
     {
       date: (r) => `${r.date}-${String(r.id).padStart(8, '0')}`,
@@ -43,6 +44,14 @@ export function IncomeList() {
     'date',
     'incomes',
   );
+  const tableTop = useRef<HTMLElement>(null);
+  const pagination = usePagination(sorted, tableTop);
+  const { pageRows } = pagination;
+  // A new order starts again from the first page.
+  const toggle = (key: Parameters<typeof toggleSort>[0]) => {
+    toggleSort(key);
+    pagination.setPage(1, false);
+  };
   const total = (data ?? []).reduce((acc, r) => acc + r.amountPence, 0);
 
   return (
@@ -70,7 +79,7 @@ export function IncomeList() {
         ) : !taxYear ? (
           <NoTaxYear />
         ) : (
-          <Card>
+          <Card ref={tableTop}>
             <CardHeader
               icon={<ArrowDownRight className="size-5 text-in-soft" />}
               title="Income received"
@@ -97,7 +106,7 @@ export function IncomeList() {
             ) : (
               <>
               <ul className="divide-y divide-line border-t border-line sm:hidden">
-                {sorted.map((row) => (
+                {pageRows.map((row) => (
                   <TransactionCard
                     key={row.id}
                     to={`/income/${row.id}`}
@@ -125,7 +134,7 @@ export function IncomeList() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-line">
-                    {sorted.map((row) => (
+                    {pageRows.map((row) => (
                       <tr
                         key={row.id}
                         className="cursor-pointer transition-colors hover:bg-surface-2/60"
@@ -159,6 +168,7 @@ export function IncomeList() {
                   </tbody>
                 </table>
               </div>
+              <Pagination pagination={pagination} />
               </>
             )}
           </Card>

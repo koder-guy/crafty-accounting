@@ -17,6 +17,7 @@ import {
   type Vehicle,
 } from '@crafty/shared';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
+import { Pagination, usePagination } from '../../components/Pagination';
 import { MileageCheckAlert } from '../../components/MileageCheckAlert';
 import { ExportMenu } from '../../components/transactions';
 import { DateInput } from '../../components/DateInput';
@@ -159,6 +160,8 @@ function TripForm({
   );
 }
 
+const EMPTY_TRIPS: MileageTrip[] = [];
+
 export function Mileage() {
   const { taxYear, isLoading: yearLoading } = useActiveTaxYear();
   const { data, isLoading, error } = useMileage(taxYear?.id);
@@ -168,6 +171,8 @@ export function Mileage() {
   const [copyOf, setCopyOf] = useState<MileageTrip | null>(null);
   const [toDelete, setToDelete] = useState<MileageTrip | null>(null);
   const formRef = useRef<HTMLDivElement>(null);
+  const tripsRef = useRef<HTMLElement>(null);
+  const pagination = usePagination(data?.trips ?? EMPTY_TRIPS, tripsRef);
 
   // Bring the form into view when a trip is picked to edit or duplicate from the list below it.
   useEffect(() => {
@@ -287,7 +292,7 @@ export function Mileage() {
                 </>
               )}
 
-              <Card>
+              <Card ref={tripsRef}>
                 <CardHeader icon={<Route className="size-5 text-accent-soft" />} title="Trips" />
                 {data.trips.length === 0 ? (
                   <EmptyState icon={<Car className="size-8" />} title="No trips yet">
@@ -308,7 +313,7 @@ export function Mileage() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-line">
-                        {data.trips.map((t) => (
+                        {pagination.pageRows.map((t) => (
                           <tr key={t.id} className={editing?.id === t.id ? 'bg-surface-2/40' : ''}>
                             <td className="px-4 py-3 whitespace-nowrap text-muted sm:pl-6">{formatDisplayDate(t.date)}</td>
                             <td className="px-4 py-3">
@@ -353,6 +358,7 @@ export function Mileage() {
                     </table>
                   </div>
                 )}
+                <Pagination pagination={pagination} noun="trips" />
               </Card>
 
               <p className="flex items-start gap-2 text-sm text-muted">

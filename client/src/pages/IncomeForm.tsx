@@ -7,7 +7,7 @@ import { DateInput } from '../components/DateInput';
 import { BackLink, ChangedElsewhere, CopiedFrom, dateInYear, duplicateDate, useLeaveGuard, yearRangeHint } from '../components/FormShell';
 import { NoTaxYear } from '../components/NoTaxYear';
 import { PageBody, PageHeader } from '../components/PageHeader';
-import { DocumentField, PaymentMethodPicker } from '../components/transactions';
+import { DocumentField, PaymentMethodPicker, tableUrl } from '../components/transactions';
 import { SubmittedFiguresNotice } from '../components/SubmittedFiguresNotice';
 import { Alert, Button, Card, Field, Spinner } from '../components/ui';
 import { ApiError, transactionForm } from '../lib/api';
@@ -139,7 +139,7 @@ export function IncomeForm() {
     save.mutate(
       { id: id ?? undefined, form: transactionForm(payload, files) },
       {
-        onSuccess: () => leave('/income'),
+        onSuccess: () => leave(tableUrl('/income')),
         onError: (err) => {
           // Someone else saved first: fetch their version so the form can offer it.
           if (err instanceof ApiError && err.status === 409) refetchExisting();
@@ -154,7 +154,7 @@ export function IncomeForm() {
   });
 
   const title = id ? 'Edit income' : copyId ? 'Duplicate income' : 'Add income';
-  const backTo = id ? `/income/${id}` : copyId ? `/income/${copyId}` : '/income';
+  const backTo = id ? `/income/${id}` : copyId ? `/income/${copyId}` : tableUrl('/income');
   const { guard, leave } = useLeaveGuard({
     dirty: isDirty || files.length > 0 || removeIds.length > 0,
     busy: save.isPending || preparingPhoto,
