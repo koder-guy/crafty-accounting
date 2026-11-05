@@ -243,7 +243,7 @@ function ExpenseReferences({ expense }: { expense: ExpenseWithLineItems }) {
   ].filter((ref) => ref.value);
   if (refs.length === 0) return null;
   return (
-    <dl className="mb-2 flex flex-wrap gap-x-6 gap-y-1 px-1 text-sm">
+    <dl className="mt-2 mb-4 flex flex-wrap gap-x-6 gap-y-1 px-1 text-sm">
       {refs.map((ref) => (
         <div key={ref.label} className="flex min-w-0 items-baseline gap-2">
           <dt className="text-xs tracking-wide text-faint uppercase">{ref.label}</dt>
