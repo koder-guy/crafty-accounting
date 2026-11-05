@@ -517,7 +517,7 @@ export function ExportMenu({
             <div className="mb-1 border-b border-line px-2.5 pt-1.5 pb-2" aria-hidden>
               <div className="text-sm font-semibold text-ink">Export</div>
               {count !== undefined && (
-                <div className="text-xs text-ink">
+                <div className="text-xs text-muted">
                   {count} {count === 1 ? noun[0] : noun[1]} to export
                 </div>
               )}
