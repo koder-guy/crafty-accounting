@@ -91,8 +91,8 @@ export function ExpenseList() {
                   )}
                   {canEdit && <ImportButton kind="expenses" iconOnly />}
                   {filterState.filters && <ExportMenu href={(format) => exportUrl('expenses', filterState.filters!, format)} count={data?.length} iconOnly />}
-                  {canEdit && data && (
-                    <DeleteShownButton kind="expenses" rows={data} filtered={filterState.active} totalPence={total} taxYearId={taxYear.id} />
+                  {canEdit && (
+                    <DeleteShownButton kind="expenses" rows={data ?? []} filtered={filterState.active} totalPence={total} taxYearId={taxYear.id} />
                   )}
                 </>
               }

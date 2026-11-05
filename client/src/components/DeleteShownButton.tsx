@@ -15,6 +15,7 @@ interface Row {
 /**
  * Deletes every transaction the table shows: all of them, or with a filter in use only those
  * matching it (across every page). Asks first, and the person types "delete" to confirm.
+ * Greyed out, like Export, while the table shows none.
  */
 export function DeleteShownButton({
   kind,
@@ -31,20 +32,32 @@ export function DeleteShownButton({
 }) {
   const [open, setOpen] = useState(false);
   const remove = useDeleteTransactions(kind);
-  if (rows.length === 0) return null;
+  // Nothing shown: stays in place beside Export, greyed out, with the reason on hover.
+  const empty = rows.length === 0;
 
   const noun = kind === 'incomes' ? 'income' : 'expense';
-  const label = filtered ? `Delete the ${rows.length} filtered` : `Delete all ${noun}`;
+  const all = kind === 'incomes' ? 'income' : 'expenses';
+  const label = filtered ? `Delete the ${rows.length} filtered` : `Delete all ${all}`;
   const count = `${rows.length} ${noun} ${rows.length === 1 ? 'transaction' : 'transactions'}`;
   const documents = rows.reduce((n, r) => n + r.documents.length, 0);
 
   return (
     <>
-      <Button type="button" variant="softDanger" onClick={() => setOpen(true)} aria-label={label} title={label} className="size-9 shrink-0 !p-0">
-        <Trash2 className="size-4" aria-hidden />
-      </Button>
+      <span className="inline-flex" title={empty ? 'Nothing to delete' : undefined}>
+        <Button
+          type="button"
+          variant="softDanger"
+          disabled={empty}
+          onClick={() => setOpen(true)}
+          aria-label={empty ? `Delete ${all}` : label}
+          title={empty ? undefined : label}
+          className="size-9 shrink-0 !p-0 disabled:pointer-events-none"
+        >
+          <Trash2 className="size-4" aria-hidden />
+        </Button>
+      </span>
       <ConfirmDialog
-        open={open}
+        open={open && !empty}
         title={filtered ? `Delete the ${count} shown?` : `Delete all ${count}?`}
         confirmLabel={rows.length === 1 ? 'Delete 1 transaction' : `Delete ${rows.length} transactions`}
         requireText="delete"

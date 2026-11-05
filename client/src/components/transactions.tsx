@@ -412,6 +412,8 @@ export function ExportMenu({
   count?: number;
   noun?: [singular: string, plural: string];
 }) {
+  // Nothing to export: greyed out, with the reason on hover.
+  const empty = count === 0;
   const [anchor, setAnchor] = useState<DOMRect | null>(null);
   const [position, setPosition] = useState<{ top: number; left: number } | null>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
@@ -478,6 +480,7 @@ export function ExportMenu({
 
   return (
     <>
+      <span className="inline-flex" title={empty ? 'Nothing to export' : undefined}>
       <button
         ref={buttonRef}
         type="button"
@@ -490,9 +493,10 @@ export function ExportMenu({
             open();
           }
         }}
+        disabled={empty}
         aria-label={iconOnly ? 'Export' : undefined}
-        title={iconOnly ? 'Export' : undefined}
-        className={`inline-flex items-center justify-center gap-2 rounded-lg border bg-surface-2 text-sm font-medium whitespace-nowrap text-ink transition-colors hover:border-accent-soft/60 hover:text-white ${
+        title={empty ? undefined : iconOnly ? 'Export' : undefined}
+        className={`inline-flex items-center justify-center gap-2 rounded-lg border bg-surface-2 text-sm font-medium whitespace-nowrap text-ink transition-colors hover:border-accent-soft/60 hover:text-white disabled:pointer-events-none disabled:opacity-50 ${
           iconOnly ? 'size-9 shrink-0' : 'px-3.5 py-2'
         } ${anchor ? 'border-accent-soft/60 text-white' : 'border-line-strong'}`}
       >
@@ -504,6 +508,7 @@ export function ExportMenu({
           </>
         )}
       </button>
+      </span>
       {anchor &&
         createPortal(
           <div

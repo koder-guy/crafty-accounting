@@ -90,8 +90,8 @@ export function IncomeList() {
                   )}
                   {canEdit && <ImportButton kind="incomes" iconOnly />}
                   {filterState.filters && <ExportMenu href={(format) => exportUrl('incomes', filterState.filters!, format)} count={data?.length} iconOnly />}
-                  {canEdit && data && (
-                    <DeleteShownButton kind="incomes" rows={data} filtered={filterState.active} totalPence={total} taxYearId={taxYear.id} />
+                  {canEdit && (
+                    <DeleteShownButton kind="incomes" rows={data ?? []} filtered={filterState.active} totalPence={total} taxYearId={taxYear.id} />
                   )}
                 </>
               }
