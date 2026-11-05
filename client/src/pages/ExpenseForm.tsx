@@ -429,7 +429,10 @@ function ExpenseFormPage() {
           {scan && (
             <Card className="p-4 sm:p-5">
               <div className="flex flex-wrap items-center justify-between gap-3">
-                <p className="text-sm text-muted">{scanProgress(scanList!.scans.filter((s) => s.id !== scan.id).length)}</p>
+                <div>
+                  <h2 className="text-base font-semibold text-ink">Approval decision</h2>
+                  <p className="mt-0.5 text-sm text-muted">{scanProgress(scanList!.scans.filter((s) => s.id !== scan.id).length)}</p>
+                </div>
                 <div className="flex flex-wrap items-center gap-2">
                   <Button type="button" variant="softDanger" onClick={() => setConfirmDiscard(true)}>
                     <Trash2 className="size-4" aria-hidden />
