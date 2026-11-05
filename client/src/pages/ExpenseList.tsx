@@ -167,22 +167,22 @@ export function ExpenseList() {
                               </button>
                             </td>
                             <td className="px-4 py-3 whitespace-nowrap text-muted">{formatDisplayDate(row.date)}</td>
-                            <td className="w-3/5 max-w-0 px-4 py-3">
+                            <td className="w-1/3 max-w-0 px-4 py-3">
                               <div className="flex items-center gap-1.5 font-medium text-ink">
                                 <span className="truncate">{row.payee}</span>
                                 <DocIndicator documents={row.documents} muted />
                               </div>
                             </td>
-                            <td className="px-4 py-3 whitespace-nowrap text-muted">
+                            <td className="w-[30%] max-w-0 px-4 py-3 whitespace-nowrap text-muted">
                               {row.invoiceNumber ? (
-                                <div className="max-w-40 truncate" title={row.invoiceNumber}>
+                                <div className="truncate" title={row.invoiceNumber}>
                                   {row.invoiceNumber}
                                 </div>
                               ) : (
                                 <span className="text-faint" aria-label="None">—</span>
                               )}
                             </td>
-                            <td className="w-2/5 max-w-0 px-4 py-3 text-muted">
+                            <td className="w-[37%] max-w-0 px-4 py-3 text-muted">
                               <div className="truncate" title={row.categoryNames.join('\n')}>
                                 {shortCategoryName(row.categoryNames[0])}
                                 {row.categoryNames.length > 1 && <span className="text-faint"> +{row.categoryNames.length - 1}</span>}
