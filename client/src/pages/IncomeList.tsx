@@ -10,7 +10,7 @@ import { NoTaxYear } from '../components/NoTaxYear';
 import { PageBody, PageHeader } from '../components/PageHeader';
 import {
   attachedDocuments,
-  DocDownloadLink,
+  DocIndicator,
   ExportMenu,
   FilterBar,
   FilterToggle,
@@ -149,7 +149,7 @@ export function IncomeList() {
                         <td className="w-2/3 max-w-0 px-4 py-3">
                           <div className="flex items-center gap-1.5 font-medium text-ink">
                             <span className="truncate">{row.description}</span>
-                            <DocDownloadLink documents={row.documents} />
+                            <DocIndicator documents={row.documents} muted />
                           </div>
                         </td>
                         <td className="w-1/3 max-w-0 truncate px-4 py-3 text-muted" title={row.categoryName}>
