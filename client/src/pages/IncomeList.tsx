@@ -41,6 +41,7 @@ export function IncomeList() {
       amount: (r) => r.amountPence,
     },
     'date',
+    'incomes',
   );
   const total = (data ?? []).reduce((acc, r) => acc + r.amountPence, 0);
 

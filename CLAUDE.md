@@ -62,6 +62,7 @@ export PATH="/opt/homebrew/opt/node@22/bin:$PATH"
   - The page header (`PageHeader`, with `SectionLayout`'s tabs passed in as `tabs`) is pinned to the top of the window on desktop; phones pin only their top bar.
   - Dialogs are centred `<dialog>` elements with a blurred backdrop.
   - Leaving a transaction form with unsaved changes asks first (`useLeaveGuard` in `FormShell.tsx`): Cancel, Back, the sidebar and the browser's back button through react-router's `useBlocker` (so the app uses a data router, `createBrowserRouter`, with the routes still in `App`), closing or reloading the tab through `beforeunload`. Saving leaves with its `leave`, which doesn't ask. Escape leaves as Cancel does; it listens on window and skips a handled key, so a popup listening on document that closes on Escape must call `preventDefault`.
+  - Table sorting (`useSort` in `transactions.tsx`) is remembered per table in that browser (localStorage, `crafty.sort.<table>`); a saved column that no longer exists falls back to the default.
   - Date fields use `DateInput` (`components/DateInput.tsx`), not `<input type="date">`: dd/mm/yyyy text plus a calendar in the top layer, weeks starting Monday. `value` is still an ISO date. In react-hook-form it goes through `Controller`.
 
 ## Working in this repo

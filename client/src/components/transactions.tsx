@@ -182,8 +182,36 @@ function FilterSelect({
 
 export type SortDir = 'asc' | 'desc';
 
-export function useSort<T, K extends string>(rows: T[] | undefined, accessors: Record<K, (row: T) => string | number>, initial: NoInfer<K>) {
-  const [sort, setSort] = useState<{ key: K; dir: SortDir }>({ key: initial, dir: 'desc' });
+const SORT_PREFIX = 'crafty.sort.';
+
+/**
+ * Sorts a table's rows by the column chosen, which this browser remembers under
+ * `storageKey` (localStorage), so the table opens sorted the same way next time.
+ */
+export function useSort<T, K extends string>(
+  rows: T[] | undefined,
+  accessors: Record<K, (row: T) => string | number>,
+  initial: NoInfer<K>,
+  storageKey: string,
+) {
+  const [sort, setSort] = useState<{ key: K; dir: SortDir }>(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(SORT_PREFIX + storageKey) ?? 'null') as { key?: unknown; dir?: unknown } | null;
+      if (saved && typeof saved.key === 'string' && saved.key in accessors && (saved.dir === 'asc' || saved.dir === 'desc')) {
+        return { key: saved.key as K, dir: saved.dir };
+      }
+    } catch {
+      // Unreadable or blocked storage: use the default.
+    }
+    return { key: initial, dir: 'desc' };
+  });
+  useEffect(() => {
+    try {
+      localStorage.setItem(SORT_PREFIX + storageKey, JSON.stringify(sort));
+    } catch {
+      // Blocked storage: the sort just isn't remembered.
+    }
+  }, [storageKey, sort]);
   const sorted = useMemo(() => {
     if (!rows) return [];
     const get = accessors[sort.key];

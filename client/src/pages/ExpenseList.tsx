@@ -42,6 +42,7 @@ export function ExpenseList() {
       amount: (r) => r.totalPence,
     },
     'date',
+    'expenses',
   );
   const total = (data ?? []).reduce((acc, r) => acc + r.totalPence, 0);
 
