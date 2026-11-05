@@ -1,6 +1,6 @@
 import { Fragment, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
-import { ArrowUpRight, ChevronRight, CircleSlash, Plus } from 'lucide-react';
+import { ArrowUpRight, ChevronRight, CircleSlash, Download, Eye, Plus } from 'lucide-react';
 import { formatDisplayDate, formatGBP, shortCategoryName, type Expense, type ExpenseWithLineItems } from '@crafty/shared';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { Pagination, usePagination } from '../components/Pagination';
@@ -22,6 +22,7 @@ import {
   useTransactionFilters,
 } from '../components/transactions';
 import { Alert, Badge, ButtonLink, Card, CardHeader, EmptyState, PaymentBadge, Spinner } from '../components/ui';
+import { documentUrl } from '../lib/api';
 import { exportUrl, useActiveTaxYear, useCanEdit, useCategories, useDeleteTransaction, useExpandedExpenseRows, useExpenses } from '../lib/queries';
 
 export function ExpenseList() {
@@ -214,9 +215,9 @@ export function ExpenseList() {
                           {open && (
                             <tr id={`lines-${row.id}`} className="border-t-0! bg-surface-2/40">
                               <td />
-                              <td colSpan={7} className="px-4 pt-3 pb-4">
-                                <ExpenseReferences expense={row} />
+                              <td colSpan={7} className="px-4 py-4">
                                 <LineItemsTable expense={row} />
+                                <DocumentsTable expense={row} />
                               </td>
                             </tr>
                           )}
@@ -261,25 +262,6 @@ export function ExpenseList() {
 const categorySummary = (names: string[]) =>
   `${shortCategoryName(names[0])}${names.length > 1 ? ` +${names.length - 1}` : ''}`;
 
-/** The invoice and order numbers, shown above an expanded row's line items when it has either. */
-function ExpenseReferences({ expense }: { expense: ExpenseWithLineItems }) {
-  const refs = [
-    { label: 'Invoice number', value: expense.invoiceNumber },
-    { label: 'Order number', value: expense.orderNumber },
-  ].filter((ref) => ref.value);
-  if (refs.length === 0) return null;
-  return (
-    <dl className="mb-4 flex flex-wrap gap-x-6 gap-y-1 px-1 text-sm">
-      {refs.map((ref) => (
-        <div key={ref.label} className="flex min-w-0 items-baseline gap-2">
-          <dt className="text-xs tracking-wide text-faint uppercase">{ref.label}</dt>
-          <dd className="min-w-0 break-all text-ink">{ref.value}</dd>
-        </div>
-      ))}
-    </dl>
-  );
-}
-
 /** Read-only line items shown under an expanded row. */
 function LineItemsTable({ expense }: { expense: ExpenseWithLineItems }) {
   return (
@@ -306,6 +288,40 @@ function LineItemsTable({ expense }: { expense: ExpenseWithLineItems }) {
               {shortCategoryName(li.categoryName)}
             </td>
             <td className="tabular px-4 py-2 text-right text-ink">{formatGBP(li.amountPence)}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+/** The documents attached to an expanded row, each with View and Download buttons. */
+function DocumentsTable({ expense }: { expense: ExpenseWithLineItems }) {
+  if (expense.documents.length === 0) return null;
+  const iconButton =
+    'inline-flex size-7 items-center justify-center rounded-md text-muted transition-colors hover:bg-accent-bg hover:text-accent-soft';
+  return (
+    <table className="mt-3 w-full rounded-lg border border-line bg-page/40 text-sm">
+      <thead className="text-xs tracking-wide text-faint uppercase">
+        <tr className="border-b border-line">
+          <th scope="col" className="px-4 py-2 text-left font-medium">Document</th>
+          <th scope="col" className="px-4 py-2 text-right font-medium">Actions</th>
+        </tr>
+      </thead>
+      <tbody className="divide-y divide-line">
+        {expense.documents.map((d) => (
+          <tr key={d.id}>
+            <td className="px-4 py-2 break-all text-ink">{d.filename}</td>
+            <td className="w-px px-3 py-1 whitespace-nowrap">
+              <div className="flex justify-end gap-1">
+                <a href={documentUrl(d.filename)} target="_blank" rel="noreferrer" aria-label={`View ${d.filename}`} title="View" className={iconButton}>
+                  <Eye className="size-4" aria-hidden />
+                </a>
+                <a href={documentUrl(d.filename, true)} download={d.filename} aria-label={`Download ${d.filename}`} title="Download" className={iconButton}>
+                  <Download className="size-4" aria-hidden />
+                </a>
+              </div>
+            </td>
           </tr>
         ))}
       </tbody>
