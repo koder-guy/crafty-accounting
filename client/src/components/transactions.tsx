@@ -244,7 +244,11 @@ export function useSort<T, K extends string>(
     return [...rows].sort((a, b) => {
       const va = get(a);
       const vb = get(b);
-      const cmp = typeof va === 'number' && typeof vb === 'number' ? va - vb : String(va).localeCompare(String(vb));
+      // Blanks (such as no invoice number) stay at the bottom whichever way round.
+      if (va === '' || vb === '') return va === vb ? 0 : va === '' ? 1 : -1;
+      // Numbers within text by value, so INV-9 comes before INV-10.
+      const cmp =
+        typeof va === 'number' && typeof vb === 'number' ? va - vb : String(va).localeCompare(String(vb), undefined, { numeric: true });
       return sort.dir === 'asc' ? cmp : -cmp;
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -273,7 +277,7 @@ export function SortTh<K extends string>({
     <th
       scope="col"
       aria-sort={active ? (sort.dir === 'asc' ? 'ascending' : 'descending') : 'none'}
-      className={`px-4 py-3 font-medium ${align === 'right' ? 'text-right' : 'text-left'}`}
+      className={`px-4 py-3 font-medium whitespace-nowrap ${align === 'right' ? 'text-right' : 'text-left'}`}
     >
       <button
         type="button"

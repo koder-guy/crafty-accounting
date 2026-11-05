@@ -38,6 +38,7 @@ export function ExpenseList() {
     {
       date: (r) => `${r.date}-${String(r.id).padStart(8, '0')}`,
       payee: (r) => r.payee.toLowerCase(),
+      invoice: (r) => (r.invoiceNumber ?? '').toLowerCase(),
       category: (r) => r.categoryNames.join(', '),
       method: (r) => r.paymentMethod,
       amount: (r) => r.totalPence,
@@ -121,7 +122,7 @@ export function ExpenseList() {
                 ))}
               </ul>
               <div className="hidden overflow-x-auto sm:block">
-                <table className="w-full min-w-[760px] text-sm">
+                <table className="w-full min-w-[880px] text-sm">
                   <thead className="text-xs tracking-wide text-muted uppercase">
                     <tr className="border-b border-line">
                       <th scope="col" className="w-10 pl-3">
@@ -129,6 +130,7 @@ export function ExpenseList() {
                       </th>
                       <SortTh label="Date" sortKey="date" sort={sort} onSort={toggle} />
                       <SortTh label="Payee" sortKey="payee" sort={sort} onSort={toggle} />
+                      <SortTh label="Invoice no." sortKey="invoice" sort={sort} onSort={toggle} />
                       <SortTh label="Categories" sortKey="category" sort={sort} onSort={toggle} />
                       <SortTh label="Method" sortKey="method" sort={sort} onSort={toggle} />
                       <SortTh label="Amount" sortKey="amount" sort={sort} onSort={toggle} align="right" />
@@ -165,6 +167,15 @@ export function ExpenseList() {
                                 <DocDownloadLink documents={row.documents} />
                               </div>
                             </td>
+                            <td className="px-4 py-3 whitespace-nowrap text-muted">
+                              {row.invoiceNumber ? (
+                                <div className="max-w-40 truncate" title={row.invoiceNumber}>
+                                  {row.invoiceNumber}
+                                </div>
+                              ) : (
+                                <span className="text-faint" aria-label="None">—</span>
+                              )}
+                            </td>
                             <td className="w-2/5 max-w-0 px-4 py-3 text-muted">
                               <div className="truncate" title={row.categoryNames.join('\n')}>
                                 {shortCategoryName(row.categoryNames[0])}
@@ -198,7 +209,7 @@ export function ExpenseList() {
                           {open && (
                             <tr id={`lines-${row.id}`} className="border-t-0! bg-surface-2/40">
                               <td />
-                              <td colSpan={6} className="px-4 pt-3 pb-4">
+                              <td colSpan={7} className="px-4 pt-3 pb-4">
                                 <ExpenseReferences expense={row} />
                                 <LineItemsTable expense={row} />
                               </td>
