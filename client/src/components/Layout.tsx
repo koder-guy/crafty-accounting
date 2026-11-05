@@ -29,7 +29,12 @@ function Brand() {
       </div>
       <div className="leading-tight">
         <div className="text-lg font-bold text-white">Crafty</div>
-        <div className="text-xs font-semibold tracking-[0.18em] text-accent-soft">ACCOUNTING</div>
+        <div className="flex items-baseline gap-2">
+          <span className="text-xs font-semibold tracking-[0.18em] text-accent-soft">ACCOUNTING</span>
+          <span className="tabular text-[11px] text-muted" title={`${APP_NAME} version ${APP_VERSION}`}>
+            v{APP_VERSION}
+          </span>
+        </div>
       </div>
     </div>
   );
@@ -148,9 +153,6 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
         <NavItem to="/reports" icon={ChartPie} label="Reports" />
         <NavItem to="/settings" icon={Settings} label="Settings" />
       </nav>
-      <div className="border-t border-line px-5 py-4 text-xs font-semibold text-ink/80">
-        {APP_NAME} v{APP_VERSION}
-      </div>
     </div>
   );
 }
