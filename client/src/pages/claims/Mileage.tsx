@@ -216,7 +216,7 @@ export function Mileage() {
             taxYear &&
             data &&
             data.trips.length > 0 && (
-              <ExportMenu href={(format) => `/api/mileage/export.${format}?taxYearId=${taxYear.id}`} />
+              <ExportMenu href={(format) => `/api/mileage/export.${format}?taxYearId=${taxYear.id}`} count={data.trips.length} noun={['trip', 'trips']} />
             )
           }
         />

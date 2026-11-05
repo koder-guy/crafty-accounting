@@ -400,7 +400,18 @@ const EXPORT_FORMATS: { format: ExportFormat; label: string; hint: string; icon:
  * Drawn over the page, right-aligned under the button (or above it near the bottom
  * of the window), and closed by a click elsewhere, Esc, Tab or scrolling.
  */
-export function ExportMenu({ href, iconOnly = false }: { href: (format: ExportFormat) => string; iconOnly?: boolean }) {
+export function ExportMenu({
+  href,
+  iconOnly = false,
+  count,
+  noun = ['transaction', 'transactions'],
+}: {
+  href: (format: ExportFormat) => string;
+  iconOnly?: boolean;
+  /** How many rows the export holds, shown under the title when known. */
+  count?: number;
+  noun?: [singular: string, plural: string];
+}) {
   const [anchor, setAnchor] = useState<DOMRect | null>(null);
   const [position, setPosition] = useState<{ top: number; left: number } | null>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
@@ -505,7 +516,12 @@ export function ExportMenu({ href, iconOnly = false }: { href: (format: ExportFo
             {/* The menu's own label says this to screen readers. */}
             <div className="mb-1 border-b border-line px-2.5 pt-1.5 pb-2" aria-hidden>
               <div className="text-sm font-semibold text-ink">Export</div>
-              <div className="text-xs text-muted">Choose the format you need</div>
+              {count !== undefined && (
+                <div className="text-xs text-ink">
+                  {count} {count === 1 ? noun[0] : noun[1]} to export
+                </div>
+              )}
+              <div className="text-xs text-muted">Please choose the format you need</div>
             </div>
             {EXPORT_FORMATS.map(({ format, label, hint, icon: Icon }) => (
               <a

@@ -86,7 +86,7 @@ export function ExpenseList() {
                     </ButtonLink>
                   )}
                   {canEdit && <ImportButton kind="expenses" iconOnly />}
-                  {filterState.filters && <ExportMenu href={(format) => exportUrl('expenses', filterState.filters!, format)} iconOnly />}
+                  {filterState.filters && <ExportMenu href={(format) => exportUrl('expenses', filterState.filters!, format)} count={data?.length} iconOnly />}
                 </>
               }
               action={
