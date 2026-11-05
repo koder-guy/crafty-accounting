@@ -3478,9 +3478,13 @@ describe('reading invoices', () => {
     expect(read).toEqual([]);
   });
 
-  it('puts every Temu order under Whaleco UK Limited (Temu)', () => {
+  it('puts every Temu order under Whaleco UK Limited (Temu), paid by card', () => {
     const expenseCats = categories.filter((c) => c.type === 'EXPENSE');
-    expect(toInvoiceReading(reply({ payee: 'Whaleco UK Limited', temuOrder: true }), expenseCats).payee).toBe('Whaleco UK Limited (Temu)');
+    expect(toInvoiceReading(reply({ payee: 'Whaleco UK Limited', temuOrder: true, paymentMethod: null }), expenseCats)).toMatchObject({
+      payee: 'Whaleco UK Limited (Temu)',
+      paymentMethod: 'card',
+      warnings: [],
+    });
     expect(toInvoiceReading(reply({ payee: 'Temu', temuOrder: true }), expenseCats).payee).toBe('Whaleco UK Limited (Temu)');
     expect(toInvoiceReading(reply({ payee: 'Bead World', temuOrder: false }), expenseCats).payee).toBe('Bead World');
   });

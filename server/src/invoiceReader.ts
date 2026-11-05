@@ -116,8 +116,8 @@ export function toInvoiceReading(reply: unknown, categories: InvoiceInput['categ
 
   const date = r.date && /^\d{4}-\d{2}-\d{2}$/.test(r.date) && !Number.isNaN(Date.parse(r.date)) ? r.date : null;
   if (!date) warnings.push('No date could be read; enter it yourself.');
-  // Amazon orders are paid by card.
-  const paymentMethod = r.amazonOrder ? 'card' : r.paymentMethod;
+  // Amazon and Temu orders are paid by card.
+  const paymentMethod = r.amazonOrder || r.temuOrder ? 'card' : r.paymentMethod;
   if (!paymentMethod) warnings.push('The invoice doesn\'t say how it was paid; choose the payment method.');
 
   return {
