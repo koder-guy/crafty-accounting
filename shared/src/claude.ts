@@ -10,7 +10,8 @@ export const CLAUDE_MODELS = [
 
 export type ClaudeModel = (typeof CLAUDE_MODELS)[number]['id'];
 
-export const DEFAULT_CLAUDE_MODEL: ClaudeModel = 'claude-opus-5-5';
+/** For a new install. Installs from before it changed keep Opus (migration 21). */
+export const DEFAULT_CLAUDE_MODEL: ClaudeModel = 'claude-haiku-5-5';
 
 const MODEL_IDS = CLAUDE_MODELS.map((m) => m.id) as [ClaudeModel, ...ClaudeModel[]];
 

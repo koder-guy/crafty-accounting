@@ -9,7 +9,8 @@ import { APP_VERSION, mtdPayload, photoFilename, type Category, type SubmissionM
 import { createApp } from './app';
 import { dumpSql } from './backup';
 import { NEXT_UPDATED_AT, nextTimestamp } from './repo';
-import { seedCategories } from './db';
+import { seedCategories, type Db } from './db';
+import { getClaudeSettings } from './claudeSettings';
 import { MIGRATIONS } from './db/migrations';
 import { isAutoBackupDue, nextAutoBackup, runAutoBackup } from './autoBackup';
 import { loadConfig } from './config';
@@ -3351,7 +3352,7 @@ describe('reading invoices', () => {
       keyHint: null,
       keyAddedBy: null,
       keyAddedAt: null,
-      model: 'claude-opus-5-5',
+      model: 'claude-haiku-5-5',
       filenamePattern: '{date}_{payee}_{invoice}_£{amount}',
     });
     await agent.post('/api/invoice-reader/read').attach('document', PDF, 'invoice.pdf').expect(404);
@@ -3391,6 +3392,20 @@ describe('reading invoices', () => {
 
     const viewer = await addPerson('Accountant', 'read-only-password', 'viewer');
     await viewer.put('/api/claude').send({ filenamePattern: '{payee}' }).expect(403);
+  });
+
+  it('keeps Opus for an install that saved a key before Haiku became the default', () => {
+    const db = new Database(':memory:');
+    db.exec('CREATE TABLE schema_migrations (version INTEGER PRIMARY KEY, applied_at TEXT)');
+    const run = (m: (typeof MIGRATIONS)[number]) => {
+      db.exec(m.sql);
+      db.prepare('INSERT INTO schema_migrations (version) VALUES (?)').run(m.version);
+    };
+    MIGRATIONS.filter((m) => m.version <= 20).forEach(run);
+    db.prepare("INSERT INTO claude_settings (id, api_key) VALUES (1, 'sk-old')").run();
+    MIGRATIONS.filter((m) => m.version > 20).forEach(run);
+    expect(getClaudeSettings(db as Db).model).toBe('claude-opus-5-5');
+    db.close();
   });
 
   it('lets only editors change it', async () => {

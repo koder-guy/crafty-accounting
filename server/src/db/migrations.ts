@@ -359,6 +359,14 @@ CREATE TABLE claude_settings (
 ALTER TABLE claude_settings ADD COLUMN filename_pattern TEXT;
 `,
   },
+  // New installs default to Haiku rather than Opus. One that saved settings without choosing a
+  // model was using Opus, the old default, and keeps it.
+  {
+    version: 21,
+    sql: `
+UPDATE claude_settings SET model = 'claude-opus-5-5' WHERE model IS NULL;
+`,
+  },
 ];
 
 export const CURRENT_SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;
