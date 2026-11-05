@@ -15,3 +15,11 @@ export function diskSize(bytes: number): string {
 export function lowSpaceThreshold(backupBytes: number): number {
   return Math.max(GB, 3 * backupBytes);
 }
+
+/**
+ * The free space documents may not take a disk below: room for the next backup like the newest
+ * (`backupBytes`), and never under 200 MB. Lower than `lowSpaceThreshold`, which only warns.
+ */
+export function minimumFreeForUploads(backupBytes: number): number {
+  return Math.max(200 * 1024 ** 2, backupBytes);
+}

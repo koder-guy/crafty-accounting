@@ -162,6 +162,8 @@ export function restoreBackup(ctx: AppContext, sql: string, uploadsFrom?: string
     fs.renameSync(uploadsFrom, uploadsDir);
     fs.rmSync(old, { recursive: true, force: true });
   }
+  // Scans restored mid-read start again.
+  ctx.scans.resume();
 }
 
 /**
@@ -181,6 +183,7 @@ export function resetToEmpty(ctx: AppContext): void {
 
   db.transaction(() => {
     db.prepare('DELETE FROM tax_years').run();
+    db.prepare('DELETE FROM scans').run();
     db.prepare('DELETE FROM categories WHERE is_custom = 1').run();
     // Keep the automatic backup settings and sign-ins; they're about the install, not the books.
     db.prepare("DELETE FROM settings WHERE key NOT LIKE 'auto\\_backup\\_%' ESCAPE '\\'").run();

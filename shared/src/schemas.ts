@@ -102,6 +102,8 @@ export const expenseInputSchema = z.object({
   removeDocumentIds,
   renameDocuments,
   expectedUpdatedAt: z.string().optional(),
+  /** A new expense checked from a scanned document (Expenses → Scan documents), which saving removes from the list. */
+  scanId: id.optional(),
 });
 export type ExpenseInput = z.infer<typeof expenseInputSchema>;
 

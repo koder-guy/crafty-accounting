@@ -17,6 +17,7 @@ import { IncomeView } from './pages/IncomeView';
 import { ExpenseList } from './pages/ExpenseList';
 import { ExpenseForm } from './pages/ExpenseForm';
 import { ExpenseView } from './pages/ExpenseView';
+import { ScanDocuments } from './pages/ScanDocuments';
 import { ClaimsLayout } from './pages/claims/ClaimsLayout';
 import { Mileage } from './pages/claims/Mileage';
 import { UseOfHome } from './pages/claims/UseOfHome';
@@ -81,6 +82,14 @@ function App() {
           element={
             <EditorOnly title="Add expense">
               <ExpenseForm />
+            </EditorOnly>
+          }
+        />
+        <Route
+          path="expenses/scans"
+          element={
+            <EditorOnly title="Scan documents">
+              <ScanDocuments />
             </EditorOnly>
           }
         />

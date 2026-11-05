@@ -20,6 +20,7 @@ import { toCsv } from '../csv';
 import { sendJsonExport } from '../jsonExport';
 import { createUploader, removeDocumentFile, saveWithDocuments, uploadedFiles, type DocumentRename } from '../documents';
 import { HttpError, parseId, parseWith, readPayload } from '../http';
+import { getScanRow } from '../scans';
 import { importTransactions } from '../transactionImport';
 import {
   getCategory,
@@ -368,8 +369,14 @@ export function expensesRouter(ctx: AppContext): Router {
     checkTaxYearAndDate(ctx, input.taxYearId, input.date);
     input.lineItems.forEach((item) => checkCategory(ctx, item.categoryId, 'EXPENSE'));
     const files = uploadedFiles(req.files);
-    const id = saveWithDocuments(ctx, { files, removing: [] }, (filenames) =>
+    // Checked from a scanned document: the scan goes in the same write, so it can't be saved twice.
+    const scan = input.scanId === undefined ? null : getScanRow(ctx.db, input.scanId);
+    if (input.scanId !== undefined && !scan) throw new HttpError(409, 'That document has already been saved or discarded, perhaps in another window.');
+    const id = saveWithDocuments(ctx, { files, removing: scan ? [scan.filename] : [] }, (filenames) =>
       ctx.db.transaction(() => {
+        if (scan && !ctx.db.prepare('DELETE FROM scans WHERE id = ?').run(scan.id).changes) {
+          throw new HttpError(409, 'That document has already been saved or discarded, perhaps in another window.');
+        }
         const expenseId = insertExpense(ctx.db, input, req.user!.name);
         storeDocuments(ctx, 'expense_id', expenseId, filenames, { removing: [], renaming: [] });
         return expenseId;

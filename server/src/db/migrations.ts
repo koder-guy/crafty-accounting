@@ -367,6 +367,25 @@ ALTER TABLE claude_settings ADD COLUMN filename_pattern TEXT;
 UPDATE claude_settings SET model = 'claude-opus-5-5' WHERE model IS NULL;
 `,
   },
+  // Documents scanned in bulk, waiting to be checked and saved as expenses. Their files are in
+  // uploads/ (named scan-…), so they go into backups with the books. `reading` is Claude's
+  // InvoiceReading as JSON. Not tied to a tax year: each is saved into the year its date falls in.
+  {
+    version: 22,
+    sql: `
+CREATE TABLE scans (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  filename TEXT NOT NULL UNIQUE,
+  original_name TEXT NOT NULL,
+  size_bytes INTEGER NOT NULL,
+  status TEXT NOT NULL DEFAULT 'waiting' CHECK (status IN ('waiting', 'reading', 'ready', 'failed')),
+  reading TEXT,
+  error TEXT,
+  uploaded_by TEXT,
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+);
+`,
+  },
 ];
 
 export const CURRENT_SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;

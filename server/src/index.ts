@@ -13,6 +13,8 @@ const app = createApp(ctx);
 const stopScheduler = startAutoBackupScheduler(ctx);
 const stopUpdateChecker = startUpdateChecker(ctx);
 const stopNotificationChecks = startNotificationChecks(ctx);
+// Carry on reading any scanned documents left waiting, or mid-read when the server stopped.
+ctx.scans.resume();
 
 const listening = () => {
   const where = config.host ? `${config.host}:${config.port}` : `port ${config.port}`;

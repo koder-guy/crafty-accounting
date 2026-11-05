@@ -11,6 +11,7 @@ import { claudeRouter } from './routes/claude';
 import { dashboardRouter } from './routes/dashboard';
 import { documentsRouter } from './routes/documents';
 import { hmrcRouter } from './routes/hmrc';
+import { scansRouter } from './routes/scans';
 import { invoiceReaderRouter } from './routes/invoiceReader';
 import { mileageRouter } from './routes/mileage';
 import { mtdRouter } from './routes/mtd';
@@ -96,6 +97,7 @@ export function createApp(ctx: AppContext) {
   app.use('/api/use-of-home', useOfHomeRouter(ctx));
   app.use('/api/documents', documentsRouter(ctx));
   app.use('/api/invoice-reader', invoiceReaderRouter(ctx));
+  app.use('/api/scans', scansRouter(ctx));
   app.use('/api/claude', claudeRouter(ctx));
   app.use('/api/dashboard', dashboardRouter(ctx));
   app.use('/api/mtd', mtdRouter(ctx));

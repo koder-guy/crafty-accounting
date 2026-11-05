@@ -3538,3 +3538,199 @@ describe('reading invoices', () => {
     expect(() => toInvoiceReading({ payee: 'x' }, expenseCats)).toThrow(/couldn't be understood/);
   });
 });
+
+describe('scanning documents in bulk', () => {
+  const KEY = 'sk-ant-api03-abcdefghijklmnopqrstuvwxyz-WXYZ';
+  let read: string[];
+  let failNext: HttpError | null;
+  const files = () => fs.readdirSync(ctx.paths.uploadsDir);
+
+  beforeEach(async () => {
+    read = [];
+    failNext = null;
+    ctx.claude = {
+      async checkKey() {},
+      async readInvoice(_apiKey, _model, input) {
+        read.push(input.data.toString());
+        if (failNext) {
+          const err = failNext;
+          failNext = null;
+          throw err;
+        }
+        return toInvoiceReading(
+          {
+            date: '2025-05-02',
+            payee: 'Bead World',
+            invoiceNumber: 'INV-7',
+            orderNumber: '',
+            paymentMethod: 'card',
+            lineItems: [{ description: 'Glass beads', amount: '30.00', categoryId: String(cat('costOfGoods')) }],
+            total: '30.00',
+          },
+          input.categories,
+        );
+      },
+    };
+    await agent.put('/api/claude').send({ apiKey: KEY }).expect(200);
+  });
+
+  const scan = (body: string, name = 'invoice.pdf', who = agent) => who.post('/api/scans').attach('document', Buffer.from(body), name);
+
+  it('reads each document in the background and lists what was read', async () => {
+    const first = (await scan('%PDF first').expect(201)).body;
+    await scan('%PDF second', 'second.pdf').expect(201);
+    expect(first).toMatchObject({ originalName: 'invoice.pdf', uploadedBy: NAME });
+    expect(['waiting', 'reading']).toContain(first.status);
+    await ctx.scans.idle();
+
+    const list = (await agent.get('/api/scans').expect(200)).body;
+    expect(list).toMatchObject({ claudeConfigured: true, maxUploadBytes: 20 * 1024 * 1024 });
+    expect(list.scans.map((s: { originalName: string; status: string }) => [s.originalName, s.status])).toEqual([
+      ['invoice.pdf', 'ready'],
+      ['second.pdf', 'ready'],
+    ]);
+    expect(list.scans[0].reading).toMatchObject({ payee: 'Bead World', totalPence: 3000 });
+    expect(read.sort()).toEqual(['%PDF first', '%PDF second']);
+    // Stored with the documents, so backups include them, under names no one would choose.
+    expect(files()).toHaveLength(2);
+    expect(files().every((f) => /^scan-[0-9a-f]{16}\.pdf$/.test(f))).toBe(true);
+    const file = await agent.get(`/api/scans/${first.id}/file`).expect(200);
+    expect(file.headers['content-type']).toBe('application/pdf');
+    expect(file.body.toString()).toBe('%PDF first');
+    // Not served as a transaction's document.
+    await agent.get(`/api/documents/${files()[0]}`).expect(404);
+  });
+
+  it('keeps a document Claude cannot read, to fill in by hand, and reads one that failed again', async () => {
+    const heic = (await scan('heic', 'photo.heic').expect(201)).body;
+    expect(heic).toMatchObject({ status: 'failed', error: expect.stringMatching(/PDF, JPG, PNG and WebP/) });
+    await agent.post(`/api/scans/${heic.id}/retry`).expect(422);
+
+    failNext = new HttpError(429, 'Anthropic is busy. Try again in a minute.');
+    const busy = (await scan('%PDF busy').expect(201)).body;
+    await ctx.scans.idle();
+    expect((await agent.get(`/api/scans/${busy.id}`).expect(200)).body).toMatchObject({ status: 'failed', error: 'Anthropic is busy. Try again in a minute.' });
+    expect((await agent.post(`/api/scans/${busy.id}/retry`).expect(200)).body.status).toMatch(/waiting|reading/);
+    await ctx.scans.idle();
+    expect((await agent.get(`/api/scans/${busy.id}`)).body).toMatchObject({ status: 'ready', error: null });
+    await agent.post(`/api/scans/${busy.id}/retry`).expect(409);
+    expect(read).toEqual(['%PDF busy', '%PDF busy']);
+  });
+
+  it('removes the scan when its expense is saved, once only', async () => {
+    const year = await createYear();
+    const { id } = (await scan('%PDF bead').expect(201)).body;
+    await ctx.scans.idle();
+    const save = () =>
+      agent
+        .post('/api/expenses')
+        .field('data', JSON.stringify(expense(year, { scanId: id })))
+        .attach('documents', Buffer.from('%PDF bead'), '2025-05-02_Bead World.pdf');
+    await save().expect(201);
+    expect((await agent.get('/api/scans')).body.scans).toEqual([]);
+    expect(files()).toEqual(['2025-05-02_Bead World.pdf']);
+
+    // Saved again from another window: refused, and nothing is added.
+    const again = await save().expect(409);
+    expect(again.body.error).toMatch(/already been saved or discarded/);
+    expect(ctx.db.prepare('SELECT COUNT(*) AS n FROM expenses').get()).toEqual({ n: 1 });
+    expect(files()).toEqual(['2025-05-02_Bead World.pdf']);
+  });
+
+  it('discards a scan and its file', async () => {
+    const { id } = (await scan('%PDF junk').expect(201)).body;
+    await ctx.scans.idle();
+    await agent.delete(`/api/scans/${id}`).expect(204);
+    await agent.delete(`/api/scans/${id}`).expect(404);
+    expect(files()).toEqual([]);
+  });
+
+  it('waits for a key, and lets only editors add, retry or discard', async () => {
+    const viewer = await addPerson('Accountant', 'read-only-password', 'viewer');
+    await scan('%PDF viewer', 'v.pdf', viewer).expect(403);
+
+    await agent.delete('/api/claude/key').expect(200);
+    await scan('%PDF later').expect(404);
+    // Added just before the key was removed: it waits, and the list still shows it.
+    ctx.db.prepare("INSERT INTO scans (filename, original_name, size_bytes) VALUES ('scan-0000000000000000.pdf', 'later.pdf', 10)").run();
+    fs.writeFileSync(path.join(ctx.paths.uploadsDir, 'scan-0000000000000000.pdf'), '%PDF later');
+    const list = (await viewer.get('/api/scans').expect(200)).body;
+    expect(list).toMatchObject({ claudeConfigured: false, scans: [{ status: 'waiting' }] });
+    await viewer.delete(`/api/scans/${list.scans[0].id}`).expect(403);
+
+    await agent.put('/api/claude').send({ apiKey: KEY }).expect(200);
+    await ctx.scans.idle();
+    expect((await agent.get('/api/scans')).body.scans[0].status).toBe('ready');
+    expect(read).toEqual(['%PDF later']);
+  });
+
+  it('refuses documents that would leave the disk nearly full', async () => {
+    const year = await createYear();
+    const MB = 1024 ** 2;
+    ctx.diskSpace = () => ({ freeBytes: 150 * MB, totalBytes: 1000 * MB });
+    expect((await agent.get('/api/scans')).body.space).toEqual({ freeBytes: 150 * MB, minimumFreeBytes: 200 * MB });
+    expect((await scan('%PDF full').expect(507)).body.error).toMatch(/nearly full \(150 MB free\)/);
+    await agent
+      .post('/api/expenses')
+      .field('data', JSON.stringify(expense(year)))
+      .attach('documents', PDF, 'receipt.pdf')
+      .expect(507);
+    expect(files()).toEqual([]);
+    expect(ctx.db.prepare('SELECT COUNT(*) AS n FROM scans').get()).toEqual({ n: 0 });
+    // Changes without documents still save.
+    await agent.post('/api/expenses').field('data', JSON.stringify(expense(year))).expect(201);
+
+    // Room for the next backup like the newest is kept too.
+    ctx.diskSpace = () => ({ freeBytes: 300 * MB, totalBytes: 1000 * MB });
+    fs.mkdirSync(ctx.paths.backupDir, { recursive: true });
+    const backup = path.join(ctx.paths.backupDir, 'crafty-accounting-auto-2025-06-01-0200.zip');
+    fs.writeFileSync(backup, '');
+    fs.truncateSync(backup, 400 * MB);
+    await scan('%PDF full').expect(507);
+    fs.truncateSync(backup, 10 * MB);
+    await scan('%PDF fits').expect(201);
+    await ctx.scans.idle();
+  });
+
+  it('keeps scans in backups, carries on reading after a restore, and empties them on a reset', async () => {
+    await scan('%PDF kept').expect(201);
+    await ctx.scans.idle();
+    // One mid-read when the backup was made is read again after the restore.
+    ctx.db.prepare("UPDATE scans SET status = 'reading', reading = NULL").run();
+    const zip = await agent
+      .get('/api/backup.zip')
+      .buffer(true)
+      .parse((res, cb) => {
+        const chunks: Buffer[] = [];
+        res.on('data', (c: Buffer) => chunks.push(c));
+        res.on('end', () => cb(null, Buffer.concat(chunks)));
+      })
+      .expect(200);
+    await agent.delete(`/api/scans/${(await agent.get('/api/scans')).body.scans[0].id}`).expect(204);
+    await agent.post('/api/restore').attach('file', zip.body as Buffer, 'backup.zip').expect(200);
+    await ctx.scans.idle();
+    const [restored] = (await agent.get('/api/scans')).body.scans;
+    expect(restored).toMatchObject({ originalName: 'invoice.pdf', status: 'ready' });
+    expect((await agent.get(`/api/scans/${restored.id}/file`).expect(200)).body.toString()).toBe('%PDF kept');
+
+    await agent.post('/api/reset').send({ confirm: 'RESET' }).expect(200);
+    expect((await agent.get('/api/scans')).body.scans).toEqual([]);
+  });
+
+  it('restores a backup made before scanning', async () => {
+    const old = new Database(':memory:');
+    old.exec('CREATE TABLE schema_migrations (version INTEGER PRIMARY KEY, applied_at TEXT)');
+    for (const migration of MIGRATIONS.filter((m) => m.version <= 21)) {
+      old.exec(migration.sql);
+      old.prepare('INSERT INTO schema_migrations (version) VALUES (?)').run(migration.version);
+    }
+    seedCategories(old);
+    const dump = dumpSql(old);
+    old.close();
+    expect(dump).not.toMatch(/scans/);
+    await agent.post('/api/restore').attach('file', Buffer.from(dump), 'backup.sql').expect(200);
+    expect((await agent.get('/api/scans').expect(200)).body.scans).toEqual([]);
+    await scan('%PDF new').expect(201);
+    await ctx.scans.idle();
+  });
+});

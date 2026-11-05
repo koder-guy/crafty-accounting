@@ -596,3 +596,32 @@ export interface InvoiceReading {
   /** Things to check, such as lines that don't add up to the total. */
   warnings: string[];
 }
+
+/** Where a scanned document is in being read: waiting its turn, with Claude, read, or not readable. */
+export type ScanStatus = 'waiting' | 'reading' | 'ready' | 'failed';
+
+/** A document scanned in bulk (Expenses → Scan documents), waiting to be checked and saved as an expense. */
+export interface Scan {
+  id: number;
+  /** The name the file was uploaded with; it's attached under this, or the name pattern's, when saved. */
+  originalName: string;
+  sizeBytes: number;
+  status: ScanStatus;
+  /** What Claude read, once `ready`. */
+  reading: InvoiceReading | null;
+  /** Why it couldn't be read, when `failed`. */
+  error: string | null;
+  uploadedBy: string | null;
+  createdAt: string;
+}
+
+export interface ScanList {
+  /** Oldest first. */
+  scans: Scan[];
+  /** Whether a Claude key is saved; without one, waiting documents stay waiting and nothing more can be added. */
+  claudeConfigured: boolean;
+  /** The largest file the server takes. */
+  maxUploadBytes: number;
+  /** Free space on the disk holding the documents, and how much must stay free; null if it can't be read. */
+  space: { freeBytes: number; minimumFreeBytes: number } | null;
+}

@@ -3,7 +3,10 @@ import path from 'node:path';
 import type { Config } from './config';
 import { openDatabase, type Db } from './db';
 import { LiveUpdates } from './liveUpdates';
+import type { DiskSpace } from '@crafty/shared';
+import { diskSpace } from './autoBackup';
 import { anthropicApi, type ClaudeApi } from './invoiceReader';
+import { ScanReader } from './scans';
 import { Updates } from './updates';
 import { ensureFirstUser } from './users';
 
@@ -24,6 +27,10 @@ export interface AppContext {
   updates: Updates;
   /** Calls to Claude (checking a key, reading an invoice); tests replace it. */
   claude: ClaudeApi;
+  /** Reads documents scanned in bulk with Claude, in the background. */
+  scans: ScanReader;
+  /** Free and total space on the disk holding a folder; tests replace it. */
+  diskSpace: (dir: string) => DiskSpace | null;
 }
 
 export function createContext(config: Config): AppContext {
@@ -41,5 +48,7 @@ export function createContext(config: Config): AppContext {
   const ctx = { config, db, paths, liveUpdates: new LiveUpdates(), fetch: (...args) => globalThis.fetch(...args) } as AppContext;
   ctx.updates = new Updates(ctx);
   ctx.claude = anthropicApi;
+  ctx.scans = new ScanReader(ctx);
+  ctx.diskSpace = diskSpace;
   return ctx;
 }

@@ -4,7 +4,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import multer from 'multer';
-import { MAX_DOCUMENTS } from '@crafty/shared';
+import { diskSize, MAX_DOCUMENTS, minimumFreeForUploads } from '@crafty/shared';
+import { listAutoBackups } from './autoBackup';
 import type { AppContext } from './context';
 import { HttpError } from './http';
 import { isDocumentNameInUse } from './repo';
@@ -40,6 +41,28 @@ export function documentNameProblem(name: string): string | null {
 
 export function documentPath(ctx: AppContext, name: string): string {
   return path.join(ctx.paths.uploadsDir, name);
+}
+
+/** Free space on the disk holding the documents, and how much must stay free; null if it can't be read. */
+export function uploadSpace(ctx: AppContext): { freeBytes: number; minimumFreeBytes: number } | null {
+  const space = ctx.diskSpace(ctx.paths.uploadsDir);
+  if (!space) return null;
+  const newestBackup = listAutoBackups(ctx.paths.backupDir)[0]?.sizeBytes ?? 0;
+  return { freeBytes: space.freeBytes, minimumFreeBytes: minimumFreeForUploads(newestBackup) };
+}
+
+/**
+ * Refuses (507) to store `bytes` more when that would leave the disk below the minimum, so a pile
+ * of documents can't fill it and leave no room for the books or the next backup. Free space can't
+ * be reserved, so this is a first check; writes still clean up if the disk fills anyway.
+ */
+export function ensureSpaceFor(ctx: AppContext, bytes: number): void {
+  const space = uploadSpace(ctx);
+  if (!space || space.freeBytes - bytes >= space.minimumFreeBytes) return;
+  throw new HttpError(
+    507,
+    `The server's disk is nearly full (${diskSize(space.freeBytes)} free), so no more documents can be stored. Free up some space, or keep fewer automatic backups, then try again.`,
+  );
 }
 
 export function createUploader(ctx: AppContext) {
@@ -105,6 +128,7 @@ export function saveWithDocuments<T>(
   const placed: string[] = [];
   const renaming = change.renaming ?? [];
   try {
+    if (change.files.length) ensureSpaceFor(ctx, change.files.reduce((sum, f) => sum + f.size, 0));
     const names = change.files.map((f) => decodeUploadName(f.originalname));
     const newNames = [...names, ...renaming.map((r) => r.to)];
     for (const [i, name] of newNames.entries()) {

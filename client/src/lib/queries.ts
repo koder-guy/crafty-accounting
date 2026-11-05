@@ -23,6 +23,8 @@ import type {
   ClaudeModel,
   ClaudeStatus,
   InvoiceReading,
+  Scan,
+  ScanList,
   MeResponse,
   NotificationsResponse,
   MileageInput,
@@ -292,6 +294,28 @@ export const useReadInvoice = () =>
       return api.post<InvoiceReading>('/invoice-reader/read', form);
     },
   });
+
+/** Documents scanned in bulk, waiting to be checked (Expenses → Scan documents). Live updates refetch it as Claude reads each. */
+export const useScans = (enabled = true) => useQuery({ queryKey: ['scans'], queryFn: () => api.get<ScanList>('/scans'), enabled });
+
+export function useScanMutations() {
+  const qc = useQueryClient();
+  const onSettled = () => qc.invalidateQueries({ queryKey: ['scans'] });
+  return {
+    add: useMutation({
+      mutationFn: (file: File) => {
+        const form = new FormData();
+        form.append('document', file, file.name);
+        return api.post<Scan>('/scans', form);
+      },
+      onSettled,
+    }),
+    retry: useMutation({ mutationFn: (id: number) => api.post<Scan>(`/scans/${id}/retry`), onSettled }),
+    discard: useMutation({ mutationFn: (id: number) => api.delete(`/scans/${id}`), onSettled }),
+  };
+}
+
+export const scanFileUrl = (id: number) => `/api/scans/${id}/file`;
 
 /** Imports a JSON export; `preview` only says what importing would do. */
 export function useImportTransactions(kind: Kind) {

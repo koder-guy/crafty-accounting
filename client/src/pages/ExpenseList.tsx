@@ -1,6 +1,6 @@
 import { Fragment, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
-import { ArrowUpRight, ChevronRight, CircleSlash, Plus } from 'lucide-react';
+import { ArrowUpRight, ChevronRight, CircleSlash, Plus, ScanText } from 'lucide-react';
 import { formatDisplayDate, formatGBP, shortCategoryName, type Expense, type ExpenseWithLineItems } from '@crafty/shared';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { Pagination, usePagination } from '../components/Pagination';
@@ -26,7 +26,7 @@ import {
   useTransactionFilters,
 } from '../components/transactions';
 import { Alert, Badge, ButtonLink, Card, CardHeader, EmptyState, PaymentBadge, Spinner } from '../components/ui';
-import { exportUrl, useActiveTaxYear, useCanEdit, useCategories, useDeleteTransaction, useExpandedRows, useExpenses } from '../lib/queries';
+import { exportUrl, useActiveTaxYear, useCanEdit, useCategories, useClaude, useDeleteTransaction, useExpandedRows, useExpenses, useScans } from '../lib/queries';
 
 export function ExpenseList() {
   const { taxYear, isLoading: yearLoading } = useActiveTaxYear();
@@ -62,6 +62,9 @@ export function ExpenseList() {
     pagination.setPage(1, false);
   };
   const total = (data ?? []).reduce((acc, r) => acc + r.totalPence, 0);
+  const { data: claude } = useClaude();
+  const { data: scans } = useScans(canEdit);
+  const toCheck = scans?.scans.length ?? 0;
 
   return (
     <>
@@ -87,6 +90,21 @@ export function ExpenseList() {
                   {canEdit && (
                     <ButtonLink to="/expenses/new" aria-label="Add expense" title="Add expense" className="size-9 shrink-0 !p-0">
                       <Plus className="size-4" aria-hidden />
+                    </ButtonLink>
+                  )}
+                  {canEdit && (claude?.configured || toCheck > 0) && (
+                    <ButtonLink
+                      to="/expenses/scans"
+                      aria-label={toCheck ? `Scan documents (${toCheck} to check)` : 'Scan documents'}
+                      title={toCheck ? `Scan documents: ${toCheck} to check` : 'Scan documents'}
+                      className="relative size-9 shrink-0 !p-0"
+                    >
+                      <ScanText className="size-4" aria-hidden />
+                      {toCheck > 0 && (
+                        <span className="absolute -top-1.5 -right-1.5 inline-flex min-w-4 items-center justify-center rounded-full bg-accent px-1 text-[10px] leading-4 font-semibold text-white">
+                          {toCheck}
+                        </span>
+                      )}
                     </ButtonLink>
                   )}
                   {canEdit && <ImportButton kind="expenses" iconOnly />}

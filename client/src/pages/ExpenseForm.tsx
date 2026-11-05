@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { Controller, useFieldArray, useForm, useWatch } from 'react-hook-form';
 import { useNavigate, useParams, useSearchParams } from 'react-router';
 import { Plus, Trash2 } from 'lucide-react';
@@ -22,13 +23,15 @@ import { CategoryOptions } from '../components/CategoryOptions';
 import { BackLink, ChangedElsewhere, CopiedFrom, dateInYear, duplicateDate, useLeaveGuard, yearRangeHint } from '../components/FormShell';
 import { NoTaxYear } from '../components/NoTaxYear';
 import { ReadInvoice } from '../components/ReadInvoice';
+import { ConfirmDialog } from '../components/ConfirmDialog';
+import { nextScanToCheck, scanCheckUrl } from './ScanDocuments';
 import { PageBody, PageHeader } from '../components/PageHeader';
 import { DateInput } from '../components/DateInput';
 import { DocumentField, renamedDocuments, type DocumentRenames, PaymentMethodPicker, tableUrl } from '../components/transactions';
 import { SubmittedFiguresNotice } from '../components/SubmittedFiguresNotice';
 import { Alert, Button, Card, CardHeader, Field, IconButton, Spinner } from '../components/ui';
 import { ApiError, transactionForm } from '../lib/api';
-import { useActiveTaxYear, useCategories, useExpense, useClaude, useSaveTransaction, useTaxYears } from '../lib/queries';
+import { scanFileUrl, useActiveTaxYear, useCategories, useExpense, useClaude, useSaveTransaction, useScanMutations, useScans, useTaxYears } from '../lib/queries';
 
 interface LineValues {
   /** Database id for existing line items; useFieldArray reserves "id". */
@@ -56,7 +59,13 @@ const validAmount = (v: string) => {
   return (pence !== null && pence > 0) || 'Enter an amount above £0.00';
 };
 
+/** Checking scanned documents moves from one to the next on this page, so each starts afresh. */
 export function ExpenseForm() {
+  const [searchParams] = useSearchParams();
+  return <ExpenseFormPage key={searchParams.get('scan') ?? ''} />;
+}
+
+function ExpenseFormPage() {
   const params = useParams();
   const id = params.id ? Number(params.id) : null;
   const navigate = useNavigate();
@@ -65,6 +74,18 @@ export function ExpenseForm() {
   const [searchParams] = useSearchParams();
   const copyId = id ? null : Number(searchParams.get('copy')) || null;
   const { data: original, isLoading: loadingOriginal, error: originalError } = useExpense(copyId);
+  // Checking a scanned document: /expenses/new?scan=<id> fills the new form from what Claude read.
+  const scanId = id || copyId ? null : Number(searchParams.get('scan')) || null;
+  const { data: scanList, isLoading: loadingScans, error: scansError } = useScans(scanId !== null);
+  const scan = scanList?.scans.find((s) => s.id === scanId) ?? null;
+  const scanChecked = scan?.status === 'ready' || scan?.status === 'failed';
+  const nextScan = scanList && scanId ? nextScanToCheck(scanList.scans, scanId) : null;
+  const scanMutations = useScanMutations();
+  const qc = useQueryClient();
+  const [scanFile, setScanFile] = useState<File | null>(null);
+  const [scanFileError, setScanFileError] = useState<string | null>(null);
+  const [confirmSkip, setConfirmSkip] = useState(false);
+  const [confirmDiscard, setConfirmDiscard] = useState(false);
   const { data: years } = useTaxYears();
   const { taxYear: activeYear, isLoading: yearLoading } = useActiveTaxYear();
   const { data: categories = [], isLoading: loadingCategories, error: categoriesError } = useCategories();
@@ -79,7 +100,10 @@ export function ExpenseForm() {
   const defaultCategory = String(expenseCategories.find((c) => !c.isCustom && c.hmrcCode === 'costOfGoods')?.id ?? '');
   const save = useSaveTransaction<ExpenseWithLineItems>('expenses');
 
-  const taxYear = id ? (years?.taxYears.find((y) => y.id === existing?.taxYearId) ?? null) : activeYear;
+  // A scanned document goes into the year its date falls in, whichever year is active.
+  const scanDate = scan?.reading?.date ?? null;
+  const scanYear = scanDate ? (years?.taxYears.find((y) => isDateInTaxYear(scanDate, y)) ?? null) : null;
+  const taxYear = id ? (years?.taxYears.find((y) => y.id === existing?.taxYearId) ?? null) : (scanYear ?? activeYear);
 
   // New documents to add, and attached ones to remove, when the form is saved.
   const [files, setFiles] = useState<File[]>([]);
@@ -91,6 +115,23 @@ export function ExpenseForm() {
   const [readingInvoice, setReadingInvoice] = useState(false);
   // The invoice last read, attached with the expense; reading another replaces it.
   const readFile = useRef<File | null>(null);
+
+  // The scanned file, to attach as if it had been chosen here.
+  useEffect(() => {
+    if (!scan || !scanChecked || scanFile) return;
+    let cancelled = false;
+    fetch(scanFileUrl(scan.id), { credentials: 'same-origin' })
+      .then((res) => {
+        if (!res.ok) throw new Error(res.status === 404 ? 'The scanned file is missing from storage.' : `The scanned file couldn't be loaded (${res.status}).`);
+        return res.blob();
+      })
+      .then((blob) => !cancelled && setScanFile(new File([blob], scan.originalName, { type: blob.type })))
+      .catch((err: Error) => !cancelled && setScanFileError(err.message));
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scan?.id, scanChecked]);
 
   const {
     register,
@@ -139,8 +180,19 @@ export function ExpenseForm() {
 
   // Fill the form once: live updates refetch the data, and that mustn't wipe what you've typed.
   useEffect(() => {
-    const key = id ? `edit-${id}` : `new-${activeYear?.id}-${copyId}`;
+    const key = id ? `edit-${id}` : scanId ? `scan-${scanId}` : `new-${activeYear?.id}-${copyId}`;
     if (filledFor.current === key) return;
+    if (scanId) {
+      if (!scan || !scanFile || !taxYear || !expenseCategories.length) return;
+      filledFor.current = key;
+      reset({ date: '', payee: '', invoiceNumber: '', orderNumber: '', paymentMethod: '', notes: '', lineItems: [emptyLine(defaultCategory)] });
+      if (scan.reading) fillFromInvoice(scan.reading, scanFile, true);
+      else {
+        readFile.current = scanFile;
+        setFiles([scanFile]);
+      }
+      return;
+    }
     // Wait for the categories every time, or the category menus can't show the choices.
     if (id && existing && expenseCategories.length) {
       filledFor.current = key;
@@ -176,10 +228,11 @@ export function ExpenseForm() {
       });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id, existing, copyId, original, activeYear?.id, expenseCategories.length]);
+  }, [id, existing, copyId, original, activeYear?.id, expenseCategories.length, scan?.id, scanFile, taxYear?.id]);
 
-  // Fills the form from an invoice Claude read. Kept dirty, so leaving still asks first.
-  const fillFromInvoice = (reading: InvoiceReading, picked: File) => {
+  // Fills the form from an invoice Claude read. Kept dirty, so leaving still asks first, except for a scanned
+  // document (`asLoaded`): that stays to be checked, so only changes made here count.
+  const fillFromInvoice = (reading: InvoiceReading, picked: File, asLoaded = false) => {
     const current = getValues();
     // Named by the pattern in Settings → Claude Integration, from what was read.
     const amountPence = reading.totalPence ?? (reading.lineItems.reduce((sum, li) => sum + li.amountPence, 0) || null);
@@ -217,7 +270,7 @@ export function ExpenseForm() {
             }))
           : current.lineItems,
       },
-      { keepDefaultValues: true },
+      { keepDefaultValues: !asLoaded },
     );
     setFiles((prev) => {
       const others = prev.filter((f) => f !== readFile.current);
@@ -249,6 +302,7 @@ export function ExpenseForm() {
       removeDocumentIds: removeIds,
       renameDocuments: renamedDocuments(existing?.documents ?? [], renames),
       expectedUpdatedAt: id ? loaded?.updatedAt : undefined,
+      scanId: scanId ?? undefined,
       lineItems: values.lineItems.map((li) => ({
         id: li.lineId,
         description: li.description,
@@ -260,7 +314,10 @@ export function ExpenseForm() {
     save.mutate(
       { id: id ?? undefined, form: transactionForm(payload, files) },
       {
-        onSuccess: () => leave(tableUrl('/expenses')),
+        onSuccess: () => {
+          if (scanId) qc.invalidateQueries({ queryKey: ['scans'] });
+          leave(scanId ? afterScan : tableUrl('/expenses'));
+        },
         onError: (err) => {
           // Someone else saved first: fetch their version so the form can offer it.
           if (err instanceof ApiError && err.status === 409) refetchExisting();
@@ -272,15 +329,20 @@ export function ExpenseForm() {
     );
   });
 
-  const title = id ? 'Edit expense' : copyId ? 'Duplicate expense' : 'Add expense';
-  const backTo = id ? `/expenses/${id}` : copyId ? `/expenses/${copyId}` : tableUrl('/expenses');
+  const title = id ? 'Edit expense' : copyId ? 'Duplicate expense' : scanId ? 'Check scanned document' : 'Add expense';
+  const backTo = id ? `/expenses/${id}` : copyId ? `/expenses/${copyId}` : scanId ? '/expenses/scans' : tableUrl('/expenses');
+  // Where checking goes after this document: the next one to check, else back to the list.
+  const afterScan = nextScan ? scanCheckUrl(nextScan.id) : '/expenses/scans';
+  // The scanned file is attached from the start, so it isn't a change made here.
+  const addedFiles = scanId ? files.filter((f) => f !== readFile.current) : files;
+  const formDirty = isDirty || addedFiles.length > 0;
   const { guard, leave } = useLeaveGuard({
-    dirty: isDirty || files.length > 0 || removeIds.length > 0 || renamedDocuments(existing?.documents ?? [], renames).length > 0,
+    dirty: isDirty || addedFiles.length > 0 || removeIds.length > 0 || renamedDocuments(existing?.documents ?? [], renames).length > 0,
     busy: save.isPending || preparingPhoto || readingInvoice,
     onCancel: () => navigate(backTo),
   });
 
-  if (yearLoading || loadingCategories || (id && loadingExisting) || (copyId && loadingOriginal)) {
+  if (yearLoading || loadingCategories || (id && loadingExisting) || (copyId && loadingOriginal) || (scanId && loadingScans)) {
     return (
       <>
         <PageHeader title={title} />
@@ -288,12 +350,29 @@ export function ExpenseForm() {
       </>
     );
   }
-  if (loadError || originalError || categoriesError) {
+  if (loadError || originalError || categoriesError || scansError) {
     return (
       <>
         <PageHeader title={title} />
         <PageBody>
-          <Alert>{(loadError ?? originalError ?? categoriesError)!.message}</Alert>
+          <Alert>{(loadError ?? originalError ?? categoriesError ?? scansError)!.message}</Alert>
+        </PageBody>
+      </>
+    );
+  }
+  if (scanId && (!scan || !scanChecked || scanFileError || !scanFile)) {
+    return (
+      <>
+        <PageHeader title={title} />
+        <PageBody>
+          <BackLink to="/expenses/scans">Scanned documents</BackLink>
+          {!scan ? (
+            <Alert tone="info">This document has already been saved or discarded, perhaps in another window.</Alert>
+          ) : scanFileError ? (
+            <Alert>{scanFileError}</Alert>
+          ) : (
+            <Spinner label={scanChecked ? 'Loading…' : 'Claude is still reading this document…'} />
+          )}
         </PageBody>
       </>
     );
@@ -318,7 +397,9 @@ export function ExpenseForm() {
             ? `${existing.payee} · ${formatDisplayDate(existing.date)}`
             : original
               ? `Copy of ${original.payee}`
-              : `In tax year ${displayTaxYear(taxYear.label)}`
+              : scan && scanList
+                ? `${scan.originalName} · in tax year ${displayTaxYear(taxYear.label)}`
+                : `In tax year ${displayTaxYear(taxYear.label)}`
         }
       />
       <PageBody>
@@ -345,7 +426,8 @@ export function ExpenseForm() {
           </div>
         )}
         <form onSubmit={onSubmit} noValidate className="max-w-[876px] space-y-6">
-          {!id && !copyId && claude?.configured && <ReadInvoice onRead={fillFromInvoice} onBusy={setReadingInvoice} />}
+          {scan && <ScanCheckNotice reading={scan.reading} error={scan.error} left={scanList!.scans.filter((s) => s.id !== scan.id).length} />}
+          {!id && !copyId && !scanId && claude?.configured && <ReadInvoice onRead={fillFromInvoice} onBusy={setReadingInvoice} />}
           <Card className="p-5 sm:p-6">
             <div className="grid gap-5 sm:grid-cols-2">
               <Field label="Date" htmlFor="date" error={errors.date?.message} hint={yearRangeHint(taxYear)}>
@@ -533,17 +615,80 @@ export function ExpenseForm() {
               </div>
             )}
 
-            <div className="mt-6 flex justify-end gap-3 border-t border-line pt-5">
-              <Button type="button" variant="ghost" onClick={() => navigate(backTo)}>
-                Cancel
-              </Button>
+            <div className="mt-6 flex flex-wrap justify-end gap-3 border-t border-line pt-5">
+              {scanId && (
+                <Button type="button" variant="softDanger" className="mr-auto" onClick={() => setConfirmDiscard(true)}>
+                  <Trash2 className="size-4" aria-hidden />
+                  Discard document
+                </Button>
+              )}
+              {scanId && nextScan ? (
+                <Button type="button" variant="ghost" onClick={() => (formDirty ? setConfirmSkip(true) : leave(afterScan))}>
+                  Skip for now
+                </Button>
+              ) : (
+                <Button type="button" variant="ghost" onClick={() => navigate(backTo)}>
+                  Cancel
+                </Button>
+              )}
               <Button type="submit" variant="primary" busy={save.isPending || preparingPhoto} disabled={badDocumentNames || readingInvoice}>
-                {id ? 'Save changes' : 'Add expense'}
+                {id ? 'Save changes' : scanId && nextScan ? 'Add and check next' : 'Add expense'}
               </Button>
             </div>
           </Card>
         </form>
+        {scanId && (
+          <>
+            <ConfirmDialog
+              open={confirmSkip}
+              title="Discard your changes?"
+              confirmLabel="Discard changes"
+              cancelLabel="Keep editing"
+              onConfirm={() => leave(afterScan)}
+              onClose={() => setConfirmSkip(false)}
+            >
+              <p>The changes you made here aren't saved. The document stays to be checked later, as Claude read it.</p>
+            </ConfirmDialog>
+            <ConfirmDialog
+              open={confirmDiscard}
+              title="Discard this document?"
+              confirmLabel="Discard"
+              onConfirm={async () => {
+                await scanMutations.discard.mutateAsync(scanId);
+                leave(afterScan);
+              }}
+              onClose={() => setConfirmDiscard(false)}
+            >
+              <p>{scan?.originalName} is removed from the documents to check, and its file is deleted. Nothing is added to the books.</p>
+            </ConfirmDialog>
+          </>
+        )}
       </PageBody>
     </>
+  );
+}
+
+/** Above the form while checking a scanned document: what to look at, and how many are left. */
+function ScanCheckNotice({ reading, error, left }: { reading: InvoiceReading | null; error: string | null; left: number }) {
+  const more = left === 0 ? 'This is the last one to check.' : `${left} more to check after this one.`;
+  return (
+    <Alert tone={!reading ? 'error' : reading.warnings.length ? 'warning' : 'info'}>
+      <p className="font-medium">
+        {reading ? 'Filled in from the scanned document.' : "Claude couldn't read this document, so fill it in yourself."}
+      </p>
+      {error && <p className="mt-1">{error}</p>}
+      {reading && reading.warnings.length > 0 && (
+        <>
+          <p className="mt-1">Check everything before saving, especially:</p>
+          <ul className="mt-1 list-disc pl-5">
+            {reading.warnings.map((w) => (
+              <li key={w}>{w}</li>
+            ))}
+          </ul>
+        </>
+      )}
+      {reading && !reading.warnings.length && <p className="mt-1">Check everything before saving.</p>}
+      <p className="mt-1">{more}</p>
+    </Alert>
   );
 }

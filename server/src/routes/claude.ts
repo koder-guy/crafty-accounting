@@ -22,6 +22,8 @@ export function claudeRouter(ctx: AppContext): Router {
       if (input.model) saveClaudeModel(ctx.db, input.model);
       if (input.filenamePattern !== undefined) saveFilenamePattern(ctx.db, input.filenamePattern);
     })();
+    // Scanned documents left waiting for a key can be read now.
+    ctx.scans.kick();
     res.json(claudeStatus(ctx.db));
   });
 
