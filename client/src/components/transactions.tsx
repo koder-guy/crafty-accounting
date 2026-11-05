@@ -613,10 +613,17 @@ export function TransactionCard({
 export function DocIndicator({ documents, muted = false }: { documents: TransactionDocument[]; muted?: boolean }) {
   if (documents.length === 0) return null;
   const label = documents.length === 1 ? `Document: ${documents[0].filename}` : `${documents.length} documents`;
+  // "×2" after the icon when there are several, in the icon's colour.
   return (
-    <FileText className={`inline size-3.5 shrink-0 ${muted ? 'text-muted' : 'text-accent-soft'}`} role="img" aria-label={label}>
-      <title>{label}</title>
-    </FileText>
+    <span
+      className={`inline-flex shrink-0 items-center gap-0.5 ${muted ? 'text-muted' : 'text-accent-soft'}`}
+      role="img"
+      aria-label={label}
+      title={label}
+    >
+      <FileText className="size-3.5" aria-hidden />
+      {documents.length > 1 && <span className="tabular text-xs" aria-hidden>×{documents.length}</span>}
+    </span>
   );
 }
 
