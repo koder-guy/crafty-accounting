@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { CircleArrowUp, Copy, ExternalLink, RefreshCw } from 'lucide-react';
 import type { UpdateStatus } from '@crafty/shared';
-import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { Alert, Button, Card, CardHeader, Spinner } from '../../components/ui';
 import { useCanEdit, useUpdateMutations, useUpdates } from '../../lib/queries';
 import { SettingsHeading } from './SettingsLayout';
@@ -35,7 +34,6 @@ function CopyableCommand({ command }: { command: string }) {
 function HowToUpdate({ status, version }: { status: UpdateStatus; version: string }) {
   const canEdit = useCanEdit();
   const { apply } = useUpdateMutations();
-  const [confirming, setConfirming] = useState(false);
 
   if (status.install === 'docker') {
     return (
@@ -63,26 +61,17 @@ function HowToUpdate({ status, version }: { status: UpdateStatus; version: strin
   if (!canEdit) return <p className="text-sm text-muted">Someone who can edit the books can install it here.</p>;
 
   return (
-    <>
-      <div className="flex flex-wrap items-center gap-3">
-        <Button variant="primary" onClick={() => setConfirming(true)} disabled={!!status.applying}>
-          <CircleArrowUp className="size-4" aria-hidden />
-          Update to version {version}
-        </Button>
+    <div className="flex flex-wrap items-center gap-3">
+      <Button variant="primary" onClick={() => apply.mutate(version)} busy={apply.isPending} disabled={!!status.applying}>
+        <CircleArrowUp className="size-4" aria-hidden />
+        Update to version {version}
+      </Button>
+      {apply.error ? (
+        <span className="text-sm text-out-soft">{apply.error.message}</span>
+      ) : (
         <span className="text-sm text-muted">Saves a backup first. Takes a few minutes.</span>
-      </div>
-      <ConfirmDialog
-        open={confirming}
-        title={`Update to version ${version}?`}
-        confirmLabel="Update"
-        tone="send"
-        onConfirm={() => apply.mutateAsync(version)}
-        onClose={() => setConfirming(false)}
-      >
-        <p>A backup of your accounts will be saved first before the new version is downloaded and installed.</p>
-        <p className="mt-3">The app will then automatically reload and you'll be all up-to-date.</p>
-      </ConfirmDialog>
-    </>
+      )}
+    </div>
   );
 }
 
