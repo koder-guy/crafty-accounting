@@ -20,7 +20,8 @@ import type {
   HmrcObligation,
   HmrcStatus,
   Income,
-  InvoiceReaderStatus,
+  ClaudeModel,
+  ClaudeStatus,
   InvoiceReading,
   MeResponse,
   NotificationsResponse,
@@ -267,9 +268,20 @@ export function useSaveTransaction<T>(kind: Kind) {
   });
 }
 
-/** Whether an invoice can be read with Claude (the server has an Anthropic API key). */
-export const useInvoiceReader = () =>
-  useQuery({ queryKey: ['invoice-reader'], queryFn: () => api.get<InvoiceReaderStatus>('/invoice-reader'), staleTime: Infinity });
+/** Settings → Claude Integration: whether a key is saved (shown only as a hint), and the model. */
+export const useClaude = () => useQuery({ queryKey: ['claude'], queryFn: () => api.get<ClaudeStatus>('/claude') });
+
+export function useClaudeMutations() {
+  const qc = useQueryClient();
+  const onSuccess = (status: ClaudeStatus) => qc.setQueryData(['claude'], status);
+  return {
+    save: useMutation({
+      mutationFn: (body: { apiKey?: string; model?: ClaudeModel }) => api.put<ClaudeStatus>('/claude', body),
+      onSuccess,
+    }),
+    removeKey: useMutation({ mutationFn: () => api.delete<ClaudeStatus>('/claude/key'), onSuccess }),
+  };
+}
 
 /** Reads an invoice with Claude; nothing is saved. */
 export const useReadInvoice = () =>

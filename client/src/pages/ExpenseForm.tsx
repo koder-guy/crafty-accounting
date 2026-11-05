@@ -28,7 +28,7 @@ import { DocumentField, renamedDocuments, type DocumentRenames, PaymentMethodPic
 import { SubmittedFiguresNotice } from '../components/SubmittedFiguresNotice';
 import { Alert, Button, Card, CardHeader, Field, IconButton, Spinner } from '../components/ui';
 import { ApiError, transactionForm } from '../lib/api';
-import { useActiveTaxYear, useCategories, useExpense, useInvoiceReader, useSaveTransaction, useTaxYears } from '../lib/queries';
+import { useActiveTaxYear, useCategories, useExpense, useClaude, useSaveTransaction, useTaxYears } from '../lib/queries';
 
 interface LineValues {
   /** Database id for existing line items; useFieldArray reserves "id". */
@@ -87,7 +87,7 @@ export function ExpenseForm() {
   const [renames, setRenames] = useState<DocumentRenames>({});
   const [preparingPhoto, setPreparingPhoto] = useState(false);
   const [badDocumentNames, setBadDocumentNames] = useState(false);
-  const { data: invoiceReader } = useInvoiceReader();
+  const { data: claude } = useClaude();
   const [readingInvoice, setReadingInvoice] = useState(false);
   // The invoice last read, attached with the expense; reading another replaces it.
   const readFile = useRef<File | null>(null);
@@ -331,7 +331,7 @@ export function ExpenseForm() {
           </div>
         )}
         <form onSubmit={onSubmit} noValidate className="max-w-[876px] space-y-6">
-          {!id && !copyId && invoiceReader?.configured && <ReadInvoice onRead={fillFromInvoice} onBusy={setReadingInvoice} />}
+          {!id && !copyId && claude?.configured && <ReadInvoice onRead={fillFromInvoice} onBusy={setReadingInvoice} />}
           <Card className="p-5 sm:p-6">
             <div className="grid gap-5 sm:grid-cols-2">
               <Field label="Date" htmlFor="date" error={errors.date?.message} hint={yearRangeHint(taxYear)}>

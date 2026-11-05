@@ -337,6 +337,21 @@ CREATE TABLE notification_reads (
 );
 `,
   },
+  // The Claude integration: the Anthropic API key and the model that reads invoices. Like the
+  // HMRC connection it belongs to the install, not the books: left out of backups, kept through a
+  // restore. One row at most.
+  {
+    version: 19,
+    sql: `
+CREATE TABLE claude_settings (
+  id INTEGER PRIMARY KEY CHECK (id = 1),
+  api_key TEXT,
+  key_added_by TEXT,
+  key_added_at TEXT,
+  model TEXT
+);
+`,
+  },
 ];
 
 export const CURRENT_SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;

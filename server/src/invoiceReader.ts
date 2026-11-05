@@ -2,7 +2,7 @@
 // needs. Nothing is saved: the form is filled in for the person to check.
 import Anthropic from '@anthropic-ai/sdk';
 import { z } from 'zod';
-import { parsePoundsToPence, PAYMENT_METHODS, type InvoiceReading } from '@crafty/shared';
+import { parsePoundsToPence, PAYMENT_METHODS, type ClaudeModel, type InvoiceReading } from '@crafty/shared';
 import { HttpError } from './http';
 
 export type InvoiceMediaType = 'application/pdf' | 'image/jpeg' | 'image/png' | 'image/webp';
@@ -14,7 +14,12 @@ export interface InvoiceInput {
   categories: { id: number; name: string; hmrcCode: string }[];
 }
 
-export type InvoiceReader = (input: InvoiceInput) => Promise<InvoiceReading>;
+/** Calls to Claude through the Anthropic API, with the key saved in Settings → Claude Integration. Tests replace it. */
+export interface ClaudeApi {
+  /** Refuses (HttpError 422) a key Anthropic doesn't accept, or one that can't use the model. */
+  checkKey(apiKey: string, model: ClaudeModel): Promise<void>;
+  readInvoice(apiKey: string, model: ClaudeModel, input: InvoiceInput): Promise<InvoiceReading>;
+}
 
 /** The largest image the API takes. */
 export const MAX_INVOICE_IMAGE_BYTES = 5 * 1024 * 1024;
@@ -112,9 +117,33 @@ export function toInvoiceReading(reply: unknown, categories: InvoiceInput['categ
   };
 }
 
-export function claudeInvoiceReader(apiKey: string, model: string): InvoiceReader {
-  const client = new Anthropic({ apiKey });
-  return async ({ data, mediaType, categories }) => {
+/** Turns the SDK's errors into ones the app can show. Never 401: the client would take it as being signed out. */
+function apiError(err: unknown): never {
+  if (err instanceof Anthropic.AuthenticationError || err instanceof Anthropic.PermissionDeniedError) {
+    throw new HttpError(502, 'Anthropic refused the API key saved in Settings → Claude Integration.');
+  }
+  if (err instanceof Anthropic.RateLimitError) throw new HttpError(503, 'The Anthropic API is busy or the account is out of credit. Try again later.');
+  if (err instanceof Anthropic.BadRequestError) throw new HttpError(422, `Claude couldn't read that file: ${err.message}`);
+  if (err instanceof Anthropic.APIError) throw new HttpError(502, `The Anthropic API didn't answer properly (${err.status ?? 'no connection'}). Try again later.`);
+  throw err;
+}
+
+export const anthropicApi: ClaudeApi = {
+  async checkKey(apiKey, model) {
+    try {
+      await new Anthropic({ apiKey, maxRetries: 0 }).models.retrieve(model);
+    } catch (err) {
+      if (err instanceof Anthropic.AuthenticationError) throw new HttpError(422, 'Anthropic didn\'t accept that key. Check you copied all of it.');
+      if (err instanceof Anthropic.PermissionDeniedError || err instanceof Anthropic.NotFoundError) {
+        throw new HttpError(422, 'That key can\'t use the chosen model. Try another model, or check the key\'s workspace in the Anthropic Console.');
+      }
+      if (err instanceof Anthropic.APIConnectionError) throw new HttpError(502, 'Couldn\'t reach Anthropic to check the key. Check the server is online.');
+      apiError(err);
+    }
+  },
+
+  async readInvoice(apiKey, model, { data, mediaType, categories }) {
+    const client = new Anthropic({ apiKey });
     const categoryList = categories.map((c) => `${c.id}: ${c.name}`).join('\n');
     const source = { type: 'base64' as const, data: data.toString('base64') };
     const document =
@@ -127,9 +156,8 @@ export function claudeInvoiceReader(apiKey: string, model: string): InvoiceReade
       response = await client.beta.messages.create({
         model,
         max_tokens: 16000,
-        // If a safety check declines the request, the API retries it on another model.
-        betas: ['server-side-fallback-2026-07-01'],
-        fallbacks: 'default',
+        // If a safety check declines the request, the API retries it on another model. Haiku has no fallback.
+        ...(model === 'claude-haiku-5-5' ? {} : { betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default' as const }),
         output_config: {
           effort: 'medium',
           format: { type: 'json_schema', schema: outputSchema(categories.map((c) => String(c.id))) },
@@ -143,14 +171,7 @@ export function claudeInvoiceReader(apiKey: string, model: string): InvoiceReade
         ],
       });
     } catch (err) {
-      // Never 401: the client would take it as being signed out.
-      if (err instanceof Anthropic.AuthenticationError || err instanceof Anthropic.PermissionDeniedError) {
-        throw new HttpError(502, 'The Anthropic API refused the key in ANTHROPIC_API_KEY.');
-      }
-      if (err instanceof Anthropic.RateLimitError) throw new HttpError(503, 'The Anthropic API is busy or the account is out of credit. Try again later.');
-      if (err instanceof Anthropic.BadRequestError) throw new HttpError(422, `Claude couldn't read that file: ${err.message}`);
-      if (err instanceof Anthropic.APIError) throw new HttpError(502, `The Anthropic API didn't answer properly (${err.status ?? 'no connection'}). Try again later.`);
-      throw err;
+      apiError(err);
     }
 
     if (response.stop_reason === 'refusal') throw new HttpError(422, 'Claude declined to read this document.');
@@ -163,5 +184,5 @@ export function claudeInvoiceReader(apiKey: string, model: string): InvoiceReade
       reply = null;
     }
     return toInvoiceReading(reply, categories);
-  };
-}
+  },
+};

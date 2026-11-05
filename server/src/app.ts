@@ -7,6 +7,7 @@ import { errorHandler, HttpError } from './http';
 import { authRouter, passwordChangeGuard, readOnlyGuard, requireAuth } from './routes/auth';
 import { backupRouter } from './routes/backup';
 import { categoriesRouter } from './routes/categories';
+import { claudeRouter } from './routes/claude';
 import { dashboardRouter } from './routes/dashboard';
 import { documentsRouter } from './routes/documents';
 import { hmrcRouter } from './routes/hmrc';
@@ -95,6 +96,7 @@ export function createApp(ctx: AppContext) {
   app.use('/api/use-of-home', useOfHomeRouter(ctx));
   app.use('/api/documents', documentsRouter(ctx));
   app.use('/api/invoice-reader', invoiceReaderRouter(ctx));
+  app.use('/api/claude', claudeRouter(ctx));
   app.use('/api/dashboard', dashboardRouter(ctx));
   app.use('/api/mtd', mtdRouter(ctx));
   app.use('/api/hmrc', hmrcRouter(ctx));

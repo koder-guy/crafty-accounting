@@ -581,11 +581,6 @@ export interface ImportSummary {
   problems: string[];
 }
 
-/** Whether invoices can be read by Claude (ANTHROPIC_API_KEY is set). */
-export interface InvoiceReaderStatus {
-  configured: boolean;
-}
-
 /** What Claude read from an invoice, to fill in a new expense for checking. */
 export interface InvoiceReading {
   /** ISO date, or null when the invoice shows none. */

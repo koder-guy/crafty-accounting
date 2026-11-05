@@ -6,6 +6,7 @@ Self-hosted bookkeeping for UK sole traders on the cash basis. Keep your income 
 
 - **Tax years** run 6 April to 5 April. Each is set to go to HMRC by a **Self Assessment return** or by **Making Tax Digital**, and the menu shows only that section. A year with quarterly updates stays MTD.
 - **Income and expenses**: income with a category and payment method (cash, card or bank transfer); purchases split into line items, each with a category and optionally marked disallowable, with the transaction total added up from them. Attach up to 10 documents (PDFs or images) to each, or take a photo with the device's camera (a computer's camera needs [HTTPS](#https); a phone's works either way). Photos are saved as JPEGs of 2 MB or less, and you can rename any new document before saving. **Duplicate** starts a new entry from an existing one, for things that repeat.
+- **Reading invoices with Claude** (optional): add an Anthropic API key in **Settings → Claude Integration** and choose a model, and **Add expense** offers to read a PDF or photo of an invoice. Claude fills in the date, payee, numbers, payment method and categorised lines for you to check before saving, and the invoice is attached, named by date, payee, invoice number and amount. Each invoice read is sent to Anthropic, which bills the key per use (a penny or two an invoice). The key is shown only partly, and stays out of backups.
 - **Lists** can be searched, filtered, sorted and exported to CSV or JSON. The JSON keeps each expense's line items, with amounts in pence, and can be imported again with **Import**, here or on another install: each transaction goes into the tax year its date falls in, and ones already in the books are left out. Document files aren't in an export, so they need attaching again.
 - **Simplified expenses**:
   - **Mileage** at HMRC's rates (for each tax year; for 2026/27, cars and vans 55p a mile for the first 10,000 miles and 25p after, motorcycles 24p, bicycles 20p). It warns if a year also has actual vehicle costs, which HMRC doesn't allow alongside mileage.
@@ -140,8 +141,6 @@ Settings go in a `.env` file next to the app (the installers write one). Only in
 | `BACKUP_DIR` | `DATA_DIR/backups` | Without Docker: where automatic backups go (the `crafty` account must be able to write there) |
 | `TZ` | `Europe/London` | Time zone for the daily backup |
 | `UPDATE_CHECK` | `true` | `false` stops the app checking GitHub for new versions by itself; **Settings → Updates** can still check |
-| `ANTHROPIC_API_KEY` | none | An Anthropic API key (console.anthropic.com, billed per use) turns on **Read invoice** when adding an expense: Claude reads a PDF or photo and fills in the form for you to check. The invoice is sent to Anthropic. |
-| `INVOICE_READER_MODEL` | `claude-opus-5-5` | The Claude model that reads invoices |
 
 ## Backups
 

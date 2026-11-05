@@ -35,6 +35,7 @@ import { CustomCategories } from './pages/settings/CustomCategories';
 import { BackupSettings } from './pages/settings/BackupSettings';
 import { Users } from './pages/settings/Users';
 import { HmrcSettings } from './pages/settings/HmrcSettings';
+import { ClaudeSettings } from './pages/settings/ClaudeSettings';
 import { UpdatesSettings } from './pages/settings/UpdatesSettings';
 import { NotFound } from './pages/NotFound';
 
@@ -120,6 +121,7 @@ function App() {
           <Route path="users" element={<Users />} />
           <Route path="people" element={<Navigate to="/settings/users" replace />} />
           <Route path="hmrc" element={<HmrcSettings />} />
+          <Route path="claude" element={<ClaudeSettings />} />
           <Route
             path="backup"
             element={

@@ -18,6 +18,7 @@ import { documentNameProblem } from './documents';
 import { fraudPreventionHeaders, parseBrowserData, publicIp } from './fraudPrevention';
 import { hmrcAccessToken } from './hmrc';
 import { toInvoiceReading, type InvoiceInput } from './invoiceReader';
+import { HttpError } from './http';
 import { changeSummaries, newestTag } from './updates';
 import { checkDiskSpace, raiseNotification, syncUpdateNotification } from './notifications';
 import { clearData, generateSampleData } from './sampleData';
@@ -3325,18 +3326,98 @@ describe('reading invoices', () => {
     ...overrides,
   });
 
-  it('is hidden without an Anthropic API key', async () => {
-    expect((await agent.get('/api/invoice-reader').expect(200)).body).toEqual({ configured: false });
+  const KEY = 'sk-ant-api03-abcdefghijklmnopqrstuvwxyz-WXYZ';
+  let checked: { apiKey: string; model: string }[];
+  let read: { apiKey: string; model: string; input: InvoiceInput }[];
+
+  beforeEach(() => {
+    checked = [];
+    read = [];
+    ctx.claude = {
+      async checkKey(apiKey, model) {
+        checked.push({ apiKey, model });
+        if (apiKey === 'sk-bad') throw new HttpError(422, "Anthropic didn't accept that key.");
+      },
+      async readInvoice(apiKey, model, input) {
+        read.push({ apiKey, model, input });
+        return toInvoiceReading(reply(), input.categories);
+      },
+    };
+  });
+
+  it('is off until a key is saved', async () => {
+    expect((await agent.get('/api/claude').expect(200)).body).toEqual({
+      configured: false,
+      keyHint: null,
+      keyAddedBy: null,
+      keyAddedAt: null,
+      model: 'claude-opus-5-5',
+    });
+    await agent.post('/api/invoice-reader/read').attach('document', PDF, 'invoice.pdf').expect(404);
+    expect(read).toEqual([]);
+  });
+
+  it('checks a key before saving it, and never sends it back', async () => {
+    await agent.put('/api/claude').send({ apiKey: 'sk-bad' }).expect(422);
+    expect((await agent.get('/api/claude')).body.configured).toBe(false);
+    await agent.put('/api/claude').send({ apiKey: 'has a space' }).expect(400);
+    await agent.put('/api/claude').send({}).expect(400);
+    await agent.put('/api/claude').send({ model: 'gpt-9' }).expect(400);
+
+    const res = await agent.put('/api/claude').send({ apiKey: `  ${KEY} `, model: 'claude-sonnet-5-5' }).expect(200);
+    expect(checked.at(-1)).toEqual({ apiKey: KEY, model: 'claude-sonnet-5-5' });
+    expect(res.body).toMatchObject({ configured: true, keyHint: 'sk-ant-api…WXYZ', keyAddedBy: NAME, model: 'claude-sonnet-5-5' });
+    expect(JSON.stringify((await agent.get('/api/claude')).body)).not.toContain('abcdefghij');
+
+    // Changing only the model keeps the key, without checking it again.
+    const before = checked.length;
+    expect((await agent.put('/api/claude').send({ model: 'claude-haiku-5-5' }).expect(200)).body).toMatchObject({ configured: true, model: 'claude-haiku-5-5' });
+    expect(checked).toHaveLength(before);
+
+    expect((await agent.delete('/api/claude/key').expect(200)).body).toMatchObject({ configured: false, keyHint: null, model: 'claude-haiku-5-5' });
     await agent.post('/api/invoice-reader/read').attach('document', PDF, 'invoice.pdf').expect(404);
   });
 
-  it('reads an invoice into a new expense without saving anything', async () => {
-    const seen: InvoiceInput[] = [];
-    ctx.readInvoice = async (input) => {
-      seen.push(input);
-      return toInvoiceReading(reply(), input.categories);
-    };
-    expect((await agent.get('/api/invoice-reader').expect(200)).body).toEqual({ configured: true });
+  it('lets only editors change it', async () => {
+    const viewer = await addPerson('Accountant', 'read-only-password', 'viewer');
+    await viewer.put('/api/claude').send({ apiKey: KEY }).expect(403);
+    await agent.put('/api/claude').send({ apiKey: KEY }).expect(200);
+    await viewer.delete('/api/claude/key').expect(403);
+    expect((await viewer.get('/api/claude').expect(200)).body).toMatchObject({ configured: true, keyHint: 'sk-ant-api…WXYZ' });
+    await viewer.post('/api/invoice-reader/read').attach('document', PDF, 'invoice.pdf').expect(403);
+  });
+
+  it('keeps the key out of backups and through a restore and a reset', async () => {
+    await agent.put('/api/claude').send({ apiKey: KEY, model: 'claude-sonnet-5-5' }).expect(200);
+    const dump = (await agent.get('/api/backup.sql').expect(200)).text;
+    expect(dump).not.toMatch(/INSERT INTO "claude_settings"/);
+    expect(dump).not.toContain(KEY);
+    await agent.post('/api/restore').attach('file', Buffer.from(dump), 'backup.sql').expect(200);
+    expect((await agent.get('/api/claude')).body).toMatchObject({ configured: true, model: 'claude-sonnet-5-5' });
+    await agent.post('/api/reset').send({ confirm: 'RESET' }).expect(200);
+    expect((await agent.get('/api/claude')).body).toMatchObject({ configured: true, model: 'claude-sonnet-5-5' });
+  });
+
+  it('upgrades a backup made before the Claude integration, keeping the saved key', async () => {
+    await agent.put('/api/claude').send({ apiKey: KEY, model: 'claude-haiku-5-5' }).expect(200);
+    const old = new Database(':memory:');
+    old.exec('CREATE TABLE schema_migrations (version INTEGER PRIMARY KEY, applied_at TEXT)');
+    for (const migration of MIGRATIONS.filter((m) => m.version <= 18)) {
+      old.exec(migration.sql);
+      old.prepare('INSERT INTO schema_migrations (version) VALUES (?)').run(migration.version);
+    }
+    seedCategories(old);
+    const dump = dumpSql(old);
+    old.close();
+    expect(dump).toMatch(/schema_version: 18/);
+    expect(dump).not.toMatch(/claude_settings/);
+
+    await agent.post('/api/restore').attach('file', Buffer.from(dump), 'backup.sql').expect(200);
+    expect((await agent.get('/api/claude')).body).toMatchObject({ configured: true, keyHint: 'sk-ant-api…WXYZ', model: 'claude-haiku-5-5' });
+  });
+
+  it('reads an invoice with the saved key and model, without saving anything', async () => {
+    await agent.put('/api/claude').send({ apiKey: KEY, model: 'claude-sonnet-5-5' }).expect(200);
     const res = await agent.post('/api/invoice-reader/read').attach('document', PDF, 'invoice.pdf').expect(200);
     expect(res.body).toMatchObject({
       date: '2025-05-02',
@@ -3349,23 +3430,22 @@ describe('reading invoices', () => {
       ],
       warnings: [],
     });
-    expect(seen[0]!.mediaType).toBe('application/pdf');
-    expect(seen[0]!.data.equals(PDF)).toBe(true);
+    const { apiKey, model, input } = read[0]!;
+    expect({ apiKey, model }).toEqual({ apiKey: KEY, model: 'claude-sonnet-5-5' });
+    expect(input.mediaType).toBe('application/pdf');
+    expect(input.data.equals(PDF)).toBe(true);
     // Depreciation isn't offered on the cash basis.
-    expect(seen[0]!.categories.some((c) => c.hmrcCode === 'depreciation')).toBe(false);
-    expect(seen[0]!.categories.every((c) => categories.find((k) => k.id === c.id)?.type === 'EXPENSE')).toBe(true);
+    expect(input.categories.some((c) => c.hmrcCode === 'depreciation')).toBe(false);
+    expect(input.categories.every((c) => categories.find((k) => k.id === c.id)?.type === 'EXPENSE')).toBe(true);
     expect(ctx.db.prepare('SELECT COUNT(*) AS n FROM expenses').get()).toEqual({ n: 0 });
   });
 
-  it('refuses files Claude cannot read, and viewers', async () => {
-    ctx.readInvoice = async () => {
-      throw new Error('not called');
-    };
+  it('refuses files Claude cannot read', async () => {
+    await agent.put('/api/claude').send({ apiKey: KEY }).expect(200);
     await agent.post('/api/invoice-reader/read').attach('document', Buffer.from('heic'), 'photo.heic').expect(422);
     await agent.post('/api/invoice-reader/read').attach('document', Buffer.alloc(5 * 1024 * 1024 + 1), 'big.jpg').expect(413);
     await agent.post('/api/invoice-reader/read').expect(400);
-    const viewer = await addPerson('Accountant', 'read-only-password', 'viewer');
-    await viewer.post('/api/invoice-reader/read').attach('document', PDF, 'invoice.pdf').expect(403);
+    expect(read).toEqual([]);
   });
 
   it('keeps only what fits the form and says what to check', () => {
