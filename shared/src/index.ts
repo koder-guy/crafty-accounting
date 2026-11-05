@@ -15,4 +15,4 @@ export * from './diskSpace';
 export * from './types';
 
 export const APP_NAME = 'Crafty Accounting';
-export const APP_VERSION = '1.10.18';
+export const APP_VERSION = '1.10.19';
