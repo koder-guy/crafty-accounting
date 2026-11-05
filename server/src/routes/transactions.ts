@@ -14,6 +14,7 @@ import {
   type TaxYear,
   type TransactionDocument,
 } from '@crafty/shared';
+import { z } from 'zod';
 import type { AppContext } from '../context';
 import { toCsv } from '../csv';
 import { sendJsonExport } from '../jsonExport';
@@ -122,6 +123,36 @@ const documentNames = (t: { documents: TransactionDocument[] }) => t.documents.m
 
 const exportFilename = (kind: string, year: TaxYear | null, ext: 'csv' | 'json') => `${kind}-${year?.label ?? 'export'}.${ext}`;
 
+const deleteManySchema = z.object({ ids: z.array(z.number().int().positive()).min(1).max(100_000) });
+
+/**
+ * Deletes the transactions the table shows (the ids it lists), in one database transaction, then their
+ * documents' files. Ids already gone (deleted in another browser) are skipped.
+ */
+function deleteMany<T extends { documents: TransactionDocument[] }>(
+  ctx: AppContext,
+  table: 'incomes' | 'expenses',
+  get: (id: number) => T | null,
+  body: unknown,
+): number {
+  const ids = [...new Set(parseWith(deleteManySchema, body).ids)];
+  const files: string[] = [];
+  const del = ctx.db.prepare(`DELETE FROM ${table} WHERE id = ?`);
+  let deleted = 0;
+  ctx.db.transaction(() => {
+    for (const id of ids) {
+      const existing = get(id);
+      if (!existing) continue;
+      // Line items and document rows go via ON DELETE CASCADE.
+      del.run(id);
+      files.push(...documentNames(existing));
+      deleted++;
+    }
+  })();
+  for (const name of files) removeDocumentFile(ctx, name);
+  return deleted;
+}
+
 export function incomesRouter(ctx: AppContext): Router {
   const router = Router();
   const upload = createUploader(ctx);
@@ -173,6 +204,10 @@ export function incomesRouter(ctx: AppContext): Router {
   });
 
   // Imports a JSON export (see transactionImport.ts); preview first to see what it would do.
+  router.post('/delete', (req, res) => {
+    res.json({ deleted: deleteMany(ctx, 'incomes', (id) => getIncome(ctx.db, id), req.body) });
+  });
+
   router.post('/import/preview', (req, res) => {
     res.json(importTransactions(ctx, req, 'incomes', false));
   });
@@ -310,6 +345,10 @@ export function expensesRouter(ctx: AppContext): Router {
   });
 
   // Imports a JSON export (see transactionImport.ts); preview first to see what it would do.
+  router.post('/delete', (req, res) => {
+    res.json({ deleted: deleteMany(ctx, 'expenses', (id) => getExpense(ctx.db, id), req.body) });
+  });
+
   router.post('/import/preview', (req, res) => {
     res.json(importTransactions(ctx, req, 'expenses', false));
   });

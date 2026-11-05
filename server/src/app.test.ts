@@ -354,6 +354,7 @@ describe('read-only people', () => {
       viewer.post('/api/incomes').send(income(yearId)),
       viewer.put(`/api/incomes/${saved.id}`).send(income(yearId)),
       viewer.delete(`/api/incomes/${saved.id}`),
+      viewer.post('/api/incomes/delete').send({ ids: [saved.id] }),
       viewer.post('/api/expenses').send(expense(yearId)),
       viewer.post('/api/incomes/import').send({ incomes: [] }),
       viewer.post('/api/expenses/import/preview').send({ expenses: [] }),
@@ -506,6 +507,24 @@ describe('working together', () => {
 });
 
 describe('incomes', () => {
+  it('deletes the transactions listed, with their documents', async () => {
+    const yearId = await createYear();
+    const keep = (await agent.post('/api/incomes').send(income(yearId, { description: 'Keep' })).expect(201)).body;
+    const a = (await agent.post('/api/incomes').field('data', JSON.stringify(income(yearId))).attach('documents', PDF, 'gone.pdf').expect(201)).body;
+    const b = (await agent.post('/api/incomes').send(income(yearId)).expect(201)).body;
+    await agent.post('/api/incomes/delete').send({ ids: [] }).expect(400);
+
+    const { body } = await agent.post('/api/incomes/delete').send({ ids: [a.id, b.id, a.id, 99999] }).expect(200);
+    expect(body).toEqual({ deleted: 2 });
+    expect((await agent.get('/api/incomes').query({ taxYearId: yearId })).body.map((i: { id: number }) => i.id)).toEqual([keep.id]);
+    await agent.get('/api/documents/gone.pdf').expect(404);
+
+    const e1 = (await agent.post('/api/expenses').send(expense(yearId)).expect(201)).body;
+    const e2 = (await agent.post('/api/expenses').send(expense(yearId)).expect(201)).body;
+    expect((await agent.post('/api/expenses/delete').send({ ids: [e1.id] }).expect(200)).body).toEqual({ deleted: 1 });
+    expect((await agent.get('/api/expenses').query({ taxYearId: yearId })).body.map((e: { id: number }) => e.id)).toEqual([e2.id]);
+  });
+
   it('rejects a date outside the tax year', async () => {
     const yearId = await createYear();
     const res = await agent.post('/api/incomes').send(income(yearId, { date: '2025-04-05' })).expect(422);

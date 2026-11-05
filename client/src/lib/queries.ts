@@ -306,6 +306,15 @@ export function useDeleteTransaction(kind: Kind) {
   return useMutation({ mutationFn: (id: number) => api.delete(`/${kind}/${id}`), onSuccess: invalidate });
 }
 
+/** Deletes several transactions at once: the ones a table shows. */
+export function useDeleteTransactions(kind: Kind) {
+  const invalidate = useInvalidateTransactions(kind);
+  return useMutation({
+    mutationFn: (ids: number[]) => api.post<{ deleted: number }>(`/${kind}/delete`, { ids }),
+    onSuccess: invalidate,
+  });
+}
+
 // ---- UI state ----
 
 /**

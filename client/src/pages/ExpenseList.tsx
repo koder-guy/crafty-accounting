@@ -5,6 +5,7 @@ import { formatDisplayDate, formatGBP, shortCategoryName, type Expense, type Exp
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { Pagination, usePagination } from '../components/Pagination';
 import { ImportButton } from '../components/ImportTransactions';
+import { DeleteShownButton } from '../components/DeleteShownButton';
 import { SubmittedFiguresNotice } from '../components/SubmittedFiguresNotice';
 import { NoTaxYear } from '../components/NoTaxYear';
 import { PageBody, PageHeader } from '../components/PageHeader';
@@ -90,6 +91,9 @@ export function ExpenseList() {
                   )}
                   {canEdit && <ImportButton kind="expenses" iconOnly />}
                   {filterState.filters && <ExportMenu href={(format) => exportUrl('expenses', filterState.filters!, format)} count={data?.length} iconOnly />}
+                  {canEdit && data && (
+                    <DeleteShownButton kind="expenses" rows={data} filtered={filterState.active} totalPence={total} taxYearId={taxYear.id} />
+                  )}
                 </>
               }
               action={
