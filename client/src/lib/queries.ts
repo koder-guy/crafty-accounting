@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import type {
+  ImportSummary,
   MtdExpenses,
   SubmissionMethod,
   AutoBackupStatus,
@@ -201,7 +202,7 @@ export function useCategoryMutations() {
 
 // ---- Transactions ----
 
-type Kind = 'incomes' | 'expenses';
+export type Kind = 'incomes' | 'expenses';
 
 const filterQuery = (filters: TransactionFilters) =>
   toQuery({
@@ -262,6 +263,14 @@ export function useSaveTransaction<T>(kind: Kind) {
       id ? api.put<T>(`/${kind}/${id}`, form) : api.post<T>(`/${kind}`, form),
     onSuccess: invalidate,
   });
+}
+
+/** Imports a JSON export; `preview` only says what importing would do. */
+export function useImportTransactions(kind: Kind) {
+  const invalidate = useInvalidateTransactions(kind);
+  const run = useMutation({ mutationFn: (file: unknown) => api.post<ImportSummary>(`/${kind}/import`, file), onSuccess: invalidate });
+  const preview = useMutation({ mutationFn: (file: unknown) => api.post<ImportSummary>(`/${kind}/import/preview`, file) });
+  return { run, preview };
 }
 
 export function useDeleteTransaction(kind: Kind) {

@@ -6,7 +6,6 @@ import {
   formatDisplayDate,
   incomeInputSchema,
   isDateInTaxYear,
-  isNeverAllowable,
   MAX_DOCUMENTS,
   PAYMENT_METHOD_LABELS,
   penceToPounds,
@@ -20,7 +19,21 @@ import { toCsv } from '../csv';
 import { sendJsonExport } from '../jsonExport';
 import { createUploader, removeDocumentFile, saveWithDocuments, uploadedFiles } from '../documents';
 import { HttpError, parseId, parseWith, readPayload } from '../http';
-import { getCategory, getExpense, getIncome, getTaxYear, listExpenses, listIncomes, NEXT_UPDATED_AT } from '../repo';
+import { importTransactions } from '../transactionImport';
+import {
+  getCategory,
+  getExpense,
+  getIncome,
+  getTaxYear,
+  insertExpense,
+  insertIncome,
+  insertLineItem,
+  lineItemParams,
+  lineItemsTotal,
+  listExpenses,
+  listIncomes,
+  NEXT_UPDATED_AT,
+} from '../repo';
 
 export function checkTaxYearAndDate(ctx: AppContext, taxYearId: number, date: string): TaxYear {
   const year = getTaxYear(ctx.db, taxYearId);
@@ -147,6 +160,15 @@ export function incomesRouter(ctx: AppContext): Router {
     sendJsonExport(res, exportFilename('income', year, 'json'), { taxYear: year?.label ?? null, incomes });
   });
 
+  // Imports a JSON export (see transactionImport.ts); preview first to see what it would do.
+  router.post('/import/preview', (req, res) => {
+    res.json(importTransactions(ctx, req, 'incomes', false));
+  });
+
+  router.post('/import', (req, res) => {
+    res.status(201).json(importTransactions(ctx, req, 'incomes', true));
+  });
+
   router.get('/:id', (req, res) => {
     const income = getIncome(ctx.db, parseId(req.params.id));
     if (!income) throw new HttpError(404, 'Transaction not found');
@@ -160,26 +182,7 @@ export function incomesRouter(ctx: AppContext): Router {
     const files = uploadedFiles(req.files);
     const id = saveWithDocuments(ctx, { files, removing: [] }, (filenames) =>
       ctx.db.transaction(() => {
-        const result = ctx.db
-          .prepare(
-            `INSERT INTO incomes (tax_year_id, date, description, source, reference, payment_method,
-               amount_pence, category_id, notes, created_by, updated_by)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          )
-          .run(
-            input.taxYearId,
-            input.date,
-            input.description,
-            input.source,
-            input.reference,
-            input.paymentMethod,
-            input.amountPence,
-            input.categoryId,
-            input.notes,
-            req.user!.name,
-            req.user!.name,
-          );
-        const incomeId = Number(result.lastInsertRowid);
+        const incomeId = insertIncome(ctx.db, input, req.user!.name);
         storeDocuments(ctx, 'income_id', incomeId, filenames, []);
         return incomeId;
       })(),
@@ -294,28 +297,20 @@ export function expensesRouter(ctx: AppContext): Router {
     sendJsonExport(res, exportFilename('expenses', year, 'json'), { taxYear: year?.label ?? null, expenses });
   });
 
+  // Imports a JSON export (see transactionImport.ts); preview first to see what it would do.
+  router.post('/import/preview', (req, res) => {
+    res.json(importTransactions(ctx, req, 'expenses', false));
+  });
+
+  router.post('/import', (req, res) => {
+    res.status(201).json(importTransactions(ctx, req, 'expenses', true));
+  });
+
   router.get('/:id', (req, res) => {
     const expense = getExpense(ctx.db, parseId(req.params.id));
     if (!expense) throw new HttpError(404, 'Transaction not found');
     res.json(expense);
   });
-
-  const insertLine = (expenseId: number) =>
-    ctx.db.prepare(
-      `INSERT INTO expense_line_items (expense_id, description, amount_pence, category_id, disallowable, sort_order)
-       VALUES (${expenseId}, @description, @amountPence, @categoryId, @disallowable, @sortOrder)`,
-    );
-
-  const lineParams = (item: { description: string; amountPence: number; categoryId: number; disallowable: boolean }, sortOrder: number) => ({
-    description: item.description,
-    amountPence: item.amountPence,
-    categoryId: item.categoryId,
-    disallowable: item.disallowable || isNeverAllowable(getCategory(ctx.db, item.categoryId)!.hmrcCode) ? 1 : 0,
-    sortOrder,
-  });
-
-  // A transaction's total is always the sum of its line items.
-  const lineItemsTotal = (items: { amountPence: number }[]) => items.reduce((acc, item) => acc + item.amountPence, 0);
 
   router.post('/', upload.array('documents', MAX_DOCUMENTS), (req, res) => {
     const input = parseWith(expenseInputSchema, readPayload(req));
@@ -324,27 +319,7 @@ export function expensesRouter(ctx: AppContext): Router {
     const files = uploadedFiles(req.files);
     const id = saveWithDocuments(ctx, { files, removing: [] }, (filenames) =>
       ctx.db.transaction(() => {
-        const result = ctx.db
-          .prepare(
-            `INSERT INTO expenses (tax_year_id, date, payee, invoice_number, order_number,
-               payment_method, total_pence, notes, created_by, updated_by)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          )
-          .run(
-            input.taxYearId,
-            input.date,
-            input.payee,
-            input.invoiceNumber,
-            input.orderNumber,
-            input.paymentMethod,
-            lineItemsTotal(input.lineItems),
-            input.notes,
-            req.user!.name,
-            req.user!.name,
-          );
-        const expenseId = Number(result.lastInsertRowid);
-        const insert = insertLine(expenseId);
-        input.lineItems.forEach((item, index) => insert.run(lineParams(item, index)));
+        const expenseId = insertExpense(ctx.db, input, req.user!.name);
         storeDocuments(ctx, 'expense_id', expenseId, filenames, []);
         return expenseId;
       })(),
@@ -398,10 +373,10 @@ export function expensesRouter(ctx: AppContext): Router {
           `UPDATE expense_line_items SET description = @description, amount_pence = @amountPence,
              category_id = @categoryId, disallowable = @disallowable, sort_order = @sortOrder WHERE id = @id`,
         );
-        const insert = insertLine(id);
+        const insert = insertLineItem(ctx.db, id);
         input.lineItems.forEach((item, index) => {
-          if (item.id) update.run({ ...lineParams(item, index), id: item.id });
-          else insert.run(lineParams(item, index));
+          if (item.id) update.run({ ...lineItemParams(ctx.db, item, index), id: item.id });
+          else insert.run(lineItemParams(ctx.db, item, index));
         });
       })(),
     );

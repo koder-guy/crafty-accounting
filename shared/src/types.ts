@@ -563,3 +563,20 @@ export interface NotificationsResponse {
   /** The signed-in person's unread notifications, newest first. */
   notifications: AppNotification[];
 }
+
+/** What importing a JSON export would do (`POST /api/{incomes,expenses}/import/preview`), or did (`…/import`). */
+export interface ImportSummary {
+  /** Transactions in the file. */
+  inFile: number;
+  /** Transactions added, or that would be. */
+  adding: number;
+  addingPence: number;
+  /** Transactions the books already have (same date, description or payee, amount and payment method), left out. */
+  alreadyThere: number;
+  /** Document names listed on the transactions being added; the files aren't in an export, so they're not attached. */
+  documentsLeftOut: number;
+  /** The tax years the new transactions go into, by their dates. */
+  years: { taxYearId: number; label: string; adding: number; firstDate: string }[];
+  /** Reasons the file can't be imported; nothing is imported while there are any. */
+  problems: string[];
+}

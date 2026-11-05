@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router';
 import { ArrowUpRight, ChevronRight, CircleSlash, Plus } from 'lucide-react';
 import { formatDisplayDate, formatGBP, shortCategoryName, type Expense, type ExpenseWithLineItems } from '@crafty/shared';
 import { ConfirmDialog } from '../components/ConfirmDialog';
+import { ImportButton } from '../components/ImportTransactions';
 import { SubmittedFiguresNotice } from '../components/SubmittedFiguresNotice';
 import { NoTaxYear } from '../components/NoTaxYear';
 import { PageBody, PageHeader } from '../components/PageHeader';
@@ -52,6 +53,7 @@ export function ExpenseList() {
           taxYear && (
             <>
               {filterState.filters && <ExportMenu href={(format) => exportUrl('expenses', filterState.filters!, format)} />}
+              {canEdit && <ImportButton kind="expenses" />}
               {canEdit && (
                 <ButtonLink to="/expenses/new" variant="primary">
                   <Plus className="size-4" aria-hidden />

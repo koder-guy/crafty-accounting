@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router';
 import { ArrowDownRight, Plus } from 'lucide-react';
 import { formatDisplayDate, formatGBP, shortCategoryName, type Income } from '@crafty/shared';
 import { ConfirmDialog } from '../components/ConfirmDialog';
+import { ImportButton } from '../components/ImportTransactions';
 import { SubmittedFiguresNotice } from '../components/SubmittedFiguresNotice';
 import { NoTaxYear } from '../components/NoTaxYear';
 import { PageBody, PageHeader } from '../components/PageHeader';
@@ -51,6 +52,7 @@ export function IncomeList() {
           taxYear && (
             <>
               {filterState.filters && <ExportMenu href={(format) => exportUrl('incomes', filterState.filters!, format)} />}
+              {canEdit && <ImportButton kind="incomes" />}
               {canEdit && (
                 <ButtonLink to="/income/new" variant="primary">
                   <Plus className="size-4" aria-hidden />

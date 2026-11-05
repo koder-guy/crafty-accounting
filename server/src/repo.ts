@@ -12,7 +12,9 @@ import type {
   TransactionFilters,
   UseOfHomeResponse,
 } from '@crafty/shared';
+import type { ExpenseInput, IncomeInput } from '@crafty/shared';
 import {
+  isNeverAllowable,
   MILEAGE_HMRC_CODE,
   mileageClaims,
   startYearFromLabel,
@@ -540,4 +542,83 @@ export function useOfHomeClaimLines(db: Db, taxYearIds?: number[]) {
 export function useOfHomeCategoryId(db: Db): number {
   const row = db.prepare('SELECT id FROM categories WHERE is_custom = 0 AND type = ? AND hmrc_code = ?').get('EXPENSE', USE_OF_HOME_HMRC_CODE) as Row;
   return row.id;
+}
+
+type NewIncome = Omit<IncomeInput, 'removeDocumentIds' | 'expectedUpdatedAt'>;
+type NewExpense = Omit<ExpenseInput, 'removeDocumentIds' | 'expectedUpdatedAt' | 'lineItems'> & {
+  lineItems: { description: string; amountPence: number; categoryId: number; disallowable: boolean }[];
+};
+
+/** Adds an income, recorded as added by `by`; returns its id. Callers check the tax year, date and category first. */
+export function insertIncome(db: Db, input: NewIncome, by: string): number {
+  const result = db
+    .prepare(
+      `INSERT INTO incomes (tax_year_id, date, description, source, reference, payment_method,
+         amount_pence, category_id, notes, created_by, updated_by)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    )
+    .run(
+      input.taxYearId,
+      input.date,
+      input.description,
+      input.source,
+      input.reference,
+      input.paymentMethod,
+      input.amountPence,
+      input.categoryId,
+      input.notes,
+      by,
+      by,
+    );
+  return Number(result.lastInsertRowid);
+}
+
+/** A transaction's total is always the sum of its line items. */
+export const lineItemsTotal = (items: { amountPence: number }[]) => items.reduce((acc, item) => acc + item.amountPence, 0);
+
+/** An expense line's database values; entertainment and depreciation are always disallowable. */
+export function lineItemParams(
+  db: Db,
+  item: { description: string; amountPence: number; categoryId: number; disallowable: boolean },
+  sortOrder: number,
+) {
+  return {
+    description: item.description,
+    amountPence: item.amountPence,
+    categoryId: item.categoryId,
+    disallowable: item.disallowable || isNeverAllowable(getCategory(db, item.categoryId)!.hmrcCode) ? 1 : 0,
+    sortOrder,
+  };
+}
+
+export const insertLineItem = (db: Db, expenseId: number) =>
+  db.prepare(
+    `INSERT INTO expense_line_items (expense_id, description, amount_pence, category_id, disallowable, sort_order)
+     VALUES (${expenseId}, @description, @amountPence, @categoryId, @disallowable, @sortOrder)`,
+  );
+
+/** Adds an expense and its line items, recorded as added by `by`; returns its id. Callers check the tax year, date and categories first. */
+export function insertExpense(db: Db, input: NewExpense, by: string): number {
+  const result = db
+    .prepare(
+      `INSERT INTO expenses (tax_year_id, date, payee, invoice_number, order_number,
+         payment_method, total_pence, notes, created_by, updated_by)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    )
+    .run(
+      input.taxYearId,
+      input.date,
+      input.payee,
+      input.invoiceNumber,
+      input.orderNumber,
+      input.paymentMethod,
+      lineItemsTotal(input.lineItems),
+      input.notes,
+      by,
+      by,
+    );
+  const expenseId = Number(result.lastInsertRowid);
+  const insert = insertLineItem(db, expenseId);
+  input.lineItems.forEach((item, index) => insert.run(lineItemParams(db, item, index)));
+  return expenseId;
 }

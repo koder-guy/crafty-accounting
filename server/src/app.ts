@@ -24,8 +24,8 @@ import { usersRouter } from './routes/users';
 /** Identifies one open browser tab, so it isn't told about its own changes. */
 const clientId = (value: unknown) => (typeof value === 'string' && /^[\w-]{1,64}$/.test(value) ? value : null);
 
-/** Changes that only affect the person making them, so nobody else needs telling. */
-const PERSONAL_CHANGES = new Set(['/tax-years/active']);
+/** Requests that only affect the person making them, or change nothing, so nobody else needs telling. */
+const PERSONAL_CHANGES = new Set(['/tax-years/active', '/incomes/import/preview', '/expenses/import/preview']);
 
 export function createApp(ctx: AppContext) {
   const app = express();
@@ -46,6 +46,8 @@ export function createApp(ctx: AppContext) {
     next();
   });
 
+  // A whole year's export can be larger than other requests.
+  app.use(['/api/incomes/import', '/api/expenses/import'], express.json({ limit: '25mb' }));
   app.use(express.json({ limit: '1mb' }));
   app.use(
     cookieSession({

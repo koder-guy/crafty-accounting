@@ -352,6 +352,8 @@ describe('read-only people', () => {
       viewer.put(`/api/incomes/${saved.id}`).send(income(yearId)),
       viewer.delete(`/api/incomes/${saved.id}`),
       viewer.post('/api/expenses').send(expense(yearId)),
+      viewer.post('/api/incomes/import').send({ incomes: [] }),
+      viewer.post('/api/expenses/import/preview').send({ expenses: [] }),
       viewer.post('/api/mileage').send({ taxYearId: yearId, date: '2025-06-14', description: 'Trip', vehicle: 'car', distanceTenths: 10 }),
       viewer.put('/api/use-of-home').send({ taxYearId: yearId, months: [] }),
       viewer.put(`/api/tax-years/${yearId}/tax-settings`).send({ otherIncomePence: 1 }),
@@ -802,6 +804,136 @@ describe('expenses', () => {
     expect(body.incomes).toHaveLength(1);
     expect(body.incomes[0]).toMatchObject({ amountPence: 12345, hmrcCode: 'turnover', category: expect.any(String), documents: [] });
     expect(body.incomes[0].date).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  });
+
+  it('imports its own JSON export, leaving out what the books already have', async () => {
+    const yearId = await createYear();
+    await agent.post('/api/expenses').send(expense(yearId, { orderNumber: 'PO-9', notes: 'For the spring fair' })).expect(201);
+    const glue = await agent
+      .post('/api/expenses')
+      .send(expense(yearId, { date: '2025-06-01', payee: 'Glue Co', lineItems: [{ description: 'Glue', amountPence: 700, categoryId: cat('costOfGoods') }] }))
+      .expect(201);
+    await agent.post('/api/incomes').send(income(yearId)).expect(201);
+    const sale = (await agent.post('/api/incomes').send(income(yearId, { date: '2025-07-01', amountPence: 1250 })).expect(201)).body;
+    const expenses = JSON.parse((await agent.get('/api/expenses/export.json').query({ taxYearId: yearId })).text);
+    const incomes = JSON.parse((await agent.get('/api/incomes/export.json').query({ taxYearId: yearId })).text);
+
+    // Everything is already there.
+    const same = (await agent.post('/api/expenses/import/preview').send(expenses).expect(200)).body;
+    expect(same).toMatchObject({ inFile: 2, adding: 0, alreadyThere: 2, problems: [] });
+
+    await agent.delete(`/api/expenses/${glue.body.id}`).expect(204);
+    await agent.delete(`/api/incomes/${sale.id}`).expect(204);
+    const preview = (await agent.post('/api/expenses/import/preview').send(expenses).expect(200)).body;
+    expect(preview).toEqual({
+      inFile: 2,
+      adding: 1,
+      addingPence: 700,
+      alreadyThere: 1,
+      documentsLeftOut: 0,
+      years: [{ taxYearId: yearId, label: '2025-26', adding: 1, firstDate: '2025-06-01' }],
+      problems: [],
+    });
+    // A preview changes nothing.
+    expect((await agent.get('/api/expenses').query({ taxYearId: yearId })).body).toHaveLength(1);
+
+    await agent.post('/api/expenses/import').send(expenses).expect(201);
+    await agent.post('/api/incomes/import').send(incomes).expect(201);
+    const again = JSON.parse((await agent.get('/api/expenses/export.json').query({ taxYearId: yearId })).text);
+    const strip = (rows: Record<string, unknown>[]) => rows.map(({ id: _id, ...rest }) => rest);
+    expect(strip(again.expenses)).toEqual(strip(expenses.expenses));
+    const incomesAgain = JSON.parse((await agent.get('/api/incomes/export.json').query({ taxYearId: yearId })).text);
+    expect(strip(incomesAgain.incomes)).toEqual(strip(incomes.incomes));
+
+    // Importing again adds nothing.
+    expect((await agent.post('/api/incomes/import').send(incomes).expect(201)).body).toMatchObject({ adding: 0, alreadyThere: 2 });
+    expect((await agent.get('/api/incomes').query({ taxYearId: yearId })).body).toHaveLength(2);
+  });
+
+  it('imports into the tax year of each date, finds categories by name or HMRC field, and counts repeats', async () => {
+    const year1 = await createYear(2024);
+    const year2 = await createYear(2025);
+    await agent.post('/api/categories').send({ name: 'Stall fees', mapsToCategoryId: cat('premisesRunningCosts') }).expect(201);
+    await agent.post('/api/incomes').send(income(year2, { date: '2025-06-14', description: 'Fair', amountPence: 500, paymentMethod: 'cash' })).expect(201);
+    const fairSale = { date: '2025-06-14', description: 'fair ', paymentMethod: 'cash', amountPence: 500, category: 'Sales', hmrcCode: 'turnover' };
+    const file = {
+      incomes: [
+        fairSale,
+        fairSale,
+        { ...fairSale, date: '2024-12-01', description: 'Christmas fair', category: 'From another install', documents: ['till-roll.pdf'] },
+      ],
+    };
+    const preview = (await agent.post('/api/incomes/import/preview').send(file).expect(200)).body;
+    expect(preview).toMatchObject({ inFile: 3, adding: 2, alreadyThere: 1, documentsLeftOut: 1, addingPence: 1000, problems: [] });
+    expect(preview.years.map((y: { taxYearId: number; adding: number }) => [y.taxYearId, y.adding])).toEqual([
+      [year1, 1],
+      [year2, 1],
+    ]);
+    await agent.post('/api/incomes/import').send(file).expect(201);
+    const christmas = (await agent.get('/api/incomes').query({ taxYearId: year1 })).body;
+    expect(christmas).toMatchObject([{ description: 'Christmas fair', hmrcCode: 'turnover', createdBy: NAME, documents: [] }]);
+
+    // A custom category by name; entertainment stays disallowable whatever the file says.
+    const expenses = {
+      expenses: [
+        {
+          date: '2025-05-01',
+          payee: 'Town Hall',
+          paymentMethod: 'card',
+          lineItems: [
+            { description: 'Pitch', category: 'stall FEES', amountPence: 3000 },
+            { description: 'Lunch with buyer', hmrcCode: 'businessEntertainmentCosts', amountPence: 1500, disallowable: false },
+          ],
+        },
+      ],
+    };
+    await agent.post('/api/expenses/import').send(expenses).expect(201);
+    const [hall] = (await agent.get('/api/expenses').query({ taxYearId: year2 })).body;
+    expect(hall.totalPence).toBe(4500);
+    expect(hall.lineItems.map((l: { categoryName: string; disallowable: boolean }) => [l.categoryName, l.disallowable])).toEqual([
+      ['Stall fees', false],
+      [expect.any(String), true],
+    ]);
+  });
+
+  it('imports nothing from a file with any problem, and says what they are', async () => {
+    const yearId = await createYear();
+    const good = { date: '2025-06-14', description: 'Sale', paymentMethod: 'card', amountPence: 500, category: 'Sales', hmrcCode: 'turnover' };
+    const file = {
+      incomes: [
+        good,
+        { ...good, date: '2023-05-01' },
+        { ...good, category: 'Nope', hmrcCode: 'nope' },
+        { ...good, amountPence: 1.5 },
+        { ...good, category: 'Costs of goods bought for resale or goods used', hmrcCode: 'costOfGoods' },
+      ],
+    };
+    const preview = (await agent.post('/api/incomes/import/preview').send(file).expect(200)).body;
+    expect(preview.adding).toBe(0);
+    expect(preview.problems).toEqual([
+      "Income 2 · 1 May 2023 · Sale: there's no tax year for 1 May 2023. Add it in Settings → Tax Years first.",
+      "Income 3 · 14 Jun 2025 · Sale: there's no income category “Nope”.",
+      'Income 4 · 14 Jun 2025 · Sale: amountPence: Amount must be in whole pence',
+      expect.stringMatching(/^Income 5 .*no income category/),
+    ]);
+    const res = await agent.post('/api/incomes/import').send(file).expect(422);
+    expect(res.body.error).toMatch(/^Nothing was imported\. Income 2/);
+    expect((await agent.get('/api/incomes').query({ taxYearId: yearId })).body).toHaveLength(0);
+
+    const badTotal = {
+      expenses: [{ date: '2025-06-14', payee: 'Shop', paymentMethod: 'cash', totalPence: 999, lineItems: [{ description: 'Card', amountPence: 100, hmrcCode: 'costOfGoods' }, { description: '', amountPence: 1, hmrcCode: 'costOfGoods' }] }],
+    };
+    expect((await agent.post('/api/expenses/import/preview').send(badTotal).expect(200)).body.problems).toEqual([
+      'Expense 1 · 14 Jun 2025 · Shop: line 2, description: Line item description is required',
+    ]);
+    badTotal.expenses[0]!.lineItems.pop();
+    expect((await agent.post('/api/expenses/import/preview').send(badTotal).expect(200)).body.problems).toEqual([
+      "Expense 1 · 14 Jun 2025 · Shop: its total, £9.99, isn't the sum of its line items, £1.00.",
+    ]);
+
+    const wrongKind = await agent.post('/api/incomes/import/preview').send(badTotal).expect(422);
+    expect(wrongKind.body.error).toBe('This is an expense export. Import it on the Expenses page.');
+    await agent.post('/api/expenses/import/preview').send({ hello: 1 }).expect(422);
   });
 
   it('includes each transaction’s line items in the list', async () => {

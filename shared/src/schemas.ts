@@ -249,3 +249,41 @@ export const hmrcBusinessSchema = z.object({
   businessId: z.string().regex(/^X[a-zA-Z0-9]IS\d{11}$/, 'Not an HMRC business ID'),
   tradingName: z.string().trim().max(200).nullable(),
 });
+
+// ---- Importing a JSON export ----
+
+/** Most transactions one import can hold. */
+export const MAX_IMPORT_ROWS = 20_000;
+
+/**
+ * A transaction's category in an export: its name, and the HMRC field it counts
+ * towards, used when no category has that name (say, a custom one from another install).
+ */
+const importCategory = {
+  category: z.string().trim().max(200).nullish(),
+  hmrcCode: z.string().trim().max(100).nullish(),
+};
+
+/** Document names are listed in an export, but the files themselves aren't in it. */
+const importDocuments = z.array(z.unknown()).nullish();
+
+/**
+ * One income as `GET /api/incomes/export.json` writes it. Fields worked out by the
+ * server (id, createdBy, updatedBy) are ignored; the tax year comes from the date.
+ */
+export const incomeImportRowSchema = incomeInputSchema
+  .pick({ date: true, description: true, source: true, reference: true, paymentMethod: true, amountPence: true, notes: true })
+  .extend({ ...importCategory, documents: importDocuments });
+
+/** One expense as `GET /api/expenses/export.json` writes it; the totals are worked out again from the line items. */
+export const expenseImportRowSchema = expenseInputSchema
+  .pick({ date: true, payee: true, invoiceNumber: true, orderNumber: true, paymentMethod: true, notes: true })
+  .extend({
+    totalPence: z.number().nullish(),
+    lineItems: z
+      .array(lineItemInputSchema.pick({ description: true, amountPence: true, disallowable: true }).extend(importCategory))
+      .min(1, 'Add at least one line item'),
+    documents: importDocuments,
+  });
+export type IncomeImportRow = z.infer<typeof incomeImportRowSchema>;
+export type ExpenseImportRow = z.infer<typeof expenseImportRowSchema>;
