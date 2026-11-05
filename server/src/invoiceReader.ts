@@ -110,7 +110,9 @@ export function toInvoiceReading(reply: unknown, categories: InvoiceInput['categ
 
   const date = r.date && /^\d{4}-\d{2}-\d{2}$/.test(r.date) && !Number.isNaN(Date.parse(r.date)) ? r.date : null;
   if (!date) warnings.push('No date could be read; enter it yourself.');
-  if (!r.paymentMethod) warnings.push('The invoice doesn\'t say how it was paid; choose the payment method.');
+  // Amazon orders are paid by card.
+  const paymentMethod = r.amazonOrder ? 'card' : r.paymentMethod;
+  if (!paymentMethod) warnings.push('The invoice doesn\'t say how it was paid; choose the payment method.');
 
   return {
     date,
@@ -118,7 +120,7 @@ export function toInvoiceReading(reply: unknown, categories: InvoiceInput['categ
     payee: r.amazonOrder ? AMAZON_PAYEE : r.payee.trim().slice(0, 200),
     invoiceNumber: r.invoiceNumber.trim().slice(0, 100),
     orderNumber: r.orderNumber.trim().slice(0, 100),
-    paymentMethod: r.paymentMethod,
+    paymentMethod,
     lineItems,
     totalPence,
     warnings,

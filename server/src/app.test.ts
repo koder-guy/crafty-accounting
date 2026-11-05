@@ -3448,10 +3448,14 @@ describe('reading invoices', () => {
     expect(read).toEqual([]);
   });
 
-  it('puts every Amazon order under Amazon, whichever seller the invoice names', () => {
+  it('puts every Amazon order under Amazon, paid by card, whichever seller the invoice names', () => {
     const expenseCats = categories.filter((c) => c.type === 'EXPENSE');
-    expect(toInvoiceReading(reply({ payee: 'SUNNYCLUE Crafts Ltd', amazonOrder: true }), expenseCats).payee).toBe('Amazon');
-    expect(toInvoiceReading(reply({ payee: 'Bead World', amazonOrder: false }), expenseCats).payee).toBe('Bead World');
+    const amazon = toInvoiceReading(reply({ payee: 'SUNNYCLUE Crafts Ltd', amazonOrder: true, paymentMethod: null }), expenseCats);
+    expect(amazon).toMatchObject({ payee: 'Amazon', paymentMethod: 'card', warnings: [] });
+    const other = toInvoiceReading(reply({ payee: 'Bead World', amazonOrder: false, paymentMethod: null }), expenseCats);
+    expect(other.payee).toBe('Bead World');
+    expect(other.paymentMethod).toBeNull();
+    expect(other.warnings).toEqual([expect.stringMatching(/how it was paid/)]);
   });
 
   it('keeps only what fits the form and says what to check', () => {
