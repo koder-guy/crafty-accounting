@@ -29,6 +29,7 @@ import {
   parsePoundsToPence,
   photoEncodeAttempts,
   photoFilename,
+  invoiceFilename,
   penceToPounds,
   percentChange,
   profitMargin,
@@ -561,5 +562,24 @@ describe('comparing tax years', () => {
     // Only the flat rate was used in this category, so there's no "recorded in Expenses" row.
     expect(rows[1].children.map((c) => c.show)).toEqual(['flat:mileage']);
     expect(rows[2].children).toEqual([]);
+  });
+});
+
+describe('invoice filenames', () => {
+  it('names a read invoice by date, payee, invoice number and amount', () => {
+    expect(
+      invoiceFilename({ date: '2025-07-24', payee: 'Amazon', invoiceNumber: 'DS-AEU-INV-GB-2025-394494656', amountPence: 3133 }, '.pdf'),
+    ).toBe('2025-07-24_Amazon_DS-AEU-INV-GB-2025-394494656_£31.33.pdf');
+    expect(invoiceFilename({ date: '2025-07-24', payee: 'Bead World Ltd', invoiceNumber: '', amountPence: 123456 }, '.JPG')).toBe(
+      '2025-07-24_Bead World Ltd_£1234.56.jpg',
+    );
+  });
+
+  it('keeps the name safe to store, and gives up when the invoice shows nothing', () => {
+    expect(invoiceFilename({ date: null, payee: ' A/B: "Crafts"\n ', invoiceNumber: '../INV 7', amountPence: null }, '.pdf')).toBe(
+      'A-B- -Crafts-_.-INV 7.pdf',
+    );
+    expect(invoiceFilename({ date: null, payee: '', invoiceNumber: '', amountPence: 0 }, '.pdf')).toBeNull();
+    expect(invoiceFilename({ date: '2025-07-24', payee: 'x'.repeat(300), invoiceNumber: 'y'.repeat(300), amountPence: 1 }, '.pdf')!.length).toBeLessThanOrEqual(200);
   });
 });

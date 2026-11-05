@@ -8,6 +8,7 @@ import {
   displayTaxYear,
   isNeverAllowable,
   formatDisplayDate,
+  invoiceFilename,
   isDateInTaxYear,
   parsePoundsToPence,
   penceToPounds,
@@ -178,8 +179,13 @@ export function ExpenseForm() {
   }, [id, existing, copyId, original, activeYear?.id, expenseCategories.length]);
 
   // Fills the form from an invoice Claude read. Kept dirty, so leaving still asks first.
-  const fillFromInvoice = (reading: InvoiceReading, file: File) => {
+  const fillFromInvoice = (reading: InvoiceReading, picked: File) => {
     const current = getValues();
+    // Named <date>_<payee>_<invoice number>_<amount>, from what was read.
+    const amountPence = reading.totalPence ?? (reading.lineItems.reduce((sum, li) => sum + li.amountPence, 0) || null);
+    const extension = /\.[^.]+$/.exec(picked.name)?.[0] ?? '';
+    const name = invoiceFilename({ date: reading.date, payee: reading.payee, invoiceNumber: reading.invoiceNumber, amountPence }, extension);
+    const file = name ? new File([picked], name, { type: picked.type, lastModified: picked.lastModified }) : picked;
     reset(
       {
         ...current,
