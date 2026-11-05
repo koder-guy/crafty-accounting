@@ -17,7 +17,6 @@ import {
   FileSpreadsheet,
   FileText,
   ListFilter,
-  Paperclip,
   Pencil,
   Search,
   Trash2,
@@ -610,14 +609,14 @@ export function TransactionCard({
   );
 }
 
-/** A paperclip showing a transaction has documents: just a sign, not a control. `muted` for grey. */
+/** A document icon showing a transaction has documents: just a sign, not a control. `muted` for grey. */
 export function DocIndicator({ documents, muted = false }: { documents: TransactionDocument[]; muted?: boolean }) {
   if (documents.length === 0) return null;
   const label = documents.length === 1 ? `Document: ${documents[0].filename}` : `${documents.length} documents`;
   return (
-    <Paperclip className={`inline size-3.5 shrink-0 ${muted ? 'text-muted' : 'text-accent-soft'}`} role="img" aria-label={label}>
+    <FileText className={`inline size-3.5 shrink-0 ${muted ? 'text-muted' : 'text-accent-soft'}`} role="img" aria-label={label}>
       <title>{label}</title>
-    </Paperclip>
+    </FileText>
   );
 }
 
