@@ -13,10 +13,12 @@ import {
   DocDownloadLink,
   ExportMenu,
   FilterBar,
+  FilterToggle,
   RowActions,
   SortTh,
   TransactionCard,
   useSort,
+  useFiltersShown,
   useTransactionFilters,
 } from '../components/transactions';
 import { Alert, ButtonLink, Card, CardHeader, EmptyState, PaymentBadge, Spinner } from '../components/ui';
@@ -28,6 +30,7 @@ export function IncomeList() {
   const { data: categories = [] } = useCategories();
   const { data, isLoading, error } = useIncomes(filterState.filters);
   const canEdit = useCanEdit();
+  const [filtersShown, setFiltersShown] = useFiltersShown('incomes');
   const remove = useDeleteTransaction('incomes');
   const [toDelete, setToDelete] = useState<Income | null>(null);
   const navigate = useNavigate();
@@ -63,34 +66,38 @@ export function IncomeList() {
         ) : !taxYear ? (
           <NoTaxYear />
         ) : (
-          <>
-            {/* Phones: Add across the page, with Export and Import side by side under it. */}
-            <div
-              className={`mb-3 gap-2 print:hidden ${canEdit ? 'grid grid-cols-2 sm:flex sm:justify-end' : 'flex justify-end'}`}
-            >
-              {filterState.filters && <ExportMenu href={(format) => exportUrl('incomes', filterState.filters!, format)} />}
-              {canEdit && <ImportButton kind="incomes" />}
-              {canEdit && (
-                <ButtonLink to="/income/new" variant="primary" className="order-first col-span-2 sm:order-none">
-                  <Plus className="size-4" aria-hidden />
-                  Add income
-                </ButtonLink>
-              )}
-            </div>
           <Card ref={tableTop}>
             <CardHeader
               icon={<ArrowDownRight className="size-5 text-in-soft" />}
               title="Income received"
+              tools={
+                <>
+                  <FilterToggle
+                    shown={filtersShown}
+                    onToggle={() => setFiltersShown((v) => !v)}
+                    controls="incomes-filters"
+                    active={filterState.active}
+                  />
+                  {canEdit && (
+                    <ButtonLink to="/income/new" aria-label="Add income" title="Add income" className="size-9 shrink-0 !p-0">
+                      <Plus className="size-4" aria-hidden />
+                    </ButtonLink>
+                  )}
+                  {canEdit && <ImportButton kind="incomes" iconOnly />}
+                  {filterState.filters && <ExportMenu href={(format) => exportUrl('incomes', filterState.filters!, format)} iconOnly />}
+                </>
+              }
               action={
                 data && (
                   <span className="text-sm text-muted">
-                    {data.length} {data.length === 1 ? 'transaction' : 'transactions'} ·{' '}
+                    {data.length} {filterState.active ? 'filtered ' : ''}
+                    {data.length === 1 ? 'transaction' : 'transactions'} ·{' '}
                     <span className="tabular font-semibold text-in-soft">{formatGBP(total)}</span>
                   </span>
                 )
               }
             />
-            <FilterBar filterState={filterState} categories={categories} type="INCOME" />
+            <FilterBar filterState={filterState} categories={categories} type="INCOME" id="incomes-filters" shown={filtersShown} />
             {error ? (
               <div className="p-6">
                 <Alert>{error.message}</Alert>
@@ -170,7 +177,6 @@ export function IncomeList() {
               </>
             )}
           </Card>
-          </>
         )}
       </PageBody>
 

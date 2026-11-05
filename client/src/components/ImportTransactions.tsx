@@ -17,7 +17,7 @@ type Stage =
  * Imports transactions from a JSON export (this page's Export → JSON, from this
  * install or another), after showing what it would add.
  */
-export function ImportButton({ kind }: { kind: Kind }) {
+export function ImportButton({ kind, iconOnly = false }: { kind: Kind; iconOnly?: boolean }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const { run, preview } = useImportTransactions(kind);
   const [stage, setStage] = useState<Stage | null>(null);
@@ -51,9 +51,16 @@ export function ImportButton({ kind }: { kind: Kind }) {
           e.target.value = '';
         }}
       />
-      <Button type="button" onClick={() => inputRef.current?.click()} busy={preview.isPending}>
+      <Button
+        type="button"
+        onClick={() => inputRef.current?.click()}
+        busy={preview.isPending}
+        aria-label={iconOnly ? 'Import' : undefined}
+        title={iconOnly ? 'Import' : undefined}
+        className={iconOnly ? 'size-9 shrink-0 !p-0' : ''}
+      >
         {!preview.isPending && <Upload className="size-4" aria-hidden />}
-        Import
+        {!iconOnly && 'Import'}
       </Button>
       <ImportDialog
         kind={kind}

@@ -16,6 +16,7 @@ import {
   FileBraces,
   FileSpreadsheet,
   FileText,
+  ListFilter,
   Paperclip,
   Pencil,
   Search,
@@ -115,10 +116,15 @@ export function FilterBar({
   filterState,
   categories,
   type,
+  id,
+  shown = true,
 }: {
   filterState: ReturnType<typeof useTransactionFilters>;
   categories: Category[];
   type: CategoryType;
+  /** For the FilterToggle that shows and hides it. */
+  id?: string;
+  shown?: boolean;
 }) {
   const { months, month, get, set } = filterState;
   const [search, setSearch] = useState(get('search'));
@@ -136,42 +142,45 @@ export function FilterBar({
   }, [search]);
 
   return (
-    <div className="grid gap-3 border-b border-line px-5 pb-5 sm:grid-cols-2 sm:px-6 xl:flex">
-      <div className="relative xl:w-64">
-        <label htmlFor="f-search" className="sr-only">
-          Search
-        </label>
-        <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-faint" aria-hidden />
-        <input
-          id="f-search"
-          type="search"
-          className="field pl-9"
-          placeholder="Search…"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
+    // The line under it stays when the filters are hidden, to separate the header from the table.
+    <div className="border-b border-line">
+      <div id={id} hidden={!shown} className="grid gap-3 px-5 pb-5 sm:grid-cols-2 sm:px-6 xl:flex">
+        <div className="relative xl:w-64">
+          <label htmlFor="f-search" className="sr-only">
+            Search
+          </label>
+          <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-faint" aria-hidden />
+          <input
+            id="f-search"
+            type="search"
+            className="field pl-9"
+            placeholder="Search…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+        <FilterSelect label="Payment method" className="xl:w-44" value={get('paymentMethod')} onChange={(v) => set('paymentMethod', v)}>
+          <option value="">All payment types</option>
+          {PAYMENT_METHODS.map((m) => (
+            <option key={m} value={m}>
+              {PAYMENT_METHOD_LABELS[m]}
+            </option>
+          ))}
+        </FilterSelect>
+        <FilterSelect label="Category" className="min-w-0 xl:w-72" value={get('categoryId')} onChange={(v) => set('categoryId', v)}>
+          <option value="">All categories</option>
+          <CategoryOptions categories={categories} type={type} />
+        </FilterSelect>
+        <FilterSelect label="Tax month" tooltip={month?.range} className="xl:w-44" value={get('taxMonth')} onChange={(v) => set('taxMonth', v)}>
+          <option value="">All tax months</option>
+          {/* The picked month shows its dates in the closed menu; the rest stay as names. */}
+          {months.map((m) => (
+            <option key={m.index} value={m.index}>
+              {m.index === month?.index ? m.shortRange : m.name}
+            </option>
+          ))}
+        </FilterSelect>
       </div>
-      <FilterSelect label="Payment method" className="xl:w-44" value={get('paymentMethod')} onChange={(v) => set('paymentMethod', v)}>
-        <option value="">All payment types</option>
-        {PAYMENT_METHODS.map((m) => (
-          <option key={m} value={m}>
-            {PAYMENT_METHOD_LABELS[m]}
-          </option>
-        ))}
-      </FilterSelect>
-      <FilterSelect label="Category" className="min-w-0 xl:w-72" value={get('categoryId')} onChange={(v) => set('categoryId', v)}>
-        <option value="">All categories</option>
-        <CategoryOptions categories={categories} type={type} />
-      </FilterSelect>
-      <FilterSelect label="Tax month" tooltip={month?.range} className="xl:w-44" value={get('taxMonth')} onChange={(v) => set('taxMonth', v)}>
-        <option value="">All tax months</option>
-        {/* The picked month shows its dates in the closed menu; the rest stay as names. */}
-        {months.map((m) => (
-          <option key={m.index} value={m.index}>
-            {m.index === month?.index ? m.shortRange : m.name}
-          </option>
-        ))}
-      </FilterSelect>
     </div>
   );
 }
@@ -207,6 +216,60 @@ function FilterSelect({
 // ---- Sorting ----
 
 export type SortDir = 'asc' | 'desc';
+
+const FILTERS_PREFIX = 'crafty.filters.';
+
+/** Whether a table's filters are showing: hidden at first, then remembered per table for this browser tab (sessionStorage). */
+export function useFiltersShown(table: string) {
+  const [shown, setShown] = useState(() => {
+    try {
+      return sessionStorage.getItem(FILTERS_PREFIX + table) === 'shown';
+    } catch {
+      return false;
+    }
+  });
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(FILTERS_PREFIX + table, shown ? 'shown' : 'hidden');
+    } catch {
+      // Blocked storage: it just isn't remembered.
+    }
+  }, [table, shown]);
+  return [shown, setShown] as const;
+}
+
+/** Icon-only, bordered button that shows and hides a FilterBar; marked while hidden filters are in use. */
+export function FilterToggle({
+  shown,
+  onToggle,
+  controls,
+  active,
+}: {
+  shown: boolean;
+  onToggle: () => void;
+  controls: string;
+  active: boolean;
+}) {
+  const label = shown ? 'Hide filters' : active ? 'Show filters (filters in use)' : 'Show filters';
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-expanded={shown}
+      aria-controls={controls}
+      aria-label={label}
+      title={label}
+      className={`relative inline-flex size-9 shrink-0 items-center justify-center rounded-lg border transition-colors ${
+        shown
+          ? 'border-accent-soft/60 bg-accent-bg text-accent-soft'
+          : 'border-line-strong bg-surface-2 text-muted hover:border-accent-soft/60 hover:text-white'
+      }`}
+    >
+      <ListFilter className="size-4" aria-hidden />
+      {!shown && active && <span className="absolute -top-1 -right-1 size-2.5 rounded-full border-2 border-surface bg-out" aria-hidden />}
+    </button>
+  );
+}
 
 const SORT_PREFIX = 'crafty.sort.';
 
@@ -337,7 +400,7 @@ const EXPORT_FORMATS: { format: ExportFormat; label: string; hint: string; icon:
  * Drawn over the page, right-aligned under the button (or above it near the bottom
  * of the window), and closed by a click elsewhere, Esc, Tab or scrolling.
  */
-export function ExportMenu({ href }: { href: (format: ExportFormat) => string }) {
+export function ExportMenu({ href, iconOnly = false }: { href: (format: ExportFormat) => string; iconOnly?: boolean }) {
   const [anchor, setAnchor] = useState<DOMRect | null>(null);
   const [position, setPosition] = useState<{ top: number; left: number } | null>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
@@ -416,13 +479,19 @@ export function ExportMenu({ href }: { href: (format: ExportFormat) => string })
             open();
           }
         }}
-        className={`inline-flex items-center justify-center gap-2 rounded-lg border bg-surface-2 px-3.5 py-2 text-sm font-medium whitespace-nowrap text-ink transition-colors hover:border-accent-soft/60 hover:text-white ${
-          anchor ? 'border-accent-soft/60 text-white' : 'border-line-strong'
-        }`}
+        aria-label={iconOnly ? 'Export' : undefined}
+        title={iconOnly ? 'Export' : undefined}
+        className={`inline-flex items-center justify-center gap-2 rounded-lg border bg-surface-2 text-sm font-medium whitespace-nowrap text-ink transition-colors hover:border-accent-soft/60 hover:text-white ${
+          iconOnly ? 'size-9 shrink-0' : 'px-3.5 py-2'
+        } ${anchor ? 'border-accent-soft/60 text-white' : 'border-line-strong'}`}
       >
         <Download className="size-4" aria-hidden />
-        Export
-        <ChevronDown className={`size-4 text-muted transition-transform ${anchor ? 'rotate-180' : ''}`} aria-hidden />
+        {!iconOnly && (
+          <>
+            Export
+            <ChevronDown className={`size-4 text-muted transition-transform ${anchor ? 'rotate-180' : ''}`} aria-hidden />
+          </>
+        )}
       </button>
       {anchor &&
         createPortal(
@@ -433,6 +502,11 @@ export function ExportMenu({ href }: { href: (format: ExportFormat) => string })
             style={{ position: 'fixed', top: position?.top ?? anchor.bottom + 4, left: position?.left ?? anchor.left }}
             className={`z-50 w-max min-w-56 rounded-lg border border-line-strong bg-surface p-1 shadow-2xl ${position ? '' : 'invisible'}`}
           >
+            {/* The menu's own label says this to screen readers. */}
+            <div className="mb-1 border-b border-line px-2.5 pt-1.5 pb-2" aria-hidden>
+              <div className="text-sm font-semibold text-ink">Export</div>
+              <div className="text-xs text-muted">Choose the format you need</div>
+            </div>
             {EXPORT_FORMATS.map(({ format, label, hint, icon: Icon }) => (
               <a
                 key={format}

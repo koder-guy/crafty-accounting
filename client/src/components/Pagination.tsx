@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState, type RefObject } from 'react';
 import { useSearchParams } from 'react-router';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
-export const PAGE_SIZES = [10, 20, 30, 50, 100] as const;
+export const PAGE_SIZES = [10, 15, 20, 30, 50, 100] as const;
 const DEFAULT_PAGE_SIZE = 20;
 const PAGE_SIZE_KEY = 'crafty.pageSize';
 /** The page is kept in the URL, so it survives opening a row and coming back. */

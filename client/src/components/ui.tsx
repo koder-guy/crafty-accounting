@@ -72,13 +72,35 @@ export function Card({ className = '', ref, children }: { className?: string; re
   );
 }
 
-export function CardHeader({ icon, title, action }: { icon?: ReactNode; title: ReactNode; action?: ReactNode }) {
+export function CardHeader({
+  icon,
+  title,
+  tools,
+  action,
+}: {
+  icon?: ReactNode;
+  title: ReactNode;
+  /** Buttons beside the title, after a divider. */
+  tools?: ReactNode;
+  action?: ReactNode;
+}) {
+  const heading = (
+    <h2 className="flex items-center gap-2.5 text-base font-semibold text-ink">
+      {icon}
+      {title}
+    </h2>
+  );
   return (
-    <div className="flex items-center justify-between gap-4 px-5 pt-5 pb-4 sm:px-6">
-      <h2 className="flex items-center gap-2.5 text-base font-semibold text-ink">
-        {icon}
-        {title}
-      </h2>
+    <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3 px-5 pt-5 pb-4 sm:px-6">
+      {tools ? (
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+          {heading}
+          <span className="hidden h-6 w-px bg-line-strong sm:block" aria-hidden />
+          <div className="flex items-center gap-2 print:hidden">{tools}</div>
+        </div>
+      ) : (
+        heading
+      )}
       {action}
     </div>
   );
