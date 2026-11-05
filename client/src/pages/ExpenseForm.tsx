@@ -426,7 +426,37 @@ function ExpenseFormPage() {
           </div>
         )}
         <form onSubmit={onSubmit} noValidate className="max-w-[876px] space-y-6">
-          {scan && <ScanCheckNotice reading={scan.reading} error={scan.error} left={scanList!.scans.filter((s) => s.id !== scan.id).length} />}
+          {scan && (
+            <Card className="p-4 sm:p-5">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <p className="text-sm text-muted">{scanProgress(scanList!.scans.filter((s) => s.id !== scan.id).length)}</p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button type="button" variant="softDanger" onClick={() => setConfirmDiscard(true)}>
+                    <Trash2 className="size-4" aria-hidden />
+                    Discard document
+                  </Button>
+                  {nextScan ? (
+                    <Button type="button" variant="ghost" onClick={() => (formDirty ? setConfirmSkip(true) : leave(afterScan))}>
+                      Skip for now
+                    </Button>
+                  ) : (
+                    <Button type="button" variant="ghost" onClick={() => navigate(backTo)}>
+                      Cancel
+                    </Button>
+                  )}
+                  <Button type="submit" variant="primary" busy={save.isPending || preparingPhoto} disabled={badDocumentNames}>
+                    {nextScan ? 'Add and check next' : 'Add expense'}
+                  </Button>
+                </div>
+              </div>
+              <ScanProblems reading={scan.reading} error={scan.error} />
+              {save.error && (
+                <div className="mt-4">
+                  <Alert>{save.error.message}</Alert>
+                </div>
+              )}
+            </Card>
+          )}
           {!id && !copyId && !scanId && claude?.configured && <ReadInvoice onRead={fillFromInvoice} onBusy={setReadingInvoice} />}
           <Card className="p-5 sm:p-6">
             <div className="grid gap-5 sm:grid-cols-2">
@@ -609,32 +639,24 @@ function ExpenseFormPage() {
 
             <SubmittedFiguresNotice className="mt-5" taxYearId={taxYear.id} dates={[watchedDate, existing?.date]} />
 
-            {save.error && (
-              <div className="mt-5">
-                <Alert>{save.error.message}</Alert>
-              </div>
+            {/* Checking a scanned document, the buttons are at the top, so moving on needs no scrolling. */}
+            {!scanId && (
+              <>
+                {save.error && (
+                  <div className="mt-5">
+                    <Alert>{save.error.message}</Alert>
+                  </div>
+                )}
+                <div className="mt-6 flex flex-wrap justify-end gap-3 border-t border-line pt-5">
+                  <Button type="button" variant="ghost" onClick={() => navigate(backTo)}>
+                    Cancel
+                  </Button>
+                  <Button type="submit" variant="primary" busy={save.isPending || preparingPhoto} disabled={badDocumentNames || readingInvoice}>
+                    {id ? 'Save changes' : 'Add expense'}
+                  </Button>
+                </div>
+              </>
             )}
-
-            <div className="mt-6 flex flex-wrap justify-end gap-3 border-t border-line pt-5">
-              {scanId && (
-                <Button type="button" variant="softDanger" className="mr-auto" onClick={() => setConfirmDiscard(true)}>
-                  <Trash2 className="size-4" aria-hidden />
-                  Discard document
-                </Button>
-              )}
-              {scanId && nextScan ? (
-                <Button type="button" variant="ghost" onClick={() => (formDirty ? setConfirmSkip(true) : leave(afterScan))}>
-                  Skip for now
-                </Button>
-              ) : (
-                <Button type="button" variant="ghost" onClick={() => navigate(backTo)}>
-                  Cancel
-                </Button>
-              )}
-              <Button type="submit" variant="primary" busy={save.isPending || preparingPhoto} disabled={badDocumentNames || readingInvoice}>
-                {id ? 'Save changes' : scanId && nextScan ? 'Add and check next' : 'Add expense'}
-              </Button>
-            </div>
           </Card>
         </form>
         {scanId && (
@@ -668,27 +690,24 @@ function ExpenseFormPage() {
   );
 }
 
-/** Above the form while checking a scanned document: what to look at, and how many are left. */
-function ScanCheckNotice({ reading, error, left }: { reading: InvoiceReading | null; error: string | null; left: number }) {
-  const more = left === 0 ? 'This is the last one to check.' : `${left} more to check after this one.`;
+const scanProgress = (left: number) => (left === 0 ? 'The last document to check' : `${left} more to check after this one`);
+
+/** Under the buttons while checking a scanned document: only what Claude flagged, or why it couldn't read it. */
+function ScanProblems({ reading, error }: { reading: InvoiceReading | null; error: string | null }) {
+  if (reading && !reading.warnings.length) return null;
   return (
-    <Alert tone={!reading ? 'error' : reading.warnings.length ? 'warning' : 'info'}>
-      <p className="font-medium">
-        {reading ? 'Filled in from the scanned document.' : "Claude couldn't read this document, so fill it in yourself."}
-      </p>
-      {error && <p className="mt-1">{error}</p>}
-      {reading && reading.warnings.length > 0 && (
-        <>
-          <p className="mt-1">Check everything before saving, especially:</p>
-          <ul className="mt-1 list-disc pl-5">
+    <div className="mt-4">
+      <Alert tone={reading ? 'warning' : 'error'}>
+        {reading ? (
+          <ul className="list-disc pl-5">
             {reading.warnings.map((w) => (
               <li key={w}>{w}</li>
             ))}
           </ul>
-        </>
-      )}
-      {reading && !reading.warnings.length && <p className="mt-1">Check everything before saving.</p>}
-      <p className="mt-1">{more}</p>
-    </Alert>
+        ) : (
+          <p>{error ?? "Claude couldn't read this document, so fill it in yourself."}</p>
+        )}
+      </Alert>
+    </div>
   );
 }
