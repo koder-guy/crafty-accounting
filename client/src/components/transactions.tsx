@@ -43,7 +43,7 @@ import { compressPhoto } from '../lib/compressPhoto';
 import { useCanEdit } from '../lib/queries';
 import { CameraDialog, useCameraOption } from './CameraDialog';
 import { CategoryOptions } from './CategoryOptions';
-import { IconButton, PaymentBadge, SOFT_DANGER } from './ui';
+import { buttonClasses, IconButton, PaymentBadge, SOFT_DANGER } from './ui';
 
 // ---- Filters (kept in the URL so they survive navigation) ----
 
@@ -549,16 +549,26 @@ export function ExportMenu({
 /** "its attached document" / "its 3 attached documents", for delete confirmations. */
 export const attachedDocuments = (count: number) => (count === 1 ? 'its attached document' : `its ${count} attached documents`);
 
-/** The documents on a transaction page, each a download link. */
+/**
+ * The documents on a transaction page: each name with View and Download buttons. A grid rather
+ * than a list, so the buttons line up just past the longest name (and names wrap when space is short).
+ */
 export function DocumentLinks({ documents }: { documents: TransactionDocument[] }) {
   if (documents.length === 0) return null;
+  const iconButton = `${buttonClasses()} size-8 shrink-0 !p-0 print:hidden`;
   return (
-    <ul className="space-y-1.5">
+    <ul className="grid w-fit max-w-full grid-cols-[minmax(0,max-content)_auto_auto] items-center gap-x-2 gap-y-1.5">
       {documents.map((d) => (
-        <li key={d.id}>
-          <a href={documentUrl(d.filename, true)} className="inline-flex items-center gap-1.5 break-all text-accent-soft hover:underline">
-            <Download className="size-4 shrink-0" aria-hidden />
-            {d.filename}
+        <li key={d.id} className="col-span-3 grid grid-cols-subgrid items-center">
+          <span className="flex min-w-0 items-center gap-1.5 pr-2">
+            <FileText className="size-4 shrink-0 text-faint" aria-hidden />
+            <span className="break-words">{d.filename}</span>
+          </span>
+          <a href={documentUrl(d.filename)} target="_blank" rel="noreferrer" aria-label={`View ${d.filename}`} title="View" className={iconButton}>
+            <Eye className="size-4" aria-hidden />
+          </a>
+          <a href={documentUrl(d.filename, true)} download={d.filename} aria-label={`Download ${d.filename}`} title="Download" className={iconButton}>
+            <Download className="size-4" aria-hidden />
           </a>
         </li>
       ))}
