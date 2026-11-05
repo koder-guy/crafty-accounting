@@ -343,7 +343,7 @@ function ScanRow({
   const total = r ? (r.totalPence ?? r.lineItems.reduce((sum, li) => sum + li.amountPence, 0)) : null;
   const dash = <span className="text-faint">–</span>;
   return (
-    <tr className="align-top">
+    <tr className="align-middle">
       <td className="px-4 py-3">
         <a
           href={scanFileUrl(scan.id)}
@@ -368,7 +368,7 @@ function ScanRow({
           </p>
         )}
       </td>
-      <td className="px-4 py-2.5">
+      <td className="px-4 py-3">
         <div className="flex items-center justify-end gap-1">
           {checkable(scan) && (
             <ButtonLink to={scanCheckUrl(scan.id)} className="!px-3 !py-1.5">
