@@ -199,7 +199,7 @@ export function ExpenseForm() {
     save.mutate(
       { id: id ?? undefined, form: transactionForm(payload, files) },
       {
-        onSuccess: (saved) => leave(`/expenses/${saved.id}`),
+        onSuccess: () => leave('/expenses'),
         onError: (err) => {
           // Someone else saved first: fetch their version so the form can offer it.
           if (err instanceof ApiError && err.status === 409) refetchExisting();
