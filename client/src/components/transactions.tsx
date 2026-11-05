@@ -416,7 +416,7 @@ export function ExportMenu({ href }: { href: (format: ExportFormat) => string })
             open();
           }
         }}
-        className={`inline-flex items-center gap-2 rounded-lg border bg-surface-2 px-3.5 py-2 text-sm font-medium whitespace-nowrap text-ink transition-colors hover:border-accent-soft/60 hover:text-white ${
+        className={`inline-flex items-center justify-center gap-2 rounded-lg border bg-surface-2 px-3.5 py-2 text-sm font-medium whitespace-nowrap text-ink transition-colors hover:border-accent-soft/60 hover:text-white ${
           anchor ? 'border-accent-soft/60 text-white' : 'border-line-strong'
         }`}
       >

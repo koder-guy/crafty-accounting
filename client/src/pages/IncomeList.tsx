@@ -56,29 +56,27 @@ export function IncomeList() {
 
   return (
     <>
-      <PageHeader
-        title="Income"
-        actions={
-          taxYear && (
-            <>
-              {filterState.filters && <ExportMenu href={(format) => exportUrl('incomes', filterState.filters!, format)} />}
-              {canEdit && <ImportButton kind="incomes" />}
-              {canEdit && (
-                <ButtonLink to="/income/new" variant="primary">
-                  <Plus className="size-4" aria-hidden />
-                  Add income
-                </ButtonLink>
-              )}
-            </>
-          )
-        }
-      />
+      <PageHeader title="Income" />
       <PageBody>
         {yearLoading ? (
           <Spinner />
         ) : !taxYear ? (
           <NoTaxYear />
         ) : (
+          <>
+            {/* Phones: Add across the page, with Export and Import side by side under it. */}
+            <div
+              className={`mb-3 gap-2 print:hidden ${canEdit ? 'grid grid-cols-2 sm:flex sm:justify-end' : 'flex justify-end'}`}
+            >
+              {filterState.filters && <ExportMenu href={(format) => exportUrl('incomes', filterState.filters!, format)} />}
+              {canEdit && <ImportButton kind="incomes" />}
+              {canEdit && (
+                <ButtonLink to="/income/new" variant="primary" className="order-first col-span-2 sm:order-none">
+                  <Plus className="size-4" aria-hidden />
+                  Add income
+                </ButtonLink>
+              )}
+            </div>
           <Card ref={tableTop}>
             <CardHeader
               icon={<ArrowDownRight className="size-5 text-in-soft" />}
@@ -172,6 +170,7 @@ export function IncomeList() {
               </>
             )}
           </Card>
+          </>
         )}
       </PageBody>
 
