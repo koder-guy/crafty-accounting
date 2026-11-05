@@ -3,7 +3,7 @@ import { Link } from 'react-router';
 import { Layers, Sparkles, Wallet } from 'lucide-react';
 import { APP_NAME } from '@crafty/shared';
 import { useCanEdit, useLoadSampleData, useSampleData } from '../lib/queries';
-import { Alert, Button, ButtonLink, Card } from './ui';
+import { Alert, Button, ButtonLink, Card, DismissibleAlert } from './ui';
 
 function Option({ icon, title, children, action }: { icon: ReactNode; title: string; children: ReactNode; action: ReactNode }) {
   return (
@@ -82,25 +82,25 @@ export function Welcome() {
   );
 }
 
-/** Reminder on the dashboard while the sample data is in use. */
+/** Reminder on the dashboard while the sample data is in use; it can be dismissed in each browser. */
 export function SampleDataNotice() {
   const { data } = useSampleData();
   const canEdit = useCanEdit();
   if (!data?.loaded) return null;
   if (!canEdit) {
     return (
-      <Alert tone="warning">
+      <DismissibleAlert id="sample-data">
         You're looking at <strong>sample data</strong>, not real books.
-      </Alert>
+      </DismissibleAlert>
     );
   }
   return (
-    <Alert tone="warning">
+    <DismissibleAlert id="sample-data">
       You're looking at <strong>sample data</strong>. When you're ready for your own books, clear it with{' '}
       <Link to="/settings/backup" className="font-medium underline">
         Start again with an empty database
       </Link>{' '}
       in Settings → Backup and Restore.
-    </Alert>
+    </DismissibleAlert>
   );
 }
