@@ -181,10 +181,24 @@ export function ExpenseForm() {
   // Fills the form from an invoice Claude read. Kept dirty, so leaving still asks first.
   const fillFromInvoice = (reading: InvoiceReading, picked: File) => {
     const current = getValues();
-    // Named <date>_<payee>_<invoice number>_<amount>, from what was read.
+    // Named by the pattern in Settings → Claude Integration, from what was read.
     const amountPence = reading.totalPence ?? (reading.lineItems.reduce((sum, li) => sum + li.amountPence, 0) || null);
+    const largest = reading.lineItems.reduce<(typeof reading.lineItems)[number] | null>((a, b) => (a && a.amountPence >= b.amountPence ? a : b), null);
     const extension = /\.[^.]+$/.exec(picked.name)?.[0] ?? '';
-    const name = invoiceFilename({ date: reading.date, payee: reading.payee, invoiceNumber: reading.invoiceNumber, amountPence }, extension);
+    const name = invoiceFilename(
+      {
+        date: reading.date,
+        payee: reading.payee,
+        invoiceNumber: reading.invoiceNumber,
+        orderNumber: reading.orderNumber,
+        amountPence,
+        paymentMethod: reading.paymentMethod,
+        category: categories.find((c) => c.id === largest?.categoryId)?.name ?? null,
+        description: reading.lineItems[0]?.description ?? null,
+      },
+      extension,
+      claude?.filenamePattern,
+    );
     const file = name ? new File([picked], name, { type: picked.type, lastModified: picked.lastModified }) : picked;
     reset(
       {

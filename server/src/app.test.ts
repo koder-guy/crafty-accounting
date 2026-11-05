@@ -3352,6 +3352,7 @@ describe('reading invoices', () => {
       keyAddedBy: null,
       keyAddedAt: null,
       model: 'claude-opus-5-5',
+      filenamePattern: '{date}_{payee}_{invoice}_£{amount}',
     });
     await agent.post('/api/invoice-reader/read').attach('document', PDF, 'invoice.pdf').expect(404);
     expect(read).toEqual([]);
@@ -3378,6 +3379,20 @@ describe('reading invoices', () => {
     await agent.post('/api/invoice-reader/read').attach('document', PDF, 'invoice.pdf').expect(404);
   });
 
+  it('saves the document name pattern, checking it first', async () => {
+    await agent.put('/api/claude').send({ filenamePattern: '{date}/{payee}' }).expect(400);
+    await agent.put('/api/claude').send({ filenamePattern: '{total}' }).expect(400);
+    const res = await agent.put('/api/claude').send({ filenamePattern: '{year}-{month} {payee} £{amount}' }).expect(200);
+    expect(res.body).toMatchObject({ configured: false, filenamePattern: '{year}-{month} {payee} £{amount}' });
+    expect(checked).toEqual([]);
+    // The default is stored as NULL, so it follows any later change to the default.
+    await agent.put('/api/claude').send({ filenamePattern: '{date}_{payee}_{invoice}_£{amount}' }).expect(200);
+    expect(ctx.db.prepare('SELECT filename_pattern FROM claude_settings').get()).toEqual({ filename_pattern: null });
+
+    const viewer = await addPerson('Accountant', 'read-only-password', 'viewer');
+    await viewer.put('/api/claude').send({ filenamePattern: '{payee}' }).expect(403);
+  });
+
   it('lets only editors change it', async () => {
     const viewer = await addPerson('Accountant', 'read-only-password', 'viewer');
     await viewer.put('/api/claude').send({ apiKey: KEY }).expect(403);
@@ -3388,18 +3403,18 @@ describe('reading invoices', () => {
   });
 
   it('keeps the key out of backups and through a restore and a reset', async () => {
-    await agent.put('/api/claude').send({ apiKey: KEY, model: 'claude-sonnet-5-5' }).expect(200);
+    await agent.put('/api/claude').send({ apiKey: KEY, model: 'claude-sonnet-5-5', filenamePattern: '{payee} {date}' }).expect(200);
     const dump = (await agent.get('/api/backup.sql').expect(200)).text;
     expect(dump).not.toMatch(/INSERT INTO "claude_settings"/);
     expect(dump).not.toContain(KEY);
     await agent.post('/api/restore').attach('file', Buffer.from(dump), 'backup.sql').expect(200);
     expect((await agent.get('/api/claude')).body).toMatchObject({ configured: true, model: 'claude-sonnet-5-5' });
     await agent.post('/api/reset').send({ confirm: 'RESET' }).expect(200);
-    expect((await agent.get('/api/claude')).body).toMatchObject({ configured: true, model: 'claude-sonnet-5-5' });
+    expect((await agent.get('/api/claude')).body).toMatchObject({ configured: true, model: 'claude-sonnet-5-5', filenamePattern: '{payee} {date}' });
   });
 
   it('upgrades a backup made before the Claude integration, keeping the saved key', async () => {
-    await agent.put('/api/claude').send({ apiKey: KEY, model: 'claude-haiku-5-5' }).expect(200);
+    await agent.put('/api/claude').send({ apiKey: KEY, model: 'claude-haiku-5-5', filenamePattern: '{payee} {date}' }).expect(200);
     const old = new Database(':memory:');
     old.exec('CREATE TABLE schema_migrations (version INTEGER PRIMARY KEY, applied_at TEXT)');
     for (const migration of MIGRATIONS.filter((m) => m.version <= 18)) {
@@ -3413,7 +3428,7 @@ describe('reading invoices', () => {
     expect(dump).not.toMatch(/claude_settings/);
 
     await agent.post('/api/restore').attach('file', Buffer.from(dump), 'backup.sql').expect(200);
-    expect((await agent.get('/api/claude')).body).toMatchObject({ configured: true, keyHint: 'sk-ant-api…WXYZ', model: 'claude-haiku-5-5' });
+    expect((await agent.get('/api/claude')).body).toMatchObject({ configured: true, keyHint: 'sk-ant-api…WXYZ', model: 'claude-haiku-5-5', filenamePattern: '{payee} {date}' });
   });
 
   it('reads an invoice with the saved key and model, without saving anything', async () => {

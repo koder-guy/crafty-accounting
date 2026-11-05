@@ -1,5 +1,6 @@
 // The Claude integration (Settings → Claude Integration): an Anthropic API key and the model that reads invoices.
 import { z } from 'zod';
+import { filenamePatternProblem } from './invoiceFilename';
 
 export const CLAUDE_MODELS = [
   { id: 'claude-opus-5-5', name: 'Claude Opus 5.5', note: 'Most accurate, for messy or hard-to-read invoices. About 2–4p an invoice.' },
@@ -15,7 +16,7 @@ const MODEL_IDS = CLAUDE_MODELS.map((m) => m.id) as [ClaudeModel, ...ClaudeModel
 
 export const isClaudeModel = (value: unknown): value is ClaudeModel => MODEL_IDS.includes(value as ClaudeModel);
 
-/** Saving the settings: a new key, a model, or both. The key itself is never sent back. */
+/** Saving the settings: a new key, a model, the filename pattern, or any of them. The key itself is never sent back. */
 export const claudeSettingsSchema = z
   .object({
     apiKey: z
@@ -26,8 +27,18 @@ export const claudeSettingsSchema = z
       .regex(/^\S+$/, 'An API key has no spaces in it')
       .optional(),
     model: z.enum(MODEL_IDS, 'Choose a model').optional(),
+    /** How documents Claude read are named (`invoiceFilename`). */
+    filenamePattern: z
+      .string()
+      .superRefine((value, ctx) => {
+        const problem = filenamePatternProblem(value);
+        if (problem) ctx.addIssue({ code: 'custom', message: problem });
+      })
+      .optional(),
   })
-  .refine((v) => v.apiKey !== undefined || v.model !== undefined, 'Nothing to save');
+  .refine((v) => v.apiKey !== undefined || v.model !== undefined || v.filenamePattern !== undefined, 'Nothing to save');
+
+export type ClaudeSettingsInput = z.infer<typeof claudeSettingsSchema>;
 
 /** Enough of a key to recognise it: its start and last four characters. */
 export function claudeKeyHint(key: string): string {
@@ -42,4 +53,6 @@ export interface ClaudeStatus {
   keyAddedBy: string | null;
   keyAddedAt: string | null;
   model: ClaudeModel;
+  /** How documents Claude read are named, such as {date}_{payee}_{invoice}_£{amount}. */
+  filenamePattern: string;
 }

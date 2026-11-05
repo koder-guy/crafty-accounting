@@ -268,7 +268,7 @@ export function useSaveTransaction<T>(kind: Kind) {
   });
 }
 
-/** Settings → Claude Integration: whether a key is saved (shown only as a hint), and the model. */
+/** Settings → Claude Integration: whether a key is saved (shown only as a hint), the model and the filename pattern. */
 export const useClaude = () => useQuery({ queryKey: ['claude'], queryFn: () => api.get<ClaudeStatus>('/claude') });
 
 export function useClaudeMutations() {
@@ -276,7 +276,7 @@ export function useClaudeMutations() {
   const onSuccess = (status: ClaudeStatus) => qc.setQueryData(['claude'], status);
   return {
     save: useMutation({
-      mutationFn: (body: { apiKey?: string; model?: ClaudeModel }) => api.put<ClaudeStatus>('/claude', body),
+      mutationFn: (body: { apiKey?: string; model?: ClaudeModel; filenamePattern?: string }) => api.put<ClaudeStatus>('/claude', body),
       onSuccess,
     }),
     removeKey: useMutation({ mutationFn: () => api.delete<ClaudeStatus>('/claude/key'), onSuccess }),

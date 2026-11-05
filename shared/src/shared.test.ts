@@ -30,6 +30,8 @@ import {
   photoEncodeAttempts,
   photoFilename,
   invoiceFilename,
+  filenamePatternProblem,
+  EXAMPLE_INVOICE,
   penceToPounds,
   percentChange,
   profitMargin,
@@ -581,5 +583,29 @@ describe('invoice filenames', () => {
     );
     expect(invoiceFilename({ date: null, payee: '', invoiceNumber: '', amountPence: 0 }, '.pdf')).toBeNull();
     expect(invoiceFilename({ date: '2025-07-24', payee: 'x'.repeat(300), invoiceNumber: 'y'.repeat(300), amountPence: 1 }, '.pdf')!.length).toBeLessThanOrEqual(200);
+  });
+
+  it('follows a chosen pattern, leaving out fields not read with the text before them', () => {
+    const pattern = 'Receipt {year}-{month} {payee} ({payment}) #{order} {category} - {description} £{amount}';
+    expect(invoiceFilename(EXAMPLE_INVOICE, '.PDF', pattern)).toBe(
+      'Receipt 2025-07 Amazon (Card) #205-1234567-7654321 Cost of goods - Glass seed beads, 500g £31.33.pdf',
+    );
+    const sparse = { date: null, payee: 'Bead World', invoiceNumber: '', amountPence: 1200 };
+    expect(invoiceFilename(sparse, '.pdf', pattern)).toBe('Receipt Bead World £12.00.pdf');
+    expect(invoiceFilename(sparse, '.pdf', '{date}_{invoice}_£{amount}')).toBe('£12.00.pdf');
+    expect(invoiceFilename({ ...sparse, amountPence: null }, '.pdf', '{date}_{invoice}_£{amount}')).toBeNull();
+    expect(invoiceFilename(EXAMPLE_INVOICE, '.pdf', '{day}.{month}.{year} {payee}')).toBe('24.07.2025 Amazon.pdf');
+    // One that can't be used falls back to the default.
+    expect(invoiceFilename(EXAMPLE_INVOICE, '.pdf', '{nope}')).toBe('2025-07-24_Amazon_INV-1042_£31.33.pdf');
+  });
+
+  it('checks a pattern', () => {
+    expect(filenamePatternProblem('{date}_{payee}_{invoice}_£{amount}')).toBeNull();
+    expect(filenamePatternProblem('  ')).toMatch(/Enter/);
+    expect(filenamePatternProblem('invoice')).toMatch(/at least one field/);
+    expect(filenamePatternProblem('{date}_{total}')).toMatch(/\{total\} isn't/);
+    expect(filenamePatternProblem('{date')).toMatch(/both its braces/);
+    expect(filenamePatternProblem('{year}/{payee}')).toMatch(/can't contain/);
+    expect(filenamePatternProblem(`{date}${'x'.repeat(200)}`)).toMatch(/under 200/);
   });
 });

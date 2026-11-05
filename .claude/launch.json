@@ -55,6 +55,20 @@
       "runtimeArgs": ["-c", "PATH=/opt/homebrew/opt/node@22/bin:$PATH API_URL=http://localhost:3103 npm run dev -w client -- --port 5175 --strictPort"],
       "port": 5175,
       "autoPort": false
+    },
+    {
+      "name": "api-check-3",
+      "runtimeExecutable": "/bin/sh",
+      "runtimeArgs": ["-c", "cd server && PATH=/opt/homebrew/opt/node@22/bin:$PATH PORT=3104 CLIENT_DIST=../client/dist DATA_DIR=$(mktemp -d) ADMIN_NAME=Admin ADMIN_PASSWORD=check-password SESSION_SECRET=check-secret npx tsx src/index.ts"],
+      "port": 3104,
+      "autoPort": false
+    },
+    {
+      "name": "web-check-3",
+      "runtimeExecutable": "/bin/sh",
+      "runtimeArgs": ["-c", "PATH=/opt/homebrew/opt/node@22/bin:$PATH API_URL=http://localhost:3104 npm run dev -w client -- --port 5176 --strictPort"],
+      "port": 5176,
+      "autoPort": false
     }
   ]
 }

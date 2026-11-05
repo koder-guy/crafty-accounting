@@ -1,6 +1,16 @@
-import { useState, type FormEvent } from 'react';
-import { Cpu, KeyRound } from 'lucide-react';
-import { CLAUDE_MODELS, formatDisplayDate, type ClaudeStatus } from '@crafty/shared';
+import { useLayoutEffect, useRef, useState, type FormEvent } from 'react';
+import { Cpu, FileText, KeyRound } from 'lucide-react';
+import {
+  CLAUDE_MODELS,
+  DEFAULT_FILENAME_PATTERN,
+  EXAMPLE_INVOICE,
+  FILENAME_FIELDS,
+  filenamePatternProblem,
+  formatDisplayDate,
+  invoiceFilename,
+  MAX_FILENAME_PATTERN_LENGTH,
+  type ClaudeStatus,
+} from '@crafty/shared';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { Alert, Badge, Button, Card, CardHeader, Field, Spinner } from '../../components/ui';
 import { useCanEdit, useClaude, useClaudeMutations } from '../../lib/queries';
@@ -167,6 +177,135 @@ function ModelCard({ status, canEdit }: { status: ClaudeStatus; canEdit: boolean
   );
 }
 
+/** How documents Claude read are named, from fields of what it read. Other documents keep their names. */
+function FilenameCard({ status, canEdit }: { status: ClaudeStatus; canEdit: boolean }) {
+  const { save } = useClaudeMutations();
+  // Null until something is typed, so a change saved elsewhere shows.
+  const [draft, setDraft] = useState<string | null>(null);
+  const pattern = draft ?? status.filenamePattern;
+  const setPattern = (value: string) => setDraft(value === status.filenamePattern ? null : value);
+  const [saved, setSaved] = useState(false);
+  const input = useRef<HTMLInputElement>(null);
+
+  const problem = filenamePatternProblem(pattern);
+  const changed = pattern !== status.filenamePattern;
+  const example = problem ? null : invoiceFilename(EXAMPLE_INVOICE, '.pdf', pattern);
+  const withoutInvoice = problem ? null : invoiceFilename({ ...EXAMPLE_INVOICE, invoiceNumber: '', orderNumber: '' }, '.pdf', pattern);
+
+  // Where the caret goes once an added field is in the box.
+  const caret = useRef<number | null>(null);
+  useLayoutEffect(() => {
+    if (caret.current === null || !input.current) return;
+    input.current.focus();
+    input.current.setSelectionRange(caret.current, caret.current);
+    caret.current = null;
+  }, [pattern]);
+
+  // A field goes where the caret is, or at the end when the box isn't being edited.
+  const insert = (token: string) => {
+    const el = input.current;
+    const text = `{${token}}`;
+    const focused = el !== null && document.activeElement === el;
+    const start = focused ? (el.selectionStart ?? pattern.length) : pattern.length;
+    const end = focused ? (el.selectionEnd ?? pattern.length) : pattern.length;
+    caret.current = start + text.length;
+    setPattern(pattern.slice(0, start) + text + pattern.slice(end));
+    setSaved(false);
+  };
+
+  const submit = (e: FormEvent) => {
+    e.preventDefault();
+    if (problem || !changed) return;
+    save.mutate({ filenamePattern: pattern }, { onSuccess: () => { setDraft(null); setSaved(true); } });
+  };
+
+  return (
+    <Card>
+      <CardHeader icon={<FileText className="size-5 text-accent-soft" />} title="Document names" />
+      <form onSubmit={submit} noValidate className="space-y-4 px-5 pb-6 sm:px-6">
+        <p className="text-sm text-muted">
+          An invoice or receipt Claude reads is attached to the expense under a name made from what it read. Documents added any other way keep their own names, and any name can still be changed before saving.
+        </p>
+        <Field
+          label="Pattern"
+          htmlFor="claude-filename-pattern"
+          error={problem ?? save.error?.message}
+          hint="A field the invoice doesn't show is left out, along with the text just before it. The file's extension is added at the end."
+        >
+          <input
+            ref={input}
+            id="claude-filename-pattern"
+            className="field font-mono"
+            value={pattern}
+            maxLength={MAX_FILENAME_PATTERN_LENGTH}
+            readOnly={!canEdit}
+            spellCheck={false}
+            autoComplete="off"
+            onChange={(e) => {
+              setPattern(e.target.value);
+              setSaved(false);
+            }}
+          />
+        </Field>
+
+        {canEdit && (
+          <div>
+            <p className="mb-2 text-xs font-medium text-muted">Add a field</p>
+            <div className="flex flex-wrap gap-2">
+              {FILENAME_FIELDS.map((f) => (
+                <button
+                  key={f.token}
+                  type="button"
+                  // Keeps the caret in the pattern, so the field goes where it was.
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => insert(f.token)}
+                  title={`{${f.token}}, such as ${f.example}`}
+                  className="rounded-md border border-line-strong bg-surface-2/60 px-2.5 py-1 text-xs text-ink transition-colors hover:border-accent-soft/60 hover:bg-accent-bg"
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {example && (
+          <dl className="space-y-1 rounded-lg border border-line-strong bg-surface-2/60 px-4 py-3 text-sm">
+            <dt className="text-muted">For example</dt>
+            <dd className="font-mono break-all">{example}</dd>
+            {withoutInvoice && withoutInvoice !== example && (
+              <>
+                <dt className="pt-2 text-muted">Without an invoice number</dt>
+                <dd className="font-mono break-all">{withoutInvoice}</dd>
+              </>
+            )}
+          </dl>
+        )}
+
+        {saved && !changed && <Alert tone="success" onDismiss={() => setSaved(false)}>Saved. Invoices read from now on are named this way.</Alert>}
+
+        {canEdit && (
+          <div className="flex flex-wrap gap-3">
+            <Button type="submit" variant="primary" busy={save.isPending} disabled={!!problem || !changed}>
+              Save pattern
+            </Button>
+            {changed && (
+              <Button type="button" variant="ghost" onClick={() => setDraft(null)}>
+                Undo changes
+              </Button>
+            )}
+            {pattern !== DEFAULT_FILENAME_PATTERN && (
+              <Button type="button" variant="ghost" onClick={() => { setPattern(DEFAULT_FILENAME_PATTERN); setSaved(false); }}>
+                Use the default
+              </Button>
+            )}
+          </div>
+        )}
+      </form>
+    </Card>
+  );
+}
+
 export function ClaudeSettings() {
   const { data: status, isLoading, error } = useClaude();
   const canEdit = useCanEdit();
@@ -184,6 +323,7 @@ export function ClaudeSettings() {
         <>
           <KeyCard status={status} canEdit={canEdit} />
           <ModelCard status={status} canEdit={canEdit} />
+          <FilenameCard status={status} canEdit={canEdit} />
         </>
       )}
     </div>

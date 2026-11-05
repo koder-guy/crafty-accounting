@@ -352,6 +352,13 @@ CREATE TABLE claude_settings (
 );
 `,
   },
+  // How documents Claude read are named (Settings → Claude Integration). NULL is the default pattern.
+  {
+    version: 20,
+    sql: `
+ALTER TABLE claude_settings ADD COLUMN filename_pattern TEXT;
+`,
+  },
 ];
 
 export const CURRENT_SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;

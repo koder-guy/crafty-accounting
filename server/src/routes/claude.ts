@@ -1,8 +1,8 @@
-// Settings → Claude Integration: the Anthropic API key (shown only as a hint) and the model.
+// Settings → Claude Integration: the Anthropic API key (shown only as a hint), the model, and how read documents are named.
 import { Router } from 'express';
 import { claudeSettingsSchema } from '@crafty/shared';
 import type { AppContext } from '../context';
-import { claudeStatus, getClaudeSettings, removeClaudeKey, saveClaudeKey, saveClaudeModel } from '../claudeSettings';
+import { claudeStatus, getClaudeSettings, removeClaudeKey, saveClaudeKey, saveClaudeModel, saveFilenamePattern } from '../claudeSettings';
 import { parseWith } from '../http';
 
 export function claudeRouter(ctx: AppContext): Router {
@@ -20,6 +20,7 @@ export function claudeRouter(ctx: AppContext): Router {
     ctx.db.transaction(() => {
       if (input.apiKey) saveClaudeKey(ctx.db, input.apiKey, req.user!.name);
       if (input.model) saveClaudeModel(ctx.db, input.model);
+      if (input.filenamePattern !== undefined) saveFilenamePattern(ctx.db, input.filenamePattern);
     })();
     res.json(claudeStatus(ctx.db));
   });
