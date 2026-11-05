@@ -3478,6 +3478,13 @@ describe('reading invoices', () => {
     expect(read).toEqual([]);
   });
 
+  it('puts every Temu order under Whaleco UK Limited (Temu)', () => {
+    const expenseCats = categories.filter((c) => c.type === 'EXPENSE');
+    expect(toInvoiceReading(reply({ payee: 'Whaleco UK Limited', temuOrder: true }), expenseCats).payee).toBe('Whaleco UK Limited (Temu)');
+    expect(toInvoiceReading(reply({ payee: 'Temu', temuOrder: true }), expenseCats).payee).toBe('Whaleco UK Limited (Temu)');
+    expect(toInvoiceReading(reply({ payee: 'Bead World', temuOrder: false }), expenseCats).payee).toBe('Bead World');
+  });
+
   it('puts every Amazon order under Amazon, paid by card, whichever seller the invoice names', () => {
     const expenseCats = categories.filter((c) => c.type === 'EXPENSE');
     const amazon = toInvoiceReading(reply({ payee: 'SUNNYCLUE Crafts Ltd', amazonOrder: true, paymentMethod: null }), expenseCats);
