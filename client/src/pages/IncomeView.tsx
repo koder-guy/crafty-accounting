@@ -25,25 +25,6 @@ export function IncomeView() {
       <PageHeader
         title={income ? income.description : 'Income'}
         subtitle={income ? `Income · ${formatDisplayDate(income.date)}` : undefined}
-        actions={
-          income &&
-          canEdit && (
-            <>
-              <ButtonLink to={`/income/${id}/edit`}>
-                <Pencil className="size-4" aria-hidden />
-                Edit
-              </ButtonLink>
-              <ButtonLink to={`/income/new?copy=${id}`} title="Start a new transaction with the same details">
-                <Copy className="size-4" aria-hidden />
-                Duplicate
-              </ButtonLink>
-              <Button variant="softDanger" onClick={() => setConfirming(true)}>
-                <Trash2 className="size-4" aria-hidden />
-                Delete
-              </Button>
-            </>
-          )
-        }
       />
       <PageBody>
         <BackLink to={tableUrl('/income')}>All income</BackLink>
@@ -54,8 +35,31 @@ export function IncomeView() {
         ) : (
           <>
             <Card className="px-5 sm:px-6">
-              <div className="flex flex-wrap items-baseline justify-between gap-3 border-b border-line py-5">
-                <span className="tabular text-3xl font-bold text-in-soft">{formatGBP(income.amountPence)}</span>
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line py-5">
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+                  <span className="tabular text-3xl font-bold text-in-soft">{formatGBP(income.amountPence)}</span>
+                  {canEdit && (
+                    <>
+                      <span className="h-6 w-px bg-line-strong" aria-hidden />
+                      <div className="flex items-center gap-2 print:hidden">
+                        <ButtonLink to={`/income/${id}/edit`} aria-label="Edit" title="Edit" className="size-9 shrink-0 !p-0">
+                          <Pencil className="size-4" aria-hidden />
+                        </ButtonLink>
+                        <ButtonLink
+                          to={`/income/new?copy=${id}`}
+                          aria-label="Duplicate"
+                          title="Duplicate: start a new transaction with the same details"
+                          className="size-9 shrink-0 !p-0"
+                        >
+                          <Copy className="size-4" aria-hidden />
+                        </ButtonLink>
+                        <Button variant="softDanger" onClick={() => setConfirming(true)} aria-label="Delete" title="Delete" className="size-9 shrink-0 !p-0">
+                          <Trash2 className="size-4" aria-hidden />
+                        </Button>
+                      </div>
+                    </>
+                  )}
+                </div>
                 <PaymentBadge method={income.paymentMethod} />
               </div>
               <dl className="divide-y divide-line">
