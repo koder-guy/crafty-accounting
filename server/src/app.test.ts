@@ -3448,6 +3448,12 @@ describe('reading invoices', () => {
     expect(read).toEqual([]);
   });
 
+  it('puts every Amazon order under Amazon, whichever seller the invoice names', () => {
+    const expenseCats = categories.filter((c) => c.type === 'EXPENSE');
+    expect(toInvoiceReading(reply({ payee: 'SUNNYCLUE Crafts Ltd', amazonOrder: true }), expenseCats).payee).toBe('Amazon');
+    expect(toInvoiceReading(reply({ payee: 'Bead World', amazonOrder: false }), expenseCats).payee).toBe('Bead World');
+  });
+
   it('keeps only what fits the form and says what to check', () => {
     const expenseCats = categories.filter((c) => c.type === 'EXPENSE');
     const reading = toInvoiceReading(

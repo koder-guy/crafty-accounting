@@ -21,6 +21,9 @@ export interface ClaudeApi {
   readInvoice(apiKey: string, model: ClaudeModel, input: InvoiceInput): Promise<InvoiceReading>;
 }
 
+/** The payee for every order placed on Amazon. */
+export const AMAZON_PAYEE = 'Amazon';
+
 /** The largest image the API takes. */
 export const MAX_INVOICE_IMAGE_BYTES = 5 * 1024 * 1024;
 
@@ -28,6 +31,7 @@ const SYSTEM = `You read invoices and receipts for the bookkeeping of a UK sole 
 Read the document and fill in one expense:
 - date: when it was paid if shown, else the invoice date, as YYYY-MM-DD. UK documents write dates day first. null if there is none.
 - payee: the business that was paid, as it names itself.
+- amazonOrder: true when the order was placed on Amazon, even if another seller is named ("Sold by …", "Dispatched by …"). Signs include "Amazon EU S.à r.l." (however it's written, e.g. "Amazon EU S.a.r.L."), "Amazon.co.uk", "Amazon Services Europe", "Amazon Payments" or an Amazon order number such as 205-1234567-1234567. Otherwise false.
 - invoiceNumber and orderNumber: as printed, or "" if absent.
 - paymentMethod: "card", "cash" or "bank_transfer" only when the document says how it was paid (a card receipt, "paid by BACS"); otherwise null.
 - lineItems: what was bought, one line per item or group of similar items, with the amount actually paid including any VAT. Put delivery or postage on its own line. Spread a discount over the lines it applies to, so every amount is above zero and the lines add up to the total paid. If the lines can't be read, give one line for the whole total.
@@ -40,6 +44,7 @@ Copy names and numbers faithfully; don't invent anything the document doesn't sh
 const replySchema = z.object({
   date: z.string().nullable(),
   payee: z.string(),
+  amazonOrder: z.boolean().optional(),
   invoiceNumber: z.string(),
   orderNumber: z.string(),
   paymentMethod: z.enum(PAYMENT_METHODS).nullable(),
@@ -52,10 +57,11 @@ function outputSchema(categoryIds: string[]) {
   return {
     type: 'object',
     additionalProperties: false,
-    required: ['date', 'payee', 'invoiceNumber', 'orderNumber', 'paymentMethod', 'lineItems', 'total'],
+    required: ['date', 'payee', 'amazonOrder', 'invoiceNumber', 'orderNumber', 'paymentMethod', 'lineItems', 'total'],
     properties: {
       date: nullableString,
       payee: { type: 'string' },
+      amazonOrder: { type: 'boolean' },
       invoiceNumber: { type: 'string' },
       orderNumber: { type: 'string' },
       paymentMethod: { anyOf: [{ type: 'string', enum: [...PAYMENT_METHODS] }, { type: 'null' }] },
@@ -108,7 +114,8 @@ export function toInvoiceReading(reply: unknown, categories: InvoiceInput['categ
 
   return {
     date,
-    payee: r.payee.trim().slice(0, 200),
+    // Amazon orders always go under one payee, whichever seller the invoice names.
+    payee: r.amazonOrder ? AMAZON_PAYEE : r.payee.trim().slice(0, 200),
     invoiceNumber: r.invoiceNumber.trim().slice(0, 100),
     orderNumber: r.orderNumber.trim().slice(0, 100),
     paymentMethod: r.paymentMethod,
