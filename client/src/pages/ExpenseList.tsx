@@ -12,6 +12,7 @@ import {
   attachedDocuments,
   DocIndicator,
   DocumentsTable,
+  NotesPanel,
   ExportMenu,
   FilterBar,
   FilterToggle,
@@ -216,8 +217,11 @@ export function ExpenseList() {
                             <tr id={`lines-${row.id}`} className="border-t-0! bg-surface-2/40">
                               <td />
                               <td colSpan={7} className="px-4 py-4">
-                                <LineItemsTable expense={row} />
-                                <DocumentsTable documents={row.documents} className="mt-3" />
+                                <div className="space-y-3">
+                                  <LineItemsTable expense={row} />
+                                  <DocumentsTable documents={row.documents} />
+                                  <NotesPanel notes={row.notes} />
+                                </div>
                               </td>
                             </tr>
                           )}

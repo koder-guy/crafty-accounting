@@ -613,12 +613,12 @@ export function TransactionCard({
  * The documents under an expanded Income or Expenses row, each with View and Download buttons.
  * The buttons have no border and the rows are the height of the line items table's.
  */
-export function DocumentsTable({ documents, className = '' }: { documents: TransactionDocument[]; className?: string }) {
+export function DocumentsTable({ documents }: { documents: TransactionDocument[] }) {
   if (documents.length === 0) return null;
   const iconButton =
     'inline-flex size-7 items-center justify-center rounded-md text-muted transition-colors hover:bg-accent-bg hover:text-accent-soft';
   return (
-    <table className={`w-full rounded-lg border border-line bg-page/40 text-sm ${className}`}>
+    <table className="w-full rounded-lg border border-line bg-page/40 text-sm">
       <thead className="text-xs tracking-wide text-faint uppercase">
         <tr className="border-b border-line">
           <th scope="col" className="px-4 py-2 text-left font-medium">Document</th>
@@ -643,6 +643,17 @@ export function DocumentsTable({ documents, className = '' }: { documents: Trans
         ))}
       </tbody>
     </table>
+  );
+}
+
+/** A transaction's notes under its expanded row, boxed like the tables above them. Nothing without notes. */
+export function NotesPanel({ notes }: { notes: string | null }) {
+  if (!notes?.trim()) return null;
+  return (
+    <section aria-label="Notes" className="rounded-lg border border-line bg-page/40 text-sm">
+      <div className="border-b border-line px-4 py-2 text-xs font-medium tracking-wide text-faint uppercase">Notes</div>
+      <p className="px-4 py-2 break-words whitespace-pre-wrap text-ink">{notes.trim()}</p>
+    </section>
   );
 }
 

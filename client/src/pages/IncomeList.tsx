@@ -12,6 +12,7 @@ import {
   attachedDocuments,
   DocIndicator,
   DocumentsTable,
+  NotesPanel,
   ExportMenu,
   FilterBar,
   FilterToggle,
@@ -131,7 +132,7 @@ export function IncomeList() {
                   <thead className="text-xs tracking-wide text-muted uppercase">
                     <tr className="border-b border-line">
                       <th scope="col" className="w-10 pl-3">
-                        <span className="sr-only">Show documents</span>
+                        <span className="sr-only">Show details</span>
                       </th>
                       <SortTh label="Date" sortKey="date" sort={sort} onSort={toggle} />
                       <SortTh label="Description" sortKey="description" sort={sort} onSort={toggle} />
@@ -145,8 +146,9 @@ export function IncomeList() {
                   </thead>
                   <tbody className="divide-y divide-line">
                     {pageRows.map((row) => {
-                      // Only a row with documents has anything to show when expanded.
-                      const open = row.documents.length > 0 && isExpanded(row.id);
+                      // Only a row with documents or notes has anything to show when expanded.
+                      const expandable = row.documents.length > 0 || !!row.notes?.trim();
+                      const open = expandable && isExpanded(row.id);
                       return (
                         <Fragment key={row.id}>
                           <tr
@@ -154,13 +156,13 @@ export function IncomeList() {
                             onClick={(e) => !(e.target as HTMLElement).closest('a,button') && navigate(`/income/${row.id}`)}
                           >
                             <td className="py-2 pl-3">
-                              {row.documents.length > 0 && (
+                              {expandable && (
                                 <button
                                   type="button"
                                   onClick={() => toggleRow(row.id)}
                                   aria-expanded={open}
-                                  aria-controls={`documents-${row.id}`}
-                                  aria-label={`${open ? 'Hide' : 'Show'} documents for ${row.description}`}
+                                  aria-controls={`details-${row.id}`}
+                                  aria-label={`${open ? 'Hide' : 'Show'} details for ${row.description}`}
                                   className="inline-flex size-7 items-center justify-center rounded-md text-muted transition-colors hover:bg-accent-bg hover:text-accent-soft"
                                 >
                                   <ChevronRight className={`size-4 transition-transform ${open ? 'rotate-90' : ''}`} aria-hidden />
@@ -192,10 +194,13 @@ export function IncomeList() {
                             </td>
                           </tr>
                           {open && (
-                            <tr id={`documents-${row.id}`} className="border-t-0! bg-surface-2/40">
+                            <tr id={`details-${row.id}`} className="border-t-0! bg-surface-2/40">
                               <td />
                               <td colSpan={6} className="px-4 py-4">
-                                <DocumentsTable documents={row.documents} />
+                                <div className="space-y-3">
+                                  <DocumentsTable documents={row.documents} />
+                                  <NotesPanel notes={row.notes} />
+                                </div>
                               </td>
                             </tr>
                           )}
