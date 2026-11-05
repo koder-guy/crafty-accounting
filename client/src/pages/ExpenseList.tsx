@@ -190,6 +190,7 @@ export function ExpenseList() {
                             <tr id={`lines-${row.id}`} className="border-t-0! bg-surface-2/40">
                               <td />
                               <td colSpan={6} className="px-4 pt-1 pb-4">
+                                <ExpenseReferences expense={row} />
                                 <LineItemsTable expense={row} />
                               </td>
                             </tr>
@@ -233,6 +234,25 @@ export function ExpenseList() {
 /** "Stall fees" or "Beads +2" */
 const categorySummary = (names: string[]) =>
   `${shortCategoryName(names[0])}${names.length > 1 ? ` +${names.length - 1}` : ''}`;
+
+/** The invoice and order numbers, shown above an expanded row's line items when it has either. */
+function ExpenseReferences({ expense }: { expense: ExpenseWithLineItems }) {
+  const refs = [
+    { label: 'Invoice number', value: expense.invoiceNumber },
+    { label: 'Order number', value: expense.orderNumber },
+  ].filter((ref) => ref.value);
+  if (refs.length === 0) return null;
+  return (
+    <dl className="mb-2 flex flex-wrap gap-x-6 gap-y-1 px-1 text-sm">
+      {refs.map((ref) => (
+        <div key={ref.label} className="flex min-w-0 items-baseline gap-2">
+          <dt className="text-xs tracking-wide text-faint uppercase">{ref.label}</dt>
+          <dd className="min-w-0 break-all text-ink">{ref.value}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
 
 /** Read-only line items shown under an expanded row. */
 function LineItemsTable({ expense }: { expense: ExpenseWithLineItems }) {
