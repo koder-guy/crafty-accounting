@@ -31,10 +31,11 @@ Read the document and fill in one expense:
 - invoiceNumber and orderNumber: as printed, or "" if absent.
 - paymentMethod: "card", "cash" or "bank_transfer" only when the document says how it was paid (a card receipt, "paid by BACS"); otherwise null.
 - lineItems: what was bought, one line per item or group of similar items, with the amount actually paid including any VAT. Put delivery or postage on its own line. Spread a discount over the lines it applies to, so every amount is above zero and the lines add up to the total paid. If the lines can't be read, give one line for the whole total.
+- description: for each line, what was bought, as it would be written in a ledger: about 60 characters at most. A short description stays as printed. Shorten a long one, such as an Amazon product title, to what the item is, the brand if it helps, and the size or quantity; leave out sales wording, lists of uses or compatible models, and colour or style options unless they matter. For example "SUNNYCLUE 1 Box 600Pcs Assorted Glass Beads for Jewellery Making Kit, Mixed Colour Loose Spacer Beads Craft Supplies for Bracelets Necklaces DIY" becomes "SUNNYCLUE assorted glass beads, 600 pcs".
 - categoryId: for each line, the id of the category from the list that fits best, or null if none does.
 - total: the total paid, or null if the document shows none.
 Amounts are pounds as plain numbers in strings, e.g. "4.99", without £ or commas.
-Copy names and descriptions faithfully; don't invent anything the document doesn't show.`;
+Copy names and numbers faithfully; don't invent anything the document doesn't show.`;
 
 const replySchema = z.object({
   date: z.string().nullable(),
