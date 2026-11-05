@@ -76,7 +76,12 @@ export PATH="/opt/homebrew/opt/node@22/bin:$PATH"
   - `api-check` has no HMRC credentials, so the connection is hidden; `api-check-hmrc` is the same with made-up ones, to see it.
 - Check UI changes in the browser.
 - Commit and push each finished change to `main` (remote `koder-guy/crafty-accounting`).
-- Bump `APP_VERSION` in `shared/src/index.ts` and the package versions for a release, then tag it.
+- **Releases**, one step at a time, stopping at the first failure:
+  1. Pull, then run `npm run typecheck` and `npx vitest run` as commands of their own, not piped or chained into the steps after. Go on only if both exit with 0. If tests fail, show the failures and stop; a failure after the computer slept can be re-run, but nothing is released until a run passes.
+  2. Bump the version (e.g. `1.10.13` → `1.10.14`) in `package.json`, `client/package.json`, `server/package.json`, `shared/package.json`, `shared/src/index.ts` (`APP_VERSION`) and `package-lock.json` (seven places). Check that none of the old version is left.
+  3. Run the typecheck and tests again on the bumped code, the same way.
+  4. Commit as `Version x.y.z`, tag `vx.y.z`, push `main`, then push the tag.
+- Git may have no author set on a machine; commit with `-c user.name=koder-guy -c user.email=jonathanguy@mac.com` rather than changing its config.
 
 ## Open ideas
 
