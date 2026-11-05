@@ -189,7 +189,7 @@ export function ExpenseList() {
                           {open && (
                             <tr id={`lines-${row.id}`} className="border-t-0! bg-surface-2/40">
                               <td />
-                              <td colSpan={6} className="px-4 pt-1 pb-4">
+                              <td colSpan={6} className="px-4 pt-3 pb-4">
                                 <ExpenseReferences expense={row} />
                                 <LineItemsTable expense={row} />
                               </td>
@@ -243,7 +243,7 @@ function ExpenseReferences({ expense }: { expense: ExpenseWithLineItems }) {
   ].filter((ref) => ref.value);
   if (refs.length === 0) return null;
   return (
-    <dl className="mt-2 mb-4 flex flex-wrap gap-x-6 gap-y-1 px-1 text-sm">
+    <dl className="mb-4 flex flex-wrap gap-x-6 gap-y-1 px-1 text-sm">
       {refs.map((ref) => (
         <div key={ref.label} className="flex min-w-0 items-baseline gap-2">
           <dt className="text-xs tracking-wide text-faint uppercase">{ref.label}</dt>
