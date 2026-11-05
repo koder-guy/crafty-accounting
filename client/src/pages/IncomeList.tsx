@@ -1,6 +1,6 @@
-import { useRef, useState } from 'react';
+import { Fragment, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
-import { ArrowDownRight, Plus } from 'lucide-react';
+import { ArrowDownRight, ChevronRight, Plus } from 'lucide-react';
 import { formatDisplayDate, formatGBP, shortCategoryName, type Income } from '@crafty/shared';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { Pagination, usePagination } from '../components/Pagination';
@@ -11,6 +11,7 @@ import { PageBody, PageHeader } from '../components/PageHeader';
 import {
   attachedDocuments,
   DocIndicator,
+  DocumentsTable,
   ExportMenu,
   FilterBar,
   FilterToggle,
@@ -22,7 +23,7 @@ import {
   useTransactionFilters,
 } from '../components/transactions';
 import { Alert, ButtonLink, Card, CardHeader, EmptyState, PaymentBadge, Spinner } from '../components/ui';
-import { exportUrl, useActiveTaxYear, useCanEdit, useCategories, useDeleteTransaction, useIncomes } from '../lib/queries';
+import { exportUrl, useActiveTaxYear, useCanEdit, useCategories, useDeleteTransaction, useExpandedRows, useIncomes } from '../lib/queries';
 
 export function IncomeList() {
   const { taxYear, isLoading: yearLoading } = useActiveTaxYear();
@@ -34,6 +35,7 @@ export function IncomeList() {
   const remove = useDeleteTransaction('incomes');
   const [toDelete, setToDelete] = useState<Income | null>(null);
   const navigate = useNavigate();
+  const { isExpanded, toggle: toggleRow } = useExpandedRows('incomes');
 
   const { sorted, sort, toggle: toggleSort } = useSort(
     data,
@@ -128,6 +130,9 @@ export function IncomeList() {
                 <table className="w-full min-w-[720px] text-sm">
                   <thead className="text-xs tracking-wide text-muted uppercase">
                     <tr className="border-b border-line">
+                      <th scope="col" className="w-10 pl-3">
+                        <span className="sr-only">Show documents</span>
+                      </th>
                       <SortTh label="Date" sortKey="date" sort={sort} onSort={toggle} />
                       <SortTh label="Description" sortKey="description" sort={sort} onSort={toggle} />
                       <SortTh label="Category" sortKey="category" sort={sort} onSort={toggle} />
@@ -139,37 +144,64 @@ export function IncomeList() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-line">
-                    {pageRows.map((row) => (
-                      <tr
-                        key={row.id}
-                        className="cursor-pointer transition-colors hover:bg-surface-2/60"
-                        onClick={(e) => !(e.target as HTMLElement).closest('a,button') && navigate(`/income/${row.id}`)}
-                      >
-                        <td className="px-4 py-3 whitespace-nowrap text-muted">{formatDisplayDate(row.date)}</td>
-                        <td className="w-2/3 max-w-0 px-4 py-3">
-                          <div className="flex items-center gap-1.5 font-medium text-ink">
-                            <span className="truncate">{row.description}</span>
-                            <DocIndicator documents={row.documents} muted />
-                          </div>
-                        </td>
-                        <td className="w-1/3 max-w-0 truncate px-4 py-3 text-muted" title={row.categoryName}>
-                          {shortCategoryName(row.categoryName)}
-                        </td>
-                        <td className="px-4 py-3">
-                          <PaymentBadge method={row.paymentMethod} />
-                        </td>
-                        <td className="tabular px-4 py-3 text-right font-semibold whitespace-nowrap text-in-soft">
-                          {formatGBP(row.amountPence)}
-                        </td>
-                        <td className="px-3 py-2">
-                          <RowActions
-                            viewTo={`/income/${row.id}`}
-                            editTo={`/income/${row.id}/edit`}
-                            onDelete={() => setToDelete(row)}
-                          />
-                        </td>
-                      </tr>
-                    ))}
+                    {pageRows.map((row) => {
+                      // Only a row with documents has anything to show when expanded.
+                      const open = row.documents.length > 0 && isExpanded(row.id);
+                      return (
+                        <Fragment key={row.id}>
+                          <tr
+                            className={`cursor-pointer transition-colors hover:bg-surface-2/60 ${open ? 'bg-surface-2/40' : ''}`}
+                            onClick={(e) => !(e.target as HTMLElement).closest('a,button') && navigate(`/income/${row.id}`)}
+                          >
+                            <td className="py-2 pl-3">
+                              {row.documents.length > 0 && (
+                                <button
+                                  type="button"
+                                  onClick={() => toggleRow(row.id)}
+                                  aria-expanded={open}
+                                  aria-controls={`documents-${row.id}`}
+                                  aria-label={`${open ? 'Hide' : 'Show'} documents for ${row.description}`}
+                                  className="inline-flex size-7 items-center justify-center rounded-md text-muted transition-colors hover:bg-accent-bg hover:text-accent-soft"
+                                >
+                                  <ChevronRight className={`size-4 transition-transform ${open ? 'rotate-90' : ''}`} aria-hidden />
+                                </button>
+                              )}
+                            </td>
+                            <td className="px-4 py-3 whitespace-nowrap text-muted">{formatDisplayDate(row.date)}</td>
+                            <td className="w-2/3 max-w-0 px-4 py-3">
+                              <div className="flex items-center gap-1.5 font-medium text-ink">
+                                <span className="truncate">{row.description}</span>
+                                <DocIndicator documents={row.documents} muted />
+                              </div>
+                            </td>
+                            <td className="w-1/3 max-w-0 truncate px-4 py-3 text-muted" title={row.categoryName}>
+                              {shortCategoryName(row.categoryName)}
+                            </td>
+                            <td className="px-4 py-3">
+                              <PaymentBadge method={row.paymentMethod} />
+                            </td>
+                            <td className="tabular px-4 py-3 text-right font-semibold whitespace-nowrap text-in-soft">
+                              {formatGBP(row.amountPence)}
+                            </td>
+                            <td className="px-3 py-2">
+                              <RowActions
+                                viewTo={`/income/${row.id}`}
+                                editTo={`/income/${row.id}/edit`}
+                                onDelete={() => setToDelete(row)}
+                              />
+                            </td>
+                          </tr>
+                          {open && (
+                            <tr id={`documents-${row.id}`} className="border-t-0! bg-surface-2/40">
+                              <td />
+                              <td colSpan={6} className="px-4 py-4">
+                                <DocumentsTable documents={row.documents} />
+                              </td>
+                            </tr>
+                          )}
+                        </Fragment>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>

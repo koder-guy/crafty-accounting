@@ -609,6 +609,43 @@ export function TransactionCard({
   );
 }
 
+/**
+ * The documents under an expanded Income or Expenses row, each with View and Download buttons.
+ * The buttons have no border and the rows are the height of the line items table's.
+ */
+export function DocumentsTable({ documents, className = '' }: { documents: TransactionDocument[]; className?: string }) {
+  if (documents.length === 0) return null;
+  const iconButton =
+    'inline-flex size-7 items-center justify-center rounded-md text-muted transition-colors hover:bg-accent-bg hover:text-accent-soft';
+  return (
+    <table className={`w-full rounded-lg border border-line bg-page/40 text-sm ${className}`}>
+      <thead className="text-xs tracking-wide text-faint uppercase">
+        <tr className="border-b border-line">
+          <th scope="col" className="px-4 py-2 text-left font-medium">Document</th>
+          <th scope="col" className="px-4 py-2 text-right font-medium">Actions</th>
+        </tr>
+      </thead>
+      <tbody className="divide-y divide-line">
+        {documents.map((d) => (
+          <tr key={d.id}>
+            <td className="px-4 py-2 break-all text-ink">{d.filename}</td>
+            <td className="w-px px-3 py-1 whitespace-nowrap">
+              <div className="flex justify-end gap-1">
+                <a href={documentUrl(d.filename)} target="_blank" rel="noreferrer" aria-label={`View ${d.filename}`} title="View" className={iconButton}>
+                  <Eye className="size-4" aria-hidden />
+                </a>
+                <a href={documentUrl(d.filename, true)} download={d.filename} aria-label={`Download ${d.filename}`} title="Download" className={iconButton}>
+                  <Download className="size-4" aria-hidden />
+                </a>
+              </div>
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
 /** A document icon showing a transaction has documents: just a sign, not a control. `muted` for grey. */
 export function DocIndicator({ documents, muted = false }: { documents: TransactionDocument[]; muted?: boolean }) {
   if (documents.length === 0) return null;

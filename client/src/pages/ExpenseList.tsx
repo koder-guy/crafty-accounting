@@ -1,6 +1,6 @@
 import { Fragment, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
-import { ArrowUpRight, ChevronRight, CircleSlash, Download, Eye, Plus } from 'lucide-react';
+import { ArrowUpRight, ChevronRight, CircleSlash, Plus } from 'lucide-react';
 import { formatDisplayDate, formatGBP, shortCategoryName, type Expense, type ExpenseWithLineItems } from '@crafty/shared';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { Pagination, usePagination } from '../components/Pagination';
@@ -11,6 +11,7 @@ import { PageBody, PageHeader } from '../components/PageHeader';
 import {
   attachedDocuments,
   DocIndicator,
+  DocumentsTable,
   ExportMenu,
   FilterBar,
   FilterToggle,
@@ -22,8 +23,7 @@ import {
   useTransactionFilters,
 } from '../components/transactions';
 import { Alert, Badge, ButtonLink, Card, CardHeader, EmptyState, PaymentBadge, Spinner } from '../components/ui';
-import { documentUrl } from '../lib/api';
-import { exportUrl, useActiveTaxYear, useCanEdit, useCategories, useDeleteTransaction, useExpandedExpenseRows, useExpenses } from '../lib/queries';
+import { exportUrl, useActiveTaxYear, useCanEdit, useCategories, useDeleteTransaction, useExpandedRows, useExpenses } from '../lib/queries';
 
 export function ExpenseList() {
   const { taxYear, isLoading: yearLoading } = useActiveTaxYear();
@@ -33,7 +33,7 @@ export function ExpenseList() {
   const canEdit = useCanEdit();
   const [filtersShown, setFiltersShown] = useFiltersShown('expenses');
   const remove = useDeleteTransaction('expenses');
-  const { isExpanded, toggle: toggleRow } = useExpandedExpenseRows();
+  const { isExpanded, toggle: toggleRow } = useExpandedRows('expenses');
   const [toDelete, setToDelete] = useState<Expense | null>(null);
   const navigate = useNavigate();
 
@@ -217,7 +217,7 @@ export function ExpenseList() {
                               <td />
                               <td colSpan={7} className="px-4 py-4">
                                 <LineItemsTable expense={row} />
-                                <DocumentsTable expense={row} />
+                                <DocumentsTable documents={row.documents} className="mt-3" />
                               </td>
                             </tr>
                           )}
@@ -288,40 +288,6 @@ function LineItemsTable({ expense }: { expense: ExpenseWithLineItems }) {
               {shortCategoryName(li.categoryName)}
             </td>
             <td className="tabular px-4 py-2 text-right text-ink">{formatGBP(li.amountPence)}</td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
-  );
-}
-
-/** The documents attached to an expanded row, each with View and Download buttons. */
-function DocumentsTable({ expense }: { expense: ExpenseWithLineItems }) {
-  if (expense.documents.length === 0) return null;
-  const iconButton =
-    'inline-flex size-7 items-center justify-center rounded-md text-muted transition-colors hover:bg-accent-bg hover:text-accent-soft';
-  return (
-    <table className="mt-3 w-full rounded-lg border border-line bg-page/40 text-sm">
-      <thead className="text-xs tracking-wide text-faint uppercase">
-        <tr className="border-b border-line">
-          <th scope="col" className="px-4 py-2 text-left font-medium">Document</th>
-          <th scope="col" className="px-4 py-2 text-right font-medium">Actions</th>
-        </tr>
-      </thead>
-      <tbody className="divide-y divide-line">
-        {expense.documents.map((d) => (
-          <tr key={d.id}>
-            <td className="px-4 py-2 break-all text-ink">{d.filename}</td>
-            <td className="w-px px-3 py-1 whitespace-nowrap">
-              <div className="flex justify-end gap-1">
-                <a href={documentUrl(d.filename)} target="_blank" rel="noreferrer" aria-label={`View ${d.filename}`} title="View" className={iconButton}>
-                  <Eye className="size-4" aria-hidden />
-                </a>
-                <a href={documentUrl(d.filename, true)} download={d.filename} aria-label={`Download ${d.filename}`} title="Download" className={iconButton}>
-                  <Download className="size-4" aria-hidden />
-                </a>
-              </div>
-            </td>
           </tr>
         ))}
       </tbody>

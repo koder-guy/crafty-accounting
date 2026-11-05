@@ -308,24 +308,23 @@ export function useDeleteTransaction(kind: Kind) {
 
 // ---- UI state ----
 
-const EXPANDED_KEY = ['ui', 'expense-expanded'];
-
 /**
- * Which Expenses rows are expanded. Kept in the query cache (never garbage
+ * Which rows of the Income or Expenses table are expanded. Kept in the query cache (never garbage
  * collected) so it survives moving between sections; it's cleared on sign-in
  * and sign-out with the rest of the cache, and on a page refresh.
  */
-export function useExpandedExpenseRows() {
+export function useExpandedRows(table: 'incomes' | 'expenses') {
   const qc = useQueryClient();
+  const key = ['ui', 'expanded', table];
   const { data: ids } = useQuery({
-    queryKey: EXPANDED_KEY,
+    queryKey: key,
     queryFn: () => [] as number[],
     initialData: [] as number[],
     staleTime: Infinity,
     gcTime: Infinity,
   });
   const toggle = (id: number) =>
-    qc.setQueryData<number[]>(EXPANDED_KEY, (prev = []) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+    qc.setQueryData<number[]>(key, (prev = []) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
   return { isExpanded: (id: number) => ids.includes(id), toggle };
 }
 
