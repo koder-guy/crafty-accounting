@@ -58,6 +58,11 @@ export const MAX_DOCUMENTS = 10;
 
 /** On an edit, the attached documents to remove (new ones come as files alongside). */
 const removeDocumentIds = z.array(id).max(MAX_DOCUMENTS).optional();
+/** On an edit, attached documents to give a new name (the server checks the names). */
+const renameDocuments = z
+  .array(z.object({ id, filename: z.string().max(500) }))
+  .max(MAX_DOCUMENTS)
+  .optional();
 
 export const incomeInputSchema = z.object({
   taxYearId: id,
@@ -70,6 +75,7 @@ export const incomeInputSchema = z.object({
   categoryId: id,
   notes: optionalText(2000),
   removeDocumentIds,
+  renameDocuments,
   /** On an edit, the updatedAt the form was loaded with; the save is refused if it has changed since. */
   expectedUpdatedAt: z.string().optional(),
 });
@@ -94,6 +100,7 @@ export const expenseInputSchema = z.object({
   notes: optionalText(2000),
   lineItems: z.array(lineItemInputSchema).min(1, 'Add at least one line item'),
   removeDocumentIds,
+  renameDocuments,
   expectedUpdatedAt: z.string().optional(),
 });
 export type ExpenseInput = z.infer<typeof expenseInputSchema>;

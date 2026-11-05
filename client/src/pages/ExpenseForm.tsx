@@ -20,7 +20,7 @@ import { BackLink, ChangedElsewhere, CopiedFrom, dateInYear, duplicateDate, useL
 import { NoTaxYear } from '../components/NoTaxYear';
 import { PageBody, PageHeader } from '../components/PageHeader';
 import { DateInput } from '../components/DateInput';
-import { DocumentField, PaymentMethodPicker, tableUrl } from '../components/transactions';
+import { DocumentField, renamedDocuments, type DocumentRenames, PaymentMethodPicker, tableUrl } from '../components/transactions';
 import { SubmittedFiguresNotice } from '../components/SubmittedFiguresNotice';
 import { Alert, Button, Card, CardHeader, Field, IconButton, Spinner } from '../components/ui';
 import { ApiError, transactionForm } from '../lib/api';
@@ -80,6 +80,7 @@ export function ExpenseForm() {
   // New documents to add, and attached ones to remove, when the form is saved.
   const [files, setFiles] = useState<File[]>([]);
   const [removeIds, setRemoveIds] = useState<number[]>([]);
+  const [renames, setRenames] = useState<DocumentRenames>({});
   const [preparingPhoto, setPreparingPhoto] = useState(false);
   const [badDocumentNames, setBadDocumentNames] = useState(false);
 
@@ -124,6 +125,7 @@ export function ExpenseForm() {
     });
     setLoaded(record);
     setRemoveIds([]);
+    setRenames({});
   };
 
   // Fill the form once: live updates refetch the data, and that mustn't wipe what you've typed.
@@ -187,6 +189,7 @@ export function ExpenseForm() {
       paymentMethod: values.paymentMethod,
       notes: values.notes,
       removeDocumentIds: removeIds,
+      renameDocuments: renamedDocuments(existing?.documents ?? [], renames),
       expectedUpdatedAt: id ? loaded?.updatedAt : undefined,
       lineItems: values.lineItems.map((li) => ({
         id: li.lineId,
@@ -214,7 +217,7 @@ export function ExpenseForm() {
   const title = id ? 'Edit expense' : copyId ? 'Duplicate expense' : 'Add expense';
   const backTo = id ? `/expenses/${id}` : copyId ? `/expenses/${copyId}` : tableUrl('/expenses');
   const { guard, leave } = useLeaveGuard({
-    dirty: isDirty || files.length > 0 || removeIds.length > 0,
+    dirty: isDirty || files.length > 0 || removeIds.length > 0 || renamedDocuments(existing?.documents ?? [], renames).length > 0,
     busy: save.isPending || preparingPhoto,
     onCancel: () => navigate(backTo),
   });
@@ -453,8 +456,10 @@ export function ExpenseForm() {
                   current={existing?.documents ?? []}
                   files={files}
                   removeIds={removeIds}
+                  renames={renames}
                   onFiles={setFiles}
                   onRemoveIds={setRemoveIds}
+                  onRenames={setRenames}
                   onPreparing={setPreparingPhoto}
                   onBadNames={setBadDocumentNames}
                 />

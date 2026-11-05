@@ -634,6 +634,68 @@ describe('incomes', () => {
     expect((await agent.get('/api/incomes').query({ taxYearId: yearId })).body).toHaveLength(1);
   });
 
+  it('renames attached documents on edit, refusing bad or clashing names without changing anything', async () => {
+    const yearId = await createYear();
+    const exists = (name: string) => fs.existsSync(path.join(dataDir, 'uploads', name));
+    const names = (t: { documents: { filename: string }[] }) => t.documents.map((d) => d.filename);
+    const created = (
+      await agent
+        .post('/api/expenses')
+        .field('data', JSON.stringify(expense(yearId)))
+        .attach('documents', PDF, 'scan.pdf')
+        .attach('documents', PDF, 'other.pdf')
+        .expect(201)
+    ).body;
+    const [scan, other] = created.documents;
+    const before = fs.readFileSync(path.join(dataDir, 'uploads', 'scan.pdf'));
+
+    // Rename one, add one, in the same save.
+    const edited = (
+      await agent
+        .put(`/api/expenses/${created.id}`)
+        .field('data', JSON.stringify(expense(yearId, { renameDocuments: [{ id: scan.id, filename: 'Invoice 42.pdf' }] })))
+        .attach('documents', PDF, 'new.pdf')
+        .expect(200)
+    ).body;
+    expect(names(edited)).toEqual(['Invoice 42.pdf', 'other.pdf', 'new.pdf']);
+    expect([exists('scan.pdf'), exists('Invoice 42.pdf')]).toEqual([false, true]);
+    expect(fs.readFileSync(path.join(dataDir, 'uploads', 'Invoice 42.pdf'))).toEqual(before);
+    await agent.get('/api/documents/Invoice%2042.pdf').expect(200);
+
+    const refused = async (renameDocuments: unknown, status: number, extra: object = {}) => {
+      await agent
+        .put(`/api/expenses/${created.id}`)
+        .send(expense(yearId, { renameDocuments, ...extra }))
+        .expect(status);
+      expect(names((await agent.get(`/api/expenses/${created.id}`)).body)).toEqual(['Invoice 42.pdf', 'other.pdf', 'new.pdf']);
+    };
+    // Taken by another of its documents, by another transaction's, or by another rename in the save.
+    await refused([{ id: other.id, filename: 'new.pdf' }], 409);
+    await agent.post('/api/incomes').field('data', JSON.stringify(income(yearId))).attach('documents', PDF, 'elsewhere.pdf').expect(201);
+    await refused([{ id: other.id, filename: 'elsewhere.pdf' }], 409);
+    await refused(
+      [
+        { id: scan.id, filename: 'twin.pdf' },
+        { id: other.id, filename: 'twin.pdf' },
+      ],
+      409,
+    );
+    // Unsafe names and other extensions; another transaction's document; renamed and removed at once.
+    await refused([{ id: other.id, filename: '../escape.pdf' }], 400);
+    await refused([{ id: other.id, filename: 'other.exe' }], 400);
+    const elsewhere = (await agent.get('/api/incomes').query({ taxYearId: yearId })).body[0].documents[0];
+    await refused([{ id: elsewhere.id, filename: 'mine.pdf' }], 422);
+    await refused([{ id: other.id, filename: 'gone.pdf' }], 422, { removeDocumentIds: [other.id] });
+    expect(fs.readdirSync(path.join(dataDir, 'uploads')).sort()).toEqual(['Invoice 42.pdf', 'elsewhere.pdf', 'new.pdf', 'other.pdf']);
+
+    // Its own name again is no change.
+    await agent
+      .put(`/api/expenses/${created.id}`)
+      .send(expense(yearId, { renameDocuments: [{ id: other.id, filename: 'other.pdf' }] }))
+      .expect(200);
+    expect(exists('other.pdf')).toBe(true);
+  });
+
   it('stores documents on expenses too', async () => {
     const yearId = await createYear();
     const created = (

@@ -17,7 +17,7 @@ import {
 import type { AppContext } from '../context';
 import { toCsv } from '../csv';
 import { sendJsonExport } from '../jsonExport';
-import { createUploader, removeDocumentFile, saveWithDocuments, uploadedFiles } from '../documents';
+import { createUploader, removeDocumentFile, saveWithDocuments, uploadedFiles, type DocumentRename } from '../documents';
 import { HttpError, parseId, parseWith, readPayload } from '../http';
 import { importTransactions } from '../transactionImport';
 import {
@@ -71,39 +71,51 @@ export function checkUnchanged(
 }
 
 /**
- * Checks an edit's document changes: the documents to remove must belong to
- * the transaction, and it can't end up with more than MAX_DOCUMENTS.
- * Returns the documents being removed.
+ * Checks an edit's document changes: the documents to remove or rename must
+ * belong to the transaction, none is both, and it can't end up with more than
+ * MAX_DOCUMENTS. Returns the documents being removed and the renames that
+ * change a name (their new names are checked when the files are placed).
  */
-function documentRemovals(
+function documentChanges(
   existing: { documents: TransactionDocument[] },
-  removeIds: number[] | undefined,
+  input: { removeDocumentIds?: number[]; renameDocuments?: { id: number; filename: string }[] },
   adding: number,
-): TransactionDocument[] {
+): { removing: TransactionDocument[]; renaming: (DocumentRename & { id: number })[] } {
   const owned = new Map(existing.documents.map((d) => [d.id, d]));
-  const removing = (removeIds ?? []).map((docId) => {
+  const ownedDoc = (docId: number) => {
     const doc = owned.get(docId);
     if (!doc) throw new HttpError(422, 'A document does not belong to this transaction');
     return doc;
+  };
+  const removing = (input.removeDocumentIds ?? []).map(ownedDoc);
+  const renamed = new Set<number>();
+  const renaming = (input.renameDocuments ?? []).flatMap(({ id: docId, filename }) => {
+    const doc = ownedDoc(docId);
+    if (renamed.has(docId)) throw new HttpError(422, 'A document can only be renamed once in a save');
+    renamed.add(docId);
+    if (removing.includes(doc)) throw new HttpError(422, 'A document can\'t be renamed and removed in the same save');
+    return filename === doc.filename ? [] : [{ id: docId, from: doc.filename, to: filename }];
   });
   if (existing.documents.length - removing.length + adding > MAX_DOCUMENTS) {
     throw new HttpError(422, `A transaction can have at most ${MAX_DOCUMENTS} documents`);
   }
-  return removing;
+  return { removing, renaming };
 }
 
-/** Records newly placed documents against a transaction, and drops removed ones. */
+/** Records newly placed documents against a transaction, renames some, and drops removed ones. */
 function storeDocuments(
   ctx: AppContext,
   owner: 'income_id' | 'expense_id',
   ownerId: number,
   added: string[],
-  removed: TransactionDocument[],
+  changes: { removing: TransactionDocument[]; renaming: { id: number; to: string }[] },
 ): void {
   const insert = ctx.db.prepare(`INSERT INTO documents (filename, ${owner}) VALUES (?, ?)`);
   for (const name of added) insert.run(name, ownerId);
+  const rename = ctx.db.prepare('UPDATE documents SET filename = ? WHERE id = ?');
+  for (const { id, to } of changes.renaming) rename.run(to, id);
   const remove = ctx.db.prepare('DELETE FROM documents WHERE id = ?');
-  for (const doc of removed) remove.run(doc.id);
+  for (const doc of changes.removing) remove.run(doc.id);
 }
 
 const documentNames = (t: { documents: TransactionDocument[] }) => t.documents.map((d) => d.filename);
@@ -183,7 +195,7 @@ export function incomesRouter(ctx: AppContext): Router {
     const id = saveWithDocuments(ctx, { files, removing: [] }, (filenames) =>
       ctx.db.transaction(() => {
         const incomeId = insertIncome(ctx.db, input, req.user!.name);
-        storeDocuments(ctx, 'income_id', incomeId, filenames, []);
+        storeDocuments(ctx, 'income_id', incomeId, filenames, { removing: [], renaming: [] });
         return incomeId;
       })(),
     );
@@ -200,8 +212,8 @@ export function incomesRouter(ctx: AppContext): Router {
     checkTaxYearAndDate(ctx, existing.taxYearId, input.date);
     checkCategory(ctx, input.categoryId, 'INCOME');
     const files = uploadedFiles(req.files);
-    const removing = documentRemovals(existing, input.removeDocumentIds, files.length);
-    saveWithDocuments(ctx, { files, removing: removing.map((d) => d.filename) }, (filenames) =>
+    const changes = documentChanges(existing, input, files.length);
+    saveWithDocuments(ctx, { files, removing: changes.removing.map((d) => d.filename), renaming: changes.renaming }, (filenames) =>
       ctx.db.transaction(() => {
         ctx.db
           .prepare(
@@ -222,7 +234,7 @@ export function incomesRouter(ctx: AppContext): Router {
             req.user!.name,
             id,
           );
-        storeDocuments(ctx, 'income_id', id, filenames, removing);
+        storeDocuments(ctx, 'income_id', id, filenames, changes);
       })(),
     );
     res.json(getIncome(ctx.db, id));
@@ -320,7 +332,7 @@ export function expensesRouter(ctx: AppContext): Router {
     const id = saveWithDocuments(ctx, { files, removing: [] }, (filenames) =>
       ctx.db.transaction(() => {
         const expenseId = insertExpense(ctx.db, input, req.user!.name);
-        storeDocuments(ctx, 'expense_id', expenseId, filenames, []);
+        storeDocuments(ctx, 'expense_id', expenseId, filenames, { removing: [], renaming: [] });
         return expenseId;
       })(),
     );
@@ -344,8 +356,8 @@ export function expensesRouter(ctx: AppContext): Router {
     }
 
     const files = uploadedFiles(req.files);
-    const removing = documentRemovals(existing, input.removeDocumentIds, files.length);
-    saveWithDocuments(ctx, { files, removing: removing.map((d) => d.filename) }, (filenames) =>
+    const changes = documentChanges(existing, input, files.length);
+    saveWithDocuments(ctx, { files, removing: changes.removing.map((d) => d.filename), renaming: changes.renaming }, (filenames) =>
       ctx.db.transaction(() => {
         ctx.db
           .prepare(
@@ -365,7 +377,7 @@ export function expensesRouter(ctx: AppContext): Router {
             req.user!.name,
             id,
           );
-        storeDocuments(ctx, 'expense_id', id, filenames, removing);
+        storeDocuments(ctx, 'expense_id', id, filenames, changes);
         const keep = new Set(input.lineItems.flatMap((item) => (item.id ? [item.id] : [])));
         const remove = ctx.db.prepare('DELETE FROM expense_line_items WHERE id = ?');
         for (const lineId of existingIds) if (!keep.has(lineId)) remove.run(lineId);

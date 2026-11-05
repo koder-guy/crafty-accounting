@@ -544,8 +544,8 @@ export function useOfHomeCategoryId(db: Db): number {
   return row.id;
 }
 
-type NewIncome = Omit<IncomeInput, 'removeDocumentIds' | 'expectedUpdatedAt'>;
-type NewExpense = Omit<ExpenseInput, 'removeDocumentIds' | 'expectedUpdatedAt' | 'lineItems'> & {
+type NewIncome = Omit<IncomeInput, 'removeDocumentIds' | 'renameDocuments' | 'expectedUpdatedAt'>;
+type NewExpense = Omit<ExpenseInput, 'removeDocumentIds' | 'renameDocuments' | 'expectedUpdatedAt' | 'lineItems'> & {
   lineItems: { description: string; amountPence: number; categoryId: number; disallowable: boolean }[];
 };
 

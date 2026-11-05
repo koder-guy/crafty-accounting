@@ -1,5 +1,5 @@
-// Attached documents live in DATA_DIR/uploads under their original filename.
-// Names are never changed, so they are validated (and checked for clashes)
+// Attached documents live in DATA_DIR/uploads under their original filename,
+// or the name given when renamed. Names are validated (and checked for clashes)
 // before anything is written to disk or the database.
 import fs from 'node:fs';
 import path from 'node:path';
@@ -66,25 +66,54 @@ export function removeDocumentFile(ctx: AppContext, name: string | null | undefi
 /** Files uploaded with a transaction (multer puts them on req.files). */
 export const uploadedFiles = (files: unknown): Express.Multer.File[] => (Array.isArray(files) ? files : []);
 
+/** Gives a stored file a second name, refusing one already taken; the old name is removed once the change is saved. */
+function linkDocument(ctx: AppContext, from: string, to: string): void {
+  const clash = () => new HttpError(409, `A document called "${to}" is already stored. Choose another name.`);
+  try {
+    fs.linkSync(documentPath(ctx, from), documentPath(ctx, to));
+  } catch (err) {
+    const code = (err as NodeJS.ErrnoException).code;
+    if (code === 'EEXIST') throw clash();
+    if (code === 'ENOENT') throw new HttpError(422, `The file for "${from}" is missing from storage, so it can't be renamed`);
+    // Storage without hard links: copy instead.
+    try {
+      fs.copyFileSync(documentPath(ctx, from), documentPath(ctx, to), fs.constants.COPYFILE_EXCL);
+    } catch (copyErr) {
+      if ((copyErr as NodeJS.ErrnoException).code === 'EEXIST') throw clash();
+      throw copyErr;
+    }
+  }
+}
+
+export interface DocumentRename {
+  from: string;
+  to: string;
+}
+
 /**
- * Places uploaded documents under their original names, runs the database
- * write with those names, then tidies up: the new files are removed if the
- * write fails, and the `removing` files (documents dropped by the write) are
- * deleted if it succeeds. Every name is checked before anything is written.
+ * Places uploaded documents under their original names and renamed ones under
+ * their new names, runs the database write with the uploaded names, then tidies
+ * up: the new files are removed if the write fails, and the `removing` files
+ * (documents dropped by the write) and renamed files' old names are deleted if
+ * it succeeds. Every name is checked before anything is written.
  */
 export function saveWithDocuments<T>(
   ctx: AppContext,
-  change: { files: Express.Multer.File[]; removing: string[] },
+  change: { files: Express.Multer.File[]; removing: string[]; renaming?: DocumentRename[] },
   write: (filenames: string[]) => T,
 ): T {
   const placed: string[] = [];
+  const renaming = change.renaming ?? [];
   try {
     const names = change.files.map((f) => decodeUploadName(f.originalname));
-    for (const [i, name] of names.entries()) {
+    const newNames = [...names, ...renaming.map((r) => r.to)];
+    for (const [i, name] of newNames.entries()) {
       const problem = documentNameProblem(name);
       if (problem) throw new HttpError(400, `${name}: ${problem}`);
-      const clash = names.indexOf(name) !== i || isDocumentNameInUse(ctx.db, name) || fs.existsSync(documentPath(ctx, name));
-      if (clash) throw new HttpError(409, `A document called "${name}" is already stored. Rename the file and try again.`);
+      const clash = newNames.indexOf(name) !== i || isDocumentNameInUse(ctx.db, name) || fs.existsSync(documentPath(ctx, name));
+      if (clash) {
+        throw new HttpError(409, `A document called "${name}" is already stored. ${i < names.length ? 'Rename the file and try again.' : 'Choose another name.'}`);
+      }
     }
     for (const [i, file] of change.files.entries()) {
       try {
@@ -97,9 +126,14 @@ export function saveWithDocuments<T>(
       }
       placed.push(names[i]);
     }
+    for (const { from, to } of renaming) {
+      linkDocument(ctx, from, to);
+      placed.push(to);
+    }
 
     const result = write(names);
     for (const name of change.removing) removeDocumentFile(ctx, name);
+    for (const { from } of renaming) removeDocumentFile(ctx, from);
     placed.length = 0;
     return result;
   } finally {

@@ -969,32 +969,49 @@ function renamedFile(file: File, name: string) {
 }
 
 /** The filename a name box means: its extension is fixed, typing it is harmless, and blank is the first name. */
-function nameFromDraft(file: File, draft: string) {
-  const { firstName } = fileInfo(file);
+function nameFromDraft(firstName: string, draft: string) {
   const extension = fileExtension(firstName);
   let stem = draft.trim();
   if (stem.toLowerCase().endsWith(extension.toLowerCase())) stem = stem.slice(0, stem.length - extension.length).trimEnd();
   return stem ? `${stem}${extension}` : firstName;
 }
 
+const withoutExtension = (name: string, extension: string) => name.slice(0, name.length - extension.length);
+
+/** What's in an attached document's name box, by document id, once Rename is pressed. */
+export type DocumentRenames = Record<number, string>;
+
+/** The attached documents whose name boxes give a new name, as the API takes them. */
+export function renamedDocuments(current: TransactionDocument[], renames: DocumentRenames) {
+  return current.flatMap((doc) => {
+    const draft = renames[doc.id];
+    const filename = draft === undefined ? doc.filename : nameFromDraft(doc.filename, draft);
+    return filename === doc.filename ? [] : [{ id: doc.id, filename }];
+  });
+}
+
 /**
- * The documents on a transaction: the ones already attached (each can be marked
- * for removal) and new files picked to add when it's saved.
+ * The documents on a transaction: the ones already attached (each can be
+ * renamed or marked for removal) and new files picked to add when it's saved.
  */
 export function DocumentField({
   current,
   files,
   removeIds,
+  renames,
   onFiles,
   onRemoveIds,
+  onRenames,
   onPreparing,
   onBadNames,
 }: {
   current: TransactionDocument[];
   files: File[];
   removeIds: number[];
+  renames: DocumentRenames;
   onFiles: (files: File[]) => void;
   onRemoveIds: (ids: number[]) => void;
+  onRenames: (renames: DocumentRenames) => void;
   /** Photos are being compressed: saving now would leave them out. */
   onPreparing: (preparing: boolean) => void;
   /** A new document's name needs fixing before it can be saved. */
@@ -1018,9 +1035,11 @@ export function DocumentField({
     canAdd ? 'cursor-pointer hover:border-accent-soft/60' : 'cursor-not-allowed opacity-50'
   }`;
 
+  const savedNames = current.map((doc) => (renames[doc.id] === undefined ? doc.filename : nameFromDraft(doc.filename, renames[doc.id])));
+
   const choose = (chosen: File[]) => {
     if (chosen.length === 0) return;
-    const taken = new Set([...current.map((d) => d.filename), ...files.map((f) => f.name)]);
+    const taken = new Set([...current.map((d) => d.filename), ...savedNames, ...files.map((f) => f.name)]);
     for (const file of chosen) {
       const problem = documentProblem(file.name) ?? (taken.has(file.name) ? 'A document with this name is already attached' : null);
       if (problem) return setError(`${file.name}: ${problem}`);
@@ -1049,15 +1068,20 @@ export function DocumentField({
 
   const newNames = files.map((file) => {
     const draft = drafts[fileInfo(file).key];
-    return draft === undefined ? file.name : nameFromDraft(file, draft);
+    return draft === undefined ? file.name : nameFromDraft(fileInfo(file).firstName, draft);
   });
-  const nameProblems = newNames.map((name, i) => {
+  // Every name the save would leave, attached documents first. Old names count as taken until the save.
+  const allNames = [...savedNames, ...newNames];
+  const nameProblem = (name: string, index: number, unchanged: boolean) => {
+    if (unchanged) return null;
     const problem = documentProblem(name);
     if (problem) return problem.replace('Rename the file: it', 'The name').replace('Rename the file: the name', 'The name');
-    const clash = current.some((d) => d.filename === name) || newNames.some((other, j) => j !== i && other === name);
+    const clash = current.some((d) => d.filename === name) || allNames.some((other, j) => j !== index && other === name);
     return clash ? 'A document with this name is already attached' : null;
-  });
-  const badNames = nameProblems.some(Boolean);
+  };
+  const savedProblems = current.map((doc, i) => nameProblem(savedNames[i], i, savedNames[i] === doc.filename));
+  const nameProblems = newNames.map((name, i) => nameProblem(name, current.length + i, false));
+  const badNames = [...savedProblems, ...nameProblems].some(Boolean);
 
   useEffect(() => {
     onBadNames(badNames);
@@ -1117,8 +1141,52 @@ export function DocumentField({
           void add([...e.dataTransfer.files], (f) => CAMERA_DEFAULT_NAME.test(f.name));
         }}
       >
-        {current.map((doc) => {
+        {current.map((doc, i) => {
           const removing = removeIds.includes(doc.id);
+          const draft = renames[doc.id];
+          if (draft !== undefined) {
+            const extension = fileExtension(doc.filename);
+            const problem = savedProblems[i];
+            const stopRenaming = () => {
+              const { [doc.id]: _, ...rest } = renames;
+              onRenames(rest);
+            };
+            return (
+              <li key={doc.id} className="px-4 py-2.5">
+                <div className="flex items-center gap-3">
+                  <FileText className="size-5 shrink-0 text-faint" aria-hidden />
+                  <div className="flex min-w-0 flex-1 items-center gap-1.5 text-sm">
+                    <input
+                      aria-label={`New name for ${doc.filename}`}
+                      aria-invalid={problem ? true : undefined}
+                      autoComplete="off"
+                      autoFocus
+                      className="field min-w-0 flex-1 py-1.5"
+                      value={draft}
+                      onChange={(e) => onRenames({ ...renames, [doc.id]: e.target.value })}
+                      onBlur={() => onRenames({ ...renames, [doc.id]: withoutExtension(savedNames[i], extension) })}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') e.preventDefault();
+                      }}
+                    />
+                    <span className="shrink-0 text-muted">{extension}</span>
+                  </div>
+                  <button
+                    type="button"
+                    className="shrink-0 rounded-md border border-line-strong bg-surface px-3 py-1.5 text-sm text-ink transition-colors hover:border-accent-soft/60"
+                    onClick={stopRenaming}
+                  >
+                    Undo
+                  </button>
+                </div>
+                {problem ? (
+                  <p className="mt-1 ml-8 text-xs text-out-soft">{problem}</p>
+                ) : (
+                  savedNames[i] !== doc.filename && <p className="mt-1 ml-8 text-xs text-muted">Renamed from {doc.filename} when you save</p>
+                )}
+              </li>
+            );
+          }
           return (
             <li key={doc.id} className="flex flex-wrap items-center gap-3 px-4 py-2.5">
               <FileText className="size-5 shrink-0 text-faint" aria-hidden />
@@ -1132,6 +1200,17 @@ export function DocumentField({
                 )}
                 {removing && <span className="ml-2 text-xs text-out-soft">Removed when you save</span>}
               </div>
+              {!removing && (
+                <button
+                  type="button"
+                  aria-label={`Rename ${doc.filename}`}
+                  title="Rename"
+                  className="rounded-md border border-line-strong bg-surface p-2 text-muted transition-colors hover:border-accent-soft/60 hover:text-ink"
+                  onClick={() => onRenames({ ...renames, [doc.id]: withoutExtension(doc.filename, fileExtension(doc.filename)) })}
+                >
+                  <Pencil className="size-4" aria-hidden />
+                </button>
+              )}
               <button
                 type="button"
                 className={`rounded-md px-3 py-1.5 text-sm transition-colors ${
@@ -1158,10 +1237,10 @@ export function DocumentField({
                     aria-invalid={problem ? true : undefined}
                     autoComplete="off"
                     className="field min-w-0 flex-1 py-1.5"
-                    value={drafts[key] ?? file.name.slice(0, file.name.length - extension.length)}
+                    value={drafts[key] ?? withoutExtension(file.name, extension)}
                     onChange={(e) => setDrafts({ ...drafts, [key]: e.target.value })}
                     onBlur={() => {
-                      if (drafts[key] !== undefined) setDrafts({ ...drafts, [key]: newNames[i].slice(0, newNames[i].length - extension.length) });
+                      if (drafts[key] !== undefined) setDrafts({ ...drafts, [key]: withoutExtension(newNames[i], extension) });
                     }}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') e.preventDefault();

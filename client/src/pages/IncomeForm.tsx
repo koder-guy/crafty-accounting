@@ -7,7 +7,7 @@ import { DateInput } from '../components/DateInput';
 import { BackLink, ChangedElsewhere, CopiedFrom, dateInYear, duplicateDate, useLeaveGuard, yearRangeHint } from '../components/FormShell';
 import { NoTaxYear } from '../components/NoTaxYear';
 import { PageBody, PageHeader } from '../components/PageHeader';
-import { DocumentField, PaymentMethodPicker, tableUrl } from '../components/transactions';
+import { DocumentField, renamedDocuments, type DocumentRenames, PaymentMethodPicker, tableUrl } from '../components/transactions';
 import { SubmittedFiguresNotice } from '../components/SubmittedFiguresNotice';
 import { Alert, Button, Card, Field, Spinner } from '../components/ui';
 import { ApiError, transactionForm } from '../lib/api';
@@ -43,6 +43,7 @@ export function IncomeForm() {
   // New documents to add, and attached ones to remove, when the form is saved.
   const [files, setFiles] = useState<File[]>([]);
   const [removeIds, setRemoveIds] = useState<number[]>([]);
+  const [renames, setRenames] = useState<DocumentRenames>({});
   const [preparingPhoto, setPreparingPhoto] = useState(false);
   const [badDocumentNames, setBadDocumentNames] = useState(false);
 
@@ -81,6 +82,7 @@ export function IncomeForm() {
     });
     setLoaded(record);
     setRemoveIds([]);
+    setRenames({});
   };
 
   // Fill the form once the record (edit) or the defaults (new) are known. Only
@@ -134,6 +136,7 @@ export function IncomeForm() {
       categoryId: Number(values.categoryId),
       notes: values.notes,
       removeDocumentIds: removeIds,
+      renameDocuments: renamedDocuments(existing?.documents ?? [], renames),
       expectedUpdatedAt: id ? loaded?.updatedAt : undefined,
     };
     save.mutate(
@@ -156,7 +159,7 @@ export function IncomeForm() {
   const title = id ? 'Edit income' : copyId ? 'Duplicate income' : 'Add income';
   const backTo = id ? `/income/${id}` : copyId ? `/income/${copyId}` : tableUrl('/income');
   const { guard, leave } = useLeaveGuard({
-    dirty: isDirty || files.length > 0 || removeIds.length > 0,
+    dirty: isDirty || files.length > 0 || removeIds.length > 0 || renamedDocuments(existing?.documents ?? [], renames).length > 0,
     busy: save.isPending || preparingPhoto,
     onCancel: () => navigate(backTo),
   });
@@ -289,8 +292,10 @@ export function IncomeForm() {
                   current={existing?.documents ?? []}
                   files={files}
                   removeIds={removeIds}
+                  renames={renames}
                   onFiles={setFiles}
                   onRemoveIds={setRemoveIds}
+                  onRenames={setRenames}
                   onPreparing={setPreparingPhoto}
                   onBadNames={setBadDocumentNames}
                 />
