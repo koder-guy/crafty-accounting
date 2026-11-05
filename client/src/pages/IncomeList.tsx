@@ -12,6 +12,7 @@ import {
   attachedDocuments,
   DocIndicator,
   DocumentsTable,
+  NotesIndicator,
   NotesPanel,
   ExportMenu,
   FilterBar,
@@ -124,6 +125,7 @@ export function IncomeList() {
                     amountClass="text-in-soft"
                     method={row.paymentMethod}
                     documents={row.documents}
+                    notes={row.notes}
                   />
                 ))}
               </ul>
@@ -174,6 +176,7 @@ export function IncomeList() {
                               <div className="flex items-center gap-1.5 font-medium text-ink">
                                 <span className="truncate">{row.description}</span>
                                 <DocIndicator documents={row.documents} muted />
+                                <NotesIndicator notes={row.notes} muted />
                               </div>
                             </td>
                             <td className="w-1/3 max-w-0 truncate px-4 py-3 text-muted" title={row.categoryName}>

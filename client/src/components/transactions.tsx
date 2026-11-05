@@ -16,6 +16,7 @@ import {
   FileBraces,
   FileSpreadsheet,
   FileText,
+  NotepadText,
   ListFilter,
   Pencil,
   Search,
@@ -581,6 +582,7 @@ export function TransactionCard({
   amountClass,
   method,
   documents,
+  notes,
 }: {
   to: string;
   title: string;
@@ -589,6 +591,7 @@ export function TransactionCard({
   amountClass: string;
   method: PaymentMethod;
   documents: TransactionDocument[];
+  notes: string | null;
 }) {
   return (
     <li>
@@ -597,6 +600,7 @@ export function TransactionCard({
           <div className="flex items-center gap-1.5 font-medium text-ink">
             <span className="truncate">{title}</span>
             <DocIndicator documents={documents} />
+            <NotesIndicator notes={notes} />
           </div>
           <div className="truncate text-xs text-muted">{sub}</div>
         </div>
@@ -643,6 +647,21 @@ export function DocumentsTable({ documents }: { documents: TransactionDocument[]
         ))}
       </tbody>
     </table>
+  );
+}
+
+/**
+ * A notepad showing a transaction has notes: just a sign, not a control. Hovering shows the start
+ * of the notes. `muted` for grey, as `DocIndicator`.
+ */
+export function NotesIndicator({ notes, muted = false }: { notes: string | null; muted?: boolean }) {
+  const text = notes?.trim().replace(/\s+/g, ' ');
+  if (!text) return null;
+  const preview = text.length > 100 ? `${text.slice(0, 99).trimEnd()}…` : text;
+  return (
+    <span className={`inline-flex shrink-0 ${muted ? 'text-muted' : 'text-accent-soft'}`} role="img" aria-label="Has notes" title={preview}>
+      <NotepadText className="size-3.5" aria-hidden />
+    </span>
   );
 }
 
