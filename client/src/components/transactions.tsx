@@ -560,10 +560,7 @@ export function DocumentLinks({ documents }: { documents: TransactionDocument[] 
     <ul className="grid w-fit max-w-full grid-cols-[minmax(0,max-content)_auto_auto] items-center gap-x-2 gap-y-1.5">
       {documents.map((d) => (
         <li key={d.id} className="col-span-3 grid grid-cols-subgrid items-center">
-          <span className="flex min-w-0 items-center gap-1.5 pr-2">
-            <FileText className="size-4 shrink-0 text-faint" aria-hidden />
-            <span className="break-words">{d.filename}</span>
-          </span>
+          <span className="min-w-0 break-words pr-2">{d.filename}</span>
           <a href={documentUrl(d.filename)} target="_blank" rel="noreferrer" aria-label={`View ${d.filename}`} title="View" className={iconButton}>
             <Eye className="size-4" aria-hidden />
           </a>
