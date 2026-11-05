@@ -3,6 +3,7 @@ import path from 'node:path';
 import type { Config } from './config';
 import { openDatabase, type Db } from './db';
 import { LiveUpdates } from './liveUpdates';
+import { claudeInvoiceReader, type InvoiceReader } from './invoiceReader';
 import { Updates } from './updates';
 import { ensureFirstUser } from './users';
 
@@ -21,6 +22,8 @@ export interface AppContext {
   fetch: typeof fetch;
   /** Checking for and applying new versions (Settings → Updates). */
   updates: Updates;
+  /** Reads an invoice with Claude; null without ANTHROPIC_API_KEY. Tests replace it. */
+  readInvoice: InvoiceReader | null;
 }
 
 export function createContext(config: Config): AppContext {
@@ -37,5 +40,6 @@ export function createContext(config: Config): AppContext {
   ensureFirstUser(db, config.adminName, config.adminPassword);
   const ctx = { config, db, paths, liveUpdates: new LiveUpdates(), fetch: (...args) => globalThis.fetch(...args) } as AppContext;
   ctx.updates = new Updates(ctx);
+  ctx.readInvoice = config.invoiceReader.apiKey ? claudeInvoiceReader(config.invoiceReader.apiKey, config.invoiceReader.model) : null;
   return ctx;
 }

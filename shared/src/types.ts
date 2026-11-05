@@ -580,3 +580,24 @@ export interface ImportSummary {
   /** Reasons the file can't be imported; nothing is imported while there are any. */
   problems: string[];
 }
+
+/** Whether invoices can be read by Claude (ANTHROPIC_API_KEY is set). */
+export interface InvoiceReaderStatus {
+  configured: boolean;
+}
+
+/** What Claude read from an invoice, to fill in a new expense for checking. */
+export interface InvoiceReading {
+  /** ISO date, or null when the invoice shows none. */
+  date: string | null;
+  payee: string;
+  invoiceNumber: string;
+  orderNumber: string;
+  /** Only when the invoice says how it was paid. */
+  paymentMethod: PaymentMethod | null;
+  lineItems: { description: string; amountPence: number; categoryId: number | null }[];
+  /** The total the invoice states, to compare with the lines. */
+  totalPence: number | null;
+  /** Things to check, such as lines that don't add up to the total. */
+  warnings: string[];
+}

@@ -26,6 +26,11 @@ export interface Config {
     /** Overrides the redirect URI worked out from the address the app is reached at. */
     redirectUri: string | null;
   };
+  /** Reading invoices with Claude, through the Anthropic API; hidden unless a key is set. */
+  invoiceReader: {
+    apiKey: string | null;
+    model: string;
+  };
   updates: {
     /** Check GitHub for new releases twice a day (UPDATE_CHECK); Check now works either way. */
     autoCheck: boolean;
@@ -61,6 +66,10 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
       clientId: env.HMRC_CLIENT_ID?.trim() || null,
       clientSecret: env.HMRC_CLIENT_SECRET?.trim() || null,
       redirectUri: env.HMRC_REDIRECT_URI?.trim() || null,
+    },
+    invoiceReader: {
+      apiKey: env.ANTHROPIC_API_KEY?.trim() || null,
+      model: env.INVOICE_READER_MODEL?.trim() || 'claude-opus-5-5',
     },
     updates: { autoCheck: !/^(false|0)$/i.test(env.UPDATE_CHECK?.trim() ?? ''), ...installKind(env) },
   };

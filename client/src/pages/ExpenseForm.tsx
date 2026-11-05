@@ -12,19 +12,22 @@ import {
   parsePoundsToPence,
   penceToPounds,
   todayIso,
+  MAX_DOCUMENTS,
   type ExpenseWithLineItems,
+  type InvoiceReading,
   type PaymentMethod,
 } from '@crafty/shared';
 import { CategoryOptions } from '../components/CategoryOptions';
 import { BackLink, ChangedElsewhere, CopiedFrom, dateInYear, duplicateDate, useLeaveGuard, yearRangeHint } from '../components/FormShell';
 import { NoTaxYear } from '../components/NoTaxYear';
+import { ReadInvoice } from '../components/ReadInvoice';
 import { PageBody, PageHeader } from '../components/PageHeader';
 import { DateInput } from '../components/DateInput';
 import { DocumentField, renamedDocuments, type DocumentRenames, PaymentMethodPicker, tableUrl } from '../components/transactions';
 import { SubmittedFiguresNotice } from '../components/SubmittedFiguresNotice';
 import { Alert, Button, Card, CardHeader, Field, IconButton, Spinner } from '../components/ui';
 import { ApiError, transactionForm } from '../lib/api';
-import { useActiveTaxYear, useCategories, useExpense, useSaveTransaction, useTaxYears } from '../lib/queries';
+import { useActiveTaxYear, useCategories, useExpense, useInvoiceReader, useSaveTransaction, useTaxYears } from '../lib/queries';
 
 interface LineValues {
   /** Database id for existing line items; useFieldArray reserves "id". */
@@ -83,12 +86,17 @@ export function ExpenseForm() {
   const [renames, setRenames] = useState<DocumentRenames>({});
   const [preparingPhoto, setPreparingPhoto] = useState(false);
   const [badDocumentNames, setBadDocumentNames] = useState(false);
+  const { data: invoiceReader } = useInvoiceReader();
+  const [readingInvoice, setReadingInvoice] = useState(false);
+  // The invoice last read, attached with the expense; reading another replaces it.
+  const readFile = useRef<File | null>(null);
 
   const {
     register,
     control,
     handleSubmit,
     reset,
+    getValues,
     setError,
     formState: { errors, isDirty },
   } = useForm<Values>({
@@ -169,6 +177,36 @@ export function ExpenseForm() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, existing, copyId, original, activeYear?.id, expenseCategories.length]);
 
+  // Fills the form from an invoice Claude read. Kept dirty, so leaving still asks first.
+  const fillFromInvoice = (reading: InvoiceReading, file: File) => {
+    const current = getValues();
+    reset(
+      {
+        ...current,
+        date: reading.date ?? current.date,
+        payee: reading.payee || current.payee,
+        invoiceNumber: reading.invoiceNumber,
+        orderNumber: reading.orderNumber,
+        paymentMethod: reading.paymentMethod ?? '',
+        lineItems: reading.lineItems.length
+          ? reading.lineItems.map((li) => ({
+              description: li.description,
+              amount: penceToPounds(li.amountPence),
+              categoryId: li.categoryId === null ? '' : String(li.categoryId),
+              disallowable: false,
+            }))
+          : current.lineItems,
+      },
+      { keepDefaultValues: true },
+    );
+    setFiles((prev) => {
+      const others = prev.filter((f) => f !== readFile.current);
+      if (others.length >= MAX_DOCUMENTS || others.some((f) => f.name === file.name)) return others;
+      readFile.current = file;
+      return [...others, file];
+    });
+  };
+
   const watchedLines = useWatch({ control, name: 'lineItems' });
   const watchedDate = useWatch({ control, name: 'date' });
   const linePence = (watchedLines ?? []).map((li) => parsePoundsToPence(li?.amount ?? ''));
@@ -218,7 +256,7 @@ export function ExpenseForm() {
   const backTo = id ? `/expenses/${id}` : copyId ? `/expenses/${copyId}` : tableUrl('/expenses');
   const { guard, leave } = useLeaveGuard({
     dirty: isDirty || files.length > 0 || removeIds.length > 0 || renamedDocuments(existing?.documents ?? [], renames).length > 0,
-    busy: save.isPending || preparingPhoto,
+    busy: save.isPending || preparingPhoto || readingInvoice,
     onCancel: () => navigate(backTo),
   });
 
@@ -287,6 +325,7 @@ export function ExpenseForm() {
           </div>
         )}
         <form onSubmit={onSubmit} noValidate className="max-w-[876px] space-y-6">
+          {!id && !copyId && invoiceReader?.configured && <ReadInvoice onRead={fillFromInvoice} onBusy={setReadingInvoice} />}
           <Card className="p-5 sm:p-6">
             <div className="grid gap-5 sm:grid-cols-2">
               <Field label="Date" htmlFor="date" error={errors.date?.message} hint={yearRangeHint(taxYear)}>
@@ -478,7 +517,7 @@ export function ExpenseForm() {
               <Button type="button" variant="ghost" onClick={() => navigate(backTo)}>
                 Cancel
               </Button>
-              <Button type="submit" variant="primary" busy={save.isPending || preparingPhoto} disabled={badDocumentNames}>
+              <Button type="submit" variant="primary" busy={save.isPending || preparingPhoto} disabled={badDocumentNames || readingInvoice}>
                 {id ? 'Save changes' : 'Add expense'}
               </Button>
             </div>

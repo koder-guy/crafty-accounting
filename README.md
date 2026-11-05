@@ -140,6 +140,8 @@ Settings go in a `.env` file next to the app (the installers write one). Only in
 | `BACKUP_DIR` | `DATA_DIR/backups` | Without Docker: where automatic backups go (the `crafty` account must be able to write there) |
 | `TZ` | `Europe/London` | Time zone for the daily backup |
 | `UPDATE_CHECK` | `true` | `false` stops the app checking GitHub for new versions by itself; **Settings → Updates** can still check |
+| `ANTHROPIC_API_KEY` | none | An Anthropic API key (console.anthropic.com, billed per use) turns on **Read invoice** when adding an expense: Claude reads a PDF or photo and fills in the form for you to check. The invoice is sent to Anthropic. |
+| `INVOICE_READER_MODEL` | `claude-opus-5-5` | The Claude model that reads invoices |
 
 ## Backups
 

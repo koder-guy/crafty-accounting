@@ -20,6 +20,8 @@ import type {
   HmrcObligation,
   HmrcStatus,
   Income,
+  InvoiceReaderStatus,
+  InvoiceReading,
   MeResponse,
   NotificationsResponse,
   MileageInput,
@@ -264,6 +266,20 @@ export function useSaveTransaction<T>(kind: Kind) {
     onSuccess: invalidate,
   });
 }
+
+/** Whether an invoice can be read with Claude (the server has an Anthropic API key). */
+export const useInvoiceReader = () =>
+  useQuery({ queryKey: ['invoice-reader'], queryFn: () => api.get<InvoiceReaderStatus>('/invoice-reader'), staleTime: Infinity });
+
+/** Reads an invoice with Claude; nothing is saved. */
+export const useReadInvoice = () =>
+  useMutation({
+    mutationFn: (file: File) => {
+      const form = new FormData();
+      form.append('document', file, file.name);
+      return api.post<InvoiceReading>('/invoice-reader/read', form);
+    },
+  });
 
 /** Imports a JSON export; `preview` only says what importing would do. */
 export function useImportTransactions(kind: Kind) {

@@ -17,6 +17,7 @@ import { createContext, type AppContext } from './context';
 import { documentNameProblem } from './documents';
 import { fraudPreventionHeaders, parseBrowserData, publicIp } from './fraudPrevention';
 import { hmrcAccessToken } from './hmrc';
+import { toInvoiceReading, type InvoiceInput } from './invoiceReader';
 import { changeSummaries, newestTag } from './updates';
 import { checkDiskSpace, raiseNotification, syncUpdateNotification } from './notifications';
 import { clearData, generateSampleData } from './sampleData';
@@ -3306,5 +3307,84 @@ describe('notifications', () => {
     expect((await unread()).map((n) => n.title)).toEqual(['Unread']);
     raiseNotification(ctx, { key: 'c', kind: 'update', title: 'After reset', message: '', audience: 'all' });
     expect(await unread()).toHaveLength(2);
+  });
+});
+
+describe('reading invoices', () => {
+  const reply = (overrides: Record<string, unknown> = {}) => ({
+    date: '2025-05-02',
+    payee: 'Bead World',
+    invoiceNumber: 'INV-7',
+    orderNumber: '',
+    paymentMethod: 'card',
+    lineItems: [
+      { description: 'Glass beads', amount: '30.00', categoryId: String(cat('costOfGoods')) },
+      { description: 'Postage', amount: '5.50', categoryId: String(cat('adminCosts')) },
+    ],
+    total: '35.50',
+    ...overrides,
+  });
+
+  it('is hidden without an Anthropic API key', async () => {
+    expect((await agent.get('/api/invoice-reader').expect(200)).body).toEqual({ configured: false });
+    await agent.post('/api/invoice-reader/read').attach('document', PDF, 'invoice.pdf').expect(404);
+  });
+
+  it('reads an invoice into a new expense without saving anything', async () => {
+    const seen: InvoiceInput[] = [];
+    ctx.readInvoice = async (input) => {
+      seen.push(input);
+      return toInvoiceReading(reply(), input.categories);
+    };
+    expect((await agent.get('/api/invoice-reader').expect(200)).body).toEqual({ configured: true });
+    const res = await agent.post('/api/invoice-reader/read').attach('document', PDF, 'invoice.pdf').expect(200);
+    expect(res.body).toMatchObject({
+      date: '2025-05-02',
+      payee: 'Bead World',
+      paymentMethod: 'card',
+      totalPence: 3550,
+      lineItems: [
+        { description: 'Glass beads', amountPence: 3000, categoryId: cat('costOfGoods') },
+        { description: 'Postage', amountPence: 550, categoryId: cat('adminCosts') },
+      ],
+      warnings: [],
+    });
+    expect(seen[0]!.mediaType).toBe('application/pdf');
+    expect(seen[0]!.data.equals(PDF)).toBe(true);
+    // Depreciation isn't offered on the cash basis.
+    expect(seen[0]!.categories.some((c) => c.hmrcCode === 'depreciation')).toBe(false);
+    expect(seen[0]!.categories.every((c) => categories.find((k) => k.id === c.id)?.type === 'EXPENSE')).toBe(true);
+    expect(ctx.db.prepare('SELECT COUNT(*) AS n FROM expenses').get()).toEqual({ n: 0 });
+  });
+
+  it('refuses files Claude cannot read, and viewers', async () => {
+    ctx.readInvoice = async () => {
+      throw new Error('not called');
+    };
+    await agent.post('/api/invoice-reader/read').attach('document', Buffer.from('heic'), 'photo.heic').expect(422);
+    await agent.post('/api/invoice-reader/read').attach('document', Buffer.alloc(5 * 1024 * 1024 + 1), 'big.jpg').expect(413);
+    await agent.post('/api/invoice-reader/read').expect(400);
+    const viewer = await addPerson('Accountant', 'read-only-password', 'viewer');
+    await viewer.post('/api/invoice-reader/read').attach('document', PDF, 'invoice.pdf').expect(403);
+  });
+
+  it('keeps only what fits the form and says what to check', () => {
+    const expenseCats = categories.filter((c) => c.type === 'EXPENSE');
+    const reading = toInvoiceReading(
+      reply({
+        date: '02/05/2025',
+        paymentMethod: null,
+        lineItems: [
+          { description: 'Glass beads', amount: '£1,030.00', categoryId: '99999' },
+          { description: 'Discount', amount: '-5.00', categoryId: null },
+        ],
+        total: '1025.00',
+      }),
+      expenseCats,
+    );
+    expect(reading.date).toBeNull();
+    expect(reading.lineItems).toEqual([{ description: 'Glass beads', amountPence: 103000, categoryId: null }]);
+    expect(reading.warnings).toHaveLength(5);
+    expect(() => toInvoiceReading({ payee: 'x' }, expenseCats)).toThrow(/couldn't be understood/);
   });
 });
