@@ -436,11 +436,11 @@ function ExpenseFormPage() {
                     Discard document
                   </Button>
                   {nextScan ? (
-                    <Button type="button" variant="ghost" onClick={() => (formDirty ? setConfirmSkip(true) : leave(afterScan))}>
+                    <Button type="button" variant="secondary" onClick={() => (formDirty ? setConfirmSkip(true) : leave(afterScan))}>
                       Skip for now
                     </Button>
                   ) : (
-                    <Button type="button" variant="ghost" onClick={() => navigate(backTo)}>
+                    <Button type="button" variant="secondary" onClick={() => navigate(backTo)}>
                       Cancel
                     </Button>
                   )}
