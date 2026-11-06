@@ -301,7 +301,7 @@ function LineItemsTable({ expense }: { expense: ExpenseWithLineItems }) {
         <thead className="text-xs tracking-wide text-faint uppercase">
           <tr className="border-b border-line">
             <th scope="col" className="px-4 py-2 text-left font-medium">
-              <DetailHeading icon={ListOrdered}>Line item</DetailHeading>
+              <DetailHeading icon={ListOrdered}>Line items</DetailHeading>
             </th>
             <th scope="col" className="px-4 py-2 text-left font-medium">Category</th>
             <th scope="col" className="px-4 py-2 text-right font-medium">Amount</th>

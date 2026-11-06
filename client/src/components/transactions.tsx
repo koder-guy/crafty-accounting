@@ -674,7 +674,7 @@ export function DocumentsTable({ documents }: { documents: TransactionDocument[]
         <thead className="text-xs tracking-wide text-faint uppercase">
           <tr className="border-b border-line">
             <th scope="col" className="px-4 py-2 text-left font-medium">
-              <DetailHeading icon={FileText}>Document</DetailHeading>
+              <DetailHeading icon={FileText}>Documents</DetailHeading>
             </th>
             <th scope="col" className="px-4 py-2 text-right font-medium">Actions</th>
           </tr>
