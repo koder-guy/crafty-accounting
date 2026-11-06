@@ -358,7 +358,7 @@ export function Breakdown() {
 
   const { data, isLoading, error } = useBreakdown(from, to);
   const payeesTop = useRef<HTMLElement>(null);
-  const payeePages = usePagination(data?.payees ?? NO_PAYEES, payeesTop);
+  const payeePages = usePagination(data?.payees ?? NO_PAYEES, payeesTop, 'payees');
   const payeesShown = new Set(payeePages.pageRows.map((p) => p.payee));
 
   const update = (changes: Record<string, string | null>) =>

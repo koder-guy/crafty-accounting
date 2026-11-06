@@ -9,9 +9,9 @@ const PAGE_SIZE_KEY = 'crafty.pageSize';
 /** The page is kept in the URL, so it survives opening a row and coming back. */
 const PAGE_PARAM = 'page';
 
-function savedPageSize(): number {
+function savedPageSize(key: string): number {
   try {
-    const saved = Number(localStorage.getItem(PAGE_SIZE_KEY));
+    const saved = Number(localStorage.getItem(key));
     if ((PAGE_SIZES as readonly number[]).includes(saved)) return saved;
   } catch {
     // Unreadable or blocked storage: use the default.
@@ -20,24 +20,25 @@ function savedPageSize(): number {
 }
 
 /**
- * The rows for the current page. The page size is one choice for every table,
- * remembered in this browser; the page number is in the URL (`?page=`).
+ * The rows for the current page. The page size is remembered in this browser: one choice for
+ * the transaction tables, or a table's own when it passes `sizeKey`. The page number is in the URL (`?page=`).
  * `scrollTo` is brought into view when the page changes, so the new page starts at its top.
  */
-export function usePagination<T>(rows: T[], scrollTo?: RefObject<HTMLElement | null>) {
+export function usePagination<T>(rows: T[], scrollTo?: RefObject<HTMLElement | null>, sizeKey?: string) {
   const [params, setParams] = useSearchParams();
-  const [pageSize, setPageSizeState] = useState(savedPageSize);
+  const storageKey = sizeKey ? `${PAGE_SIZE_KEY}.${sizeKey}` : PAGE_SIZE_KEY;
+  const [pageSize, setPageSizeState] = useState(() => savedPageSize(storageKey));
   const pageCount = Math.max(1, Math.ceil(rows.length / pageSize));
   // Clamped, so a deleted last row or a narrower filter never leaves an empty page.
   const page = Math.min(Math.max(1, Math.floor(Number(params.get(PAGE_PARAM))) || 1), pageCount);
 
   useEffect(() => {
     try {
-      localStorage.setItem(PAGE_SIZE_KEY, String(pageSize));
+      localStorage.setItem(storageKey, String(pageSize));
     } catch {
       // Blocked storage: the size just isn't remembered.
     }
-  }, [pageSize]);
+  }, [storageKey, pageSize]);
 
   const setPage = (next: number, scroll = true) => {
     setParams(
