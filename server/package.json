@@ -1,6 +1,6 @@
 {
   "name": "@crafty/server",
-  "version": "1.10.42",
+  "version": "1.10.43",
   "private": true,
   "license": "MIT",
   "type": "module",
@@ -21,7 +21,7 @@
     "zod": "^4.6.7"
   },
   "devDependencies": {
-    "@crafty/shared": "1.10.42",
+    "@crafty/shared": "1.10.43",
     "@types/archiver": "^6.0.3",
     "@types/better-sqlite3": "^7.6.13",
     "@types/cookie-session": "^2.0.49",
