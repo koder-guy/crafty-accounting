@@ -8,6 +8,7 @@ import { tableUrl } from '../components/transactions';
 import { Alert, Badge, Button, ButtonLink, Card, CardHeader, EmptyState, IconButton, Spinner } from '../components/ui';
 import { ApiError } from '../lib/api';
 import { compressPhoto } from '../lib/compressPhoto';
+import { openInDocumentWindow } from '../lib/documentWindow';
 import { scanFileUrl, useScanMutations, useScans } from '../lib/queries';
 
 const CAMERA_DEFAULT_NAME = /^image\.\w+$/i;
@@ -349,6 +350,7 @@ function ScanRow({
           href={scanFileUrl(scan.id)}
           target="_blank"
           rel="noreferrer"
+          onClick={openInDocumentWindow}
           className="inline-flex max-w-[22rem] items-center gap-2 text-ink hover:text-accent-soft"
           title="Open the document"
         >

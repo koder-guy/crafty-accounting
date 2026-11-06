@@ -30,6 +30,7 @@ import { DocumentField, renamedDocuments, type DocumentRenames, PaymentMethodPic
 import { SubmittedFiguresNotice } from '../components/SubmittedFiguresNotice';
 import { Alert, Button, Card, CardHeader, Field, IconButton, Spinner } from '../components/ui';
 import { ApiError, transactionForm } from '../lib/api';
+import { openDocumentWindow } from '../lib/documentWindow';
 import { scanFileUrl, useActiveTaxYear, useCategories, useExpense, useClaude, useSaveTransaction, useScanMutations, useScans, useTaxYears } from '../lib/queries';
 
 interface LineValues {
@@ -442,7 +443,7 @@ function ExpenseFormPage() {
                       Cancel
                     </Button>
                   )}
-                  <Button type="button" onClick={() => openScanWindow(scan.id)}>
+                  <Button type="button" onClick={() => openDocumentWindow(scanFileUrl(scan.id))}>
                     <ExternalLink className="size-4" aria-hidden />
                     Open document
                   </Button>
@@ -689,16 +690,6 @@ function ExpenseFormPage() {
       </PageBody>
     </>
   );
-}
-
-/**
- * Opens the scanned document in a window of its own, beside the form where the browser allows (phones open a tab).
- * Every document opens in the same window, so moving on to the next one and opening it replaces the last.
- */
-function openScanWindow(id: number) {
-  const width = Math.min(900, Math.round(window.screen.availWidth / 2));
-  const height = Math.round(window.screen.availHeight * 0.9);
-  window.open(scanFileUrl(id), 'crafty-scanned-document', `popup,width=${width},height=${height}`)?.focus();
 }
 
 const scanProgress = (left: number) => (left === 0 ? 'The last document to check' : `${left} more to check after this one`);

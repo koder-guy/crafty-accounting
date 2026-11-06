@@ -12,6 +12,7 @@ import {
   ChevronUp,
   CreditCard,
   Download,
+  ExternalLink,
   Eye,
   FileBraces,
   FileSpreadsheet,
@@ -38,6 +39,7 @@ import {
   type TransactionFilters,
 } from '@crafty/shared';
 import { documentUrl } from '../lib/api';
+import { openInDocumentWindow } from '../lib/documentWindow';
 import { dismissWithoutClicking } from '../lib/menus';
 import { compressPhoto } from '../lib/compressPhoto';
 import { useCanEdit } from '../lib/queries';
@@ -554,7 +556,7 @@ export function ExportMenu({
 export const attachedDocuments = (count: number) => (count === 1 ? 'its attached document' : `its ${count} attached documents`);
 
 /**
- * The documents on a transaction page: each name with View and Download buttons. A grid rather
+ * The documents on a transaction page: each name with Open (in the document window) and Download buttons. A grid rather
  * than a list, so the buttons line up just past the longest name (and names wrap when space is short).
  */
 export function DocumentLinks({ documents }: { documents: TransactionDocument[] }) {
@@ -565,8 +567,8 @@ export function DocumentLinks({ documents }: { documents: TransactionDocument[] 
       {documents.map((d) => (
         <li key={d.id} className="col-span-3 grid grid-cols-subgrid items-center">
           <span className="min-w-0 break-words pr-2">{d.filename}</span>
-          <a href={documentUrl(d.filename)} target="_blank" rel="noreferrer" aria-label={`View ${d.filename}`} title="View" className={iconButton}>
-            <Eye className="size-4" aria-hidden />
+          <a href={documentUrl(d.filename)} target="_blank" rel="noreferrer" onClick={openInDocumentWindow} aria-label={`Open ${d.filename}`} title="Open document" className={iconButton}>
+            <ExternalLink className="size-4" aria-hidden />
           </a>
           <a href={documentUrl(d.filename, true)} download={d.filename} aria-label={`Download ${d.filename}`} title="Download" className={iconButton}>
             <Download className="size-4" aria-hidden />
@@ -618,7 +620,7 @@ export function TransactionCard({
 }
 
 /**
- * The documents under an expanded Income or Expenses row, each with View and Download buttons.
+ * The documents under an expanded Income or Expenses row, each with Open (in the document window) and Download buttons.
  * The buttons have no border and the rows are the height of the line items table's.
  */
 export function DocumentsTable({ documents }: { documents: TransactionDocument[] }) {
@@ -639,8 +641,8 @@ export function DocumentsTable({ documents }: { documents: TransactionDocument[]
             <td className="px-4 py-2 break-all text-ink">{d.filename}</td>
             <td className="w-px px-3 py-1 whitespace-nowrap">
               <div className="flex justify-end gap-1">
-                <a href={documentUrl(d.filename)} target="_blank" rel="noreferrer" aria-label={`View ${d.filename}`} title="View" className={iconButton}>
-                  <Eye className="size-4" aria-hidden />
+                <a href={documentUrl(d.filename)} target="_blank" rel="noreferrer" onClick={openInDocumentWindow} aria-label={`Open ${d.filename}`} title="Open document" className={iconButton}>
+                  <ExternalLink className="size-4" aria-hidden />
                 </a>
                 <a href={documentUrl(d.filename, true)} download={d.filename} aria-label={`Download ${d.filename}`} title="Download" className={iconButton}>
                   <Download className="size-4" aria-hidden />
@@ -1160,7 +1162,7 @@ export function DocumentField({
                 {removing ? (
                   <span className="break-all text-muted line-through">{doc.filename}</span>
                 ) : (
-                  <a href={documentUrl(doc.filename)} target="_blank" rel="noreferrer" className="break-all text-accent-soft hover:underline">
+                  <a href={documentUrl(doc.filename)} target="_blank" rel="noreferrer" onClick={openInDocumentWindow} className="break-all text-accent-soft hover:underline">
                     {doc.filename}
                   </a>
                 )}
