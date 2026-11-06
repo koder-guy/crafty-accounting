@@ -1,6 +1,6 @@
 {
   "name": "@crafty/shared",
-  "version": "1.10.40",
+  "version": "1.10.41",
   "private": true,
   "license": "MIT",
   "type": "module",
