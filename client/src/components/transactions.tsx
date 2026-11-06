@@ -526,7 +526,6 @@ export function ExportMenu({
                   {count} {count === 1 ? noun[0] : noun[1]} to export
                 </div>
               )}
-              <div className="text-xs text-muted">Please choose the format you need</div>
             </div>
             {EXPORT_FORMATS.map(({ format, label, hint, icon: Icon }) => (
               <a
