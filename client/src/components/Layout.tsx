@@ -7,7 +7,7 @@ import {
   CalendarDays,
   Car,
   FileSpreadsheet,
-  ChartPie,
+  ChartArea,
   Menu,
   Settings,
   TrendingUp,
@@ -150,7 +150,7 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
         ) : (
           <NavItem to="/self-assessment" icon={Calculator} label="Self Assessment" />
         )}
-        <NavItem to="/reports" icon={ChartPie} label="Reports" />
+        <NavItem to="/reports" icon={ChartArea} label="Reports" />
         <NavItem to="/settings" icon={Settings} label="Settings" />
       </nav>
     </div>
