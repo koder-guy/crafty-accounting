@@ -12,7 +12,6 @@ import { dashboardRouter } from './routes/dashboard';
 import { documentsRouter } from './routes/documents';
 import { hmrcRouter } from './routes/hmrc';
 import { scansRouter } from './routes/scans';
-import { invoiceReaderRouter } from './routes/invoiceReader';
 import { mileageRouter } from './routes/mileage';
 import { mtdRouter } from './routes/mtd';
 import { notificationsRouter } from './routes/notifications';
@@ -28,7 +27,7 @@ import { usersRouter } from './routes/users';
 const clientId = (value: unknown) => (typeof value === 'string' && /^[\w-]{1,64}$/.test(value) ? value : null);
 
 /** Requests that only affect the person making them, or change nothing, so nobody else needs telling. */
-const PERSONAL_CHANGES = new Set(['/tax-years/active', '/incomes/import/preview', '/expenses/import/preview', '/invoice-reader/read']);
+const PERSONAL_CHANGES = new Set(['/tax-years/active', '/incomes/import/preview', '/expenses/import/preview']);
 
 export function createApp(ctx: AppContext) {
   const app = express();
@@ -96,7 +95,6 @@ export function createApp(ctx: AppContext) {
   app.use('/api/mileage', mileageRouter(ctx));
   app.use('/api/use-of-home', useOfHomeRouter(ctx));
   app.use('/api/documents', documentsRouter(ctx));
-  app.use('/api/invoice-reader', invoiceReaderRouter(ctx));
   app.use('/api/scans', scansRouter(ctx));
   app.use('/api/claude', claudeRouter(ctx));
   app.use('/api/dashboard', dashboardRouter(ctx));

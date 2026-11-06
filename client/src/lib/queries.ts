@@ -22,7 +22,6 @@ import type {
   Income,
   ClaudeModel,
   ClaudeStatus,
-  InvoiceReading,
   Scan,
   ScanList,
   MeResponse,
@@ -284,16 +283,6 @@ export function useClaudeMutations() {
     removeKey: useMutation({ mutationFn: () => api.delete<ClaudeStatus>('/claude/key'), onSuccess }),
   };
 }
-
-/** Reads an invoice with Claude; nothing is saved. */
-export const useReadInvoice = () =>
-  useMutation({
-    mutationFn: (file: File) => {
-      const form = new FormData();
-      form.append('document', file, file.name);
-      return api.post<InvoiceReading>('/invoice-reader/read', form);
-    },
-  });
 
 /** Documents scanned in bulk, waiting to be checked (Expenses → Scan documents). Live updates refetch it as Claude reads each. */
 export const useScans = (enabled = true) => useQuery({ queryKey: ['scans'], queryFn: () => api.get<ScanList>('/scans'), enabled });

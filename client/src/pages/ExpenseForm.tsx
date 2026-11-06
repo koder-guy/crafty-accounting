@@ -22,7 +22,6 @@ import {
 import { CategoryOptions } from '../components/CategoryOptions';
 import { BackLink, ChangedElsewhere, CopiedFrom, dateInYear, duplicateDate, useLeaveGuard, yearRangeHint } from '../components/FormShell';
 import { NoTaxYear } from '../components/NoTaxYear';
-import { ReadInvoice } from '../components/ReadInvoice';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { nextScanToCheck, scanCheckUrl } from './ScanDocuments';
 import { PageBody, PageHeader } from '../components/PageHeader';
@@ -112,8 +111,7 @@ function ExpenseFormPage() {
   const [preparingPhoto, setPreparingPhoto] = useState(false);
   const [badDocumentNames, setBadDocumentNames] = useState(false);
   const { data: claude } = useClaude();
-  const [readingInvoice, setReadingInvoice] = useState(false);
-  // The invoice last read, attached with the expense; reading another replaces it.
+  // The scanned document, attached with the expense.
   const readFile = useRef<File | null>(null);
 
   // The scanned file, to attach as if it had been chosen here.
@@ -186,7 +184,7 @@ function ExpenseFormPage() {
       if (!scan || !scanFile || !taxYear || !expenseCategories.length) return;
       filledFor.current = key;
       reset({ date: '', payee: '', invoiceNumber: '', orderNumber: '', paymentMethod: '', notes: '', lineItems: [emptyLine(defaultCategory)] });
-      if (scan.reading) fillFromInvoice(scan.reading, scanFile, true);
+      if (scan.reading) fillFromInvoice(scan.reading, scanFile);
       else {
         readFile.current = scanFile;
         setFiles([scanFile]);
@@ -230,9 +228,9 @@ function ExpenseFormPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, existing, copyId, original, activeYear?.id, expenseCategories.length, scan?.id, scanFile, taxYear?.id]);
 
-  // Fills the form from an invoice Claude read. Kept dirty, so leaving still asks first, except for a scanned
-  // document (`asLoaded`): that stays to be checked, so only changes made here count.
-  const fillFromInvoice = (reading: InvoiceReading, picked: File, asLoaded = false) => {
+  // Fills the form from what Claude read from a scanned document. The reading becomes what the form was loaded with,
+  // as the document stays to be checked if you leave, so only changes made here count.
+  const fillFromInvoice = (reading: InvoiceReading, picked: File) => {
     const current = getValues();
     // Named by the pattern in Settings → Claude Integration, from what was read.
     const amountPence = reading.totalPence ?? (reading.lineItems.reduce((sum, li) => sum + li.amountPence, 0) || null);
@@ -253,25 +251,22 @@ function ExpenseFormPage() {
       claude?.filenamePattern,
     );
     const file = name ? new File([picked], name, { type: picked.type, lastModified: picked.lastModified }) : picked;
-    reset(
-      {
-        ...current,
-        date: reading.date ?? current.date,
-        payee: reading.payee || current.payee,
-        invoiceNumber: reading.invoiceNumber,
-        orderNumber: reading.orderNumber,
-        paymentMethod: reading.paymentMethod ?? '',
-        lineItems: reading.lineItems.length
-          ? reading.lineItems.map((li) => ({
-              description: li.description,
-              amount: penceToPounds(li.amountPence),
-              categoryId: li.categoryId === null ? '' : String(li.categoryId),
-              disallowable: false,
-            }))
-          : current.lineItems,
-      },
-      { keepDefaultValues: !asLoaded },
-    );
+    reset({
+      ...current,
+      date: reading.date ?? current.date,
+      payee: reading.payee || current.payee,
+      invoiceNumber: reading.invoiceNumber,
+      orderNumber: reading.orderNumber,
+      paymentMethod: reading.paymentMethod ?? '',
+      lineItems: reading.lineItems.length
+        ? reading.lineItems.map((li) => ({
+            description: li.description,
+            amount: penceToPounds(li.amountPence),
+            categoryId: li.categoryId === null ? '' : String(li.categoryId),
+            disallowable: false,
+          }))
+        : current.lineItems,
+    });
     setFiles((prev) => {
       const others = prev.filter((f) => f !== readFile.current);
       if (others.length >= MAX_DOCUMENTS || others.some((f) => f.name === file.name)) return others;
@@ -338,7 +333,7 @@ function ExpenseFormPage() {
   const formDirty = isDirty || addedFiles.length > 0;
   const { guard, leave } = useLeaveGuard({
     dirty: isDirty || addedFiles.length > 0 || removeIds.length > 0 || renamedDocuments(existing?.documents ?? [], renames).length > 0,
-    busy: save.isPending || preparingPhoto || readingInvoice,
+    busy: save.isPending || preparingPhoto,
     onCancel: () => navigate(backTo),
   });
 
@@ -464,7 +459,6 @@ function ExpenseFormPage() {
               )}
             </Card>
           )}
-          {!id && !copyId && !scanId && claude?.configured && <ReadInvoice onRead={fillFromInvoice} onBusy={setReadingInvoice} />}
           <Card className="p-5 sm:p-6">
             <div className="grid gap-5 sm:grid-cols-2">
               <Field label="Date" htmlFor="date" error={errors.date?.message} hint={yearRangeHint(taxYear)}>
@@ -658,7 +652,7 @@ function ExpenseFormPage() {
                   <Button type="button" variant="ghost" onClick={() => navigate(backTo)}>
                     Cancel
                   </Button>
-                  <Button type="submit" variant="primary" busy={save.isPending || preparingPhoto} disabled={badDocumentNames || readingInvoice}>
+                  <Button type="submit" variant="primary" busy={save.isPending || preparingPhoto} disabled={badDocumentNames}>
                     {id ? 'Save changes' : 'Add expense'}
                   </Button>
                 </div>

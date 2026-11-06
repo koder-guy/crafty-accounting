@@ -3374,7 +3374,7 @@ describe('reading invoices', () => {
       model: 'claude-haiku-5-5',
       filenamePattern: '{date}_{payee}_{invoice}_£{amount}',
     });
-    await agent.post('/api/invoice-reader/read').attach('document', PDF, 'invoice.pdf').expect(404);
+    await agent.post('/api/scans').attach('document', PDF, 'invoice.pdf').expect(404);
     expect(read).toEqual([]);
   });
 
@@ -3396,7 +3396,7 @@ describe('reading invoices', () => {
     expect(checked).toHaveLength(before);
 
     expect((await agent.delete('/api/claude/key').expect(200)).body).toMatchObject({ configured: false, keyHint: null, model: 'claude-haiku-5-5' });
-    await agent.post('/api/invoice-reader/read').attach('document', PDF, 'invoice.pdf').expect(404);
+    await agent.post('/api/scans').attach('document', PDF, 'invoice.pdf').expect(404);
   });
 
   it('saves the document name pattern, checking it first', async () => {
@@ -3433,7 +3433,7 @@ describe('reading invoices', () => {
     await agent.put('/api/claude').send({ apiKey: KEY }).expect(200);
     await viewer.delete('/api/claude/key').expect(403);
     expect((await viewer.get('/api/claude').expect(200)).body).toMatchObject({ configured: true, keyHint: 'sk-ant-api…WXYZ' });
-    await viewer.post('/api/invoice-reader/read').attach('document', PDF, 'invoice.pdf').expect(403);
+    await viewer.post('/api/scans').attach('document', PDF, 'invoice.pdf').expect(403);
   });
 
   it('keeps the key out of backups and through a restore and a reset', async () => {
@@ -3467,8 +3467,9 @@ describe('reading invoices', () => {
 
   it('reads an invoice with the saved key and model, without saving anything', async () => {
     await agent.put('/api/claude').send({ apiKey: KEY, model: 'claude-sonnet-5-5' }).expect(200);
-    const res = await agent.post('/api/invoice-reader/read').attach('document', PDF, 'invoice.pdf').expect(200);
-    expect(res.body).toMatchObject({
+    const { id } = (await agent.post('/api/scans').attach('document', PDF, 'invoice.pdf').expect(201)).body;
+    await ctx.scans.idle();
+    expect((await agent.get(`/api/scans/${id}`).expect(200)).body.reading).toMatchObject({
       date: '2025-05-02',
       payee: 'Bead World',
       paymentMethod: 'card',
@@ -3489,11 +3490,14 @@ describe('reading invoices', () => {
     expect(ctx.db.prepare('SELECT COUNT(*) AS n FROM expenses').get()).toEqual({ n: 0 });
   });
 
-  it('refuses files Claude cannot read', async () => {
+  it('keeps files Claude cannot read without sending them, to fill in by hand', async () => {
     await agent.put('/api/claude').send({ apiKey: KEY }).expect(200);
-    await agent.post('/api/invoice-reader/read').attach('document', Buffer.from('heic'), 'photo.heic').expect(422);
-    await agent.post('/api/invoice-reader/read').attach('document', Buffer.alloc(5 * 1024 * 1024 + 1), 'big.jpg').expect(413);
-    await agent.post('/api/invoice-reader/read').expect(400);
+    const heic = (await agent.post('/api/scans').attach('document', Buffer.from('heic'), 'photo.heic').expect(201)).body;
+    expect(heic).toMatchObject({ status: 'failed', error: expect.stringMatching(/PDF, JPG, PNG and WebP/) });
+    const big = (await agent.post('/api/scans').attach('document', Buffer.alloc(5 * 1024 * 1024 + 1), 'big.jpg').expect(201)).body;
+    expect(big).toMatchObject({ status: 'failed', error: expect.stringMatching(/too large for Claude to read/) });
+    await agent.post('/api/scans').expect(400);
+    await ctx.scans.idle();
     expect(read).toEqual([]);
   });
 
