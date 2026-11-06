@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Controller, useFieldArray, useForm, useWatch } from 'react-hook-form';
 import { useNavigate, useParams, useSearchParams } from 'react-router';
-import { Plus, Trash2 } from 'lucide-react';
+import { ExternalLink, Plus, Trash2 } from 'lucide-react';
 import {
   CASH_BASIS_UNUSED_CODE,
   formatGBP,
@@ -447,6 +447,10 @@ function ExpenseFormPage() {
                       Cancel
                     </Button>
                   )}
+                  <Button type="button" onClick={() => openScanWindow(scan.id)}>
+                    <ExternalLink className="size-4" aria-hidden />
+                    Open document
+                  </Button>
                   <Button type="submit" variant="primary" busy={save.isPending || preparingPhoto} disabled={badDocumentNames}>
                     {nextScan ? 'Add and check next' : 'Add expense'}
                   </Button>
@@ -691,6 +695,16 @@ function ExpenseFormPage() {
       </PageBody>
     </>
   );
+}
+
+/**
+ * Opens the scanned document in a window of its own, beside the form where the browser allows (phones open a tab).
+ * Every document opens in the same window, so moving on to the next one and opening it replaces the last.
+ */
+function openScanWindow(id: number) {
+  const width = Math.min(900, Math.round(window.screen.availWidth / 2));
+  const height = Math.round(window.screen.availHeight * 0.9);
+  window.open(scanFileUrl(id), 'crafty-scanned-document', `popup,width=${width},height=${height}`)?.focus();
 }
 
 const scanProgress = (left: number) => (left === 0 ? 'The last document to check' : `${left} more to check after this one`);
