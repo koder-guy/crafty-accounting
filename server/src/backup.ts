@@ -17,6 +17,7 @@ import { applyMigrations, openDatabase, schemaVersion, seedCategories, setSettin
 import { CURRENT_SCHEMA_VERSION } from './db/migrations';
 import { documentNameProblem } from './documents';
 import { HttpError } from './http';
+import { syncScansNotification } from './notifications';
 
 const REQUIRED_TABLES = ['schema_migrations', 'tax_years', 'settings', 'categories', 'incomes', 'expenses', 'expense_line_items', 'mtd_submissions'];
 const ALLOWED_STATEMENT = /^(CREATE TABLE |CREATE INDEX |CREATE UNIQUE INDEX |INSERT INTO )/;
@@ -191,6 +192,7 @@ export function resetToEmpty(ctx: AppContext): void {
     // Start ids from 1 again; standard categories and users keep theirs.
     db.prepare("DELETE FROM sqlite_sequence WHERE name NOT IN ('categories', 'users', 'notifications')").run();
   })();
+  syncScansNotification(ctx);
 
   const previous = path.join(dataDir, 'uploads.pre-reset');
   fs.rmSync(previous, { recursive: true, force: true });

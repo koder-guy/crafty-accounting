@@ -546,7 +546,7 @@ export interface UpdateStatus {
 }
 
 /** What a notification is about, for its icon. */
-export type NotificationKind = 'update' | 'low-space';
+export type NotificationKind = 'update' | 'low-space' | 'scans-read';
 
 /** Something the person should know or act on, shown under the bell until they mark it read. */
 export interface AppNotification {

@@ -1,4 +1,4 @@
-import { useRef, useState, type DragEvent } from 'react';
+import { useEffect, useRef, useState, type DragEvent } from 'react';
 import { Copy, ExternalLink, FileText, FileUp, LoaderCircle, RotateCw, ScanText, Trash2 } from 'lucide-react';
 import { diskSize, formatDisplayDate, formatGBP, MAX_PHOTO_BYTES, photoFilename, type Scan, type ScanDuplicate, type ScanList } from '@crafty/shared';
 import { ConfirmDialog } from '../components/ConfirmDialog';
@@ -9,7 +9,7 @@ import { Alert, Badge, Button, ButtonLink, Card, CardHeader, EmptyState, IconBut
 import { ApiError } from '../lib/api';
 import { compressPhoto } from '../lib/compressPhoto';
 import { openInDocumentWindow } from '../lib/documentWindow';
-import { scanFileUrl, useScanMutations, useScans } from '../lib/queries';
+import { scanFileUrl, useNotificationMutations, useNotifications, useScanMutations, useScans } from '../lib/queries';
 
 const CAMERA_DEFAULT_NAME = /^image\.\w+$/i;
 const ACCEPT = '.pdf,.jpg,.jpeg,.png,.webp,.heic,.heif,application/pdf,image/*';
@@ -81,7 +81,22 @@ type Stage =
   | { step: 'added'; added: number; problems: { name: string; message: string }[] };
 
 /** Expenses → Scan documents: add many invoices and receipts at once, then check each one Claude has read. */
+/** Marks the "documents have been read" notification read while this page shows them. */
+function useScansReadSeen() {
+  const { data } = useNotifications();
+  const { markRead } = useNotificationMutations();
+  const sent = useRef(new Set<number>());
+  useEffect(() => {
+    for (const n of data?.notifications ?? []) {
+      if (n.kind !== 'scans-read' || sent.current.has(n.id)) continue;
+      sent.current.add(n.id);
+      markRead.mutate(n.id);
+    }
+  }, [data, markRead]);
+}
+
 export function ScanDocuments() {
+  useScansReadSeen();
   const { data, isLoading, error } = useScans();
   const { add, retry, discard } = useScanMutations();
   const inputRef = useRef<HTMLInputElement>(null);

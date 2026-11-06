@@ -3680,6 +3680,42 @@ describe('scanning documents in bulk', () => {
     expect(files()).toEqual(['2025-05-02_Bead World.pdf']);
   });
 
+  it('says under the bell when a pile has been read, until none are left to check', async () => {
+    const viewer = await addPerson('Accountant', 'read-only-password', 'viewer');
+    const scansRead = async (who = agent) =>
+      ((await who.get('/api/notifications').expect(200)).body.notifications as { id: number; kind: string; message: string; link: string }[]).filter(
+        (n) => n.kind === 'scans-read',
+      );
+    const first = (await scan('%PDF one').expect(201)).body;
+    failNext = new HttpError(429, 'Anthropic is busy. Try again in a minute.');
+    await scan('%PDF two', 'two.pdf').expect(201);
+    await ctx.scans.idle();
+    const [n] = await scansRead();
+    expect(n).toMatchObject({ link: '/expenses/scans', message: "1 document is ready to check, and 1 document couldn't be read and needs filling in by hand." });
+    expect(await scansRead(viewer)).toEqual([]);
+    await agent.post(`/api/notifications/${n.id}/read`).expect(200);
+
+    // Another pile: a new one, unread again, replacing the last.
+    await scan('%PDF three', 'three.pdf').expect(201);
+    await ctx.scans.idle();
+    const [again] = await scansRead();
+    expect(again.id).not.toBe(n.id);
+    expect(again.message).toBe("2 documents are ready to check, and 1 document couldn't be read and needs filling in by hand.");
+    expect(ctx.db.prepare("SELECT COUNT(*) AS n FROM notifications WHERE kind = 'scans-read'").get()).toEqual({ n: 1 });
+
+    // Gone once every one has been saved or discarded.
+    const year = await createYear();
+    const ids = (await agent.get('/api/scans')).body.scans.map((s: { id: number }) => s.id) as number[];
+    await agent.delete(`/api/scans/${ids[1]}`).expect(204);
+    await agent.delete(`/api/scans/${ids[2]}`).expect(204);
+    expect(await scansRead()).toHaveLength(1);
+    await agent
+      .post('/api/expenses')
+      .field('data', JSON.stringify(expense(year, { scanId: first.id })))
+      .expect(201);
+    expect(await scansRead()).toEqual([]);
+  });
+
   it('discards a scan and its file', async () => {
     const { id } = (await scan('%PDF junk').expect(201)).body;
     await ctx.scans.idle();

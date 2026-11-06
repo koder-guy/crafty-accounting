@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router';
-import { Bell, Check, CheckCheck, CircleArrowUp, HardDrive, type LucideIcon } from 'lucide-react';
+import { Bell, Check, CheckCheck, CircleArrowUp, HardDrive, ScanText, type LucideIcon } from 'lucide-react';
 import type { AppNotification, NotificationKind } from '@crafty/shared';
 import { dismissWithoutClicking } from '../lib/menus';
 import { useNotificationMutations, useNotifications } from '../lib/queries';
@@ -8,11 +8,13 @@ import { useNotificationMutations, useNotifications } from '../lib/queries';
 const ICONS: Record<NotificationKind, LucideIcon> = {
   update: CircleArrowUp,
   'low-space': HardDrive,
+  'scans-read': ScanText,
 };
 
 const ICON_TONES: Record<NotificationKind, string> = {
   update: 'bg-accent-bg text-accent-soft',
   'low-space': 'bg-warn-bg text-warn',
+  'scans-read': 'bg-teal-bg text-teal',
 };
 
 const relative = new Intl.RelativeTimeFormat('en-GB', { numeric: 'auto' });

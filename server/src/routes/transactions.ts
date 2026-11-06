@@ -20,6 +20,7 @@ import { toCsv } from '../csv';
 import { sendJsonExport } from '../jsonExport';
 import { createUploader, removeDocumentFile, saveWithDocuments, uploadedFiles, type DocumentRename } from '../documents';
 import { HttpError, parseId, parseWith, readPayload } from '../http';
+import { syncScansNotification } from '../notifications';
 import { getScanRow } from '../scans';
 import { importTransactions } from '../transactionImport';
 import {
@@ -382,6 +383,7 @@ export function expensesRouter(ctx: AppContext): Router {
         return expenseId;
       })(),
     );
+    if (scan) syncScansNotification(ctx);
     res.status(201).json(getExpense(ctx.db, id));
   });
 

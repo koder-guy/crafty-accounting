@@ -12,6 +12,7 @@ import type { Db } from './db';
 import { documentPath, fileFingerprint, removeDocumentFile } from './documents';
 import { HttpError } from './http';
 import { MAX_INVOICE_IMAGE_BYTES, type InvoiceMediaType } from './invoiceReader';
+import { notifyScansRead, syncScansNotification } from './notifications';
 import { listCategories } from './repo';
 
 /** How many documents Claude reads at once: quicker than one by one, within Anthropic's rate limits. */
@@ -214,11 +215,14 @@ export function deleteScan(ctx: AppContext, id: number): void {
   if (!row) throw new HttpError(404, 'That document has already been saved or discarded');
   ctx.db.prepare('DELETE FROM scans WHERE id = ?').run(id);
   removeDocumentFile(ctx, row.filename);
+  syncScansNotification(ctx);
 }
 
 /** Reads waiting scans with Claude in the background, a few at a time. */
 export class ScanReader {
   private running = 0;
+  /** Whether anything has been read since the reader was last idle, for the notification. */
+  private readSome = false;
   private idleWaiters: (() => void)[] = [];
 
   constructor(private ctx: AppContext) {}
@@ -226,6 +230,8 @@ export class ScanReader {
   /** At start-up and after a restore: anything left mid-read starts again, then reading carries on. */
   resume(): void {
     this.ctx.db.prepare("UPDATE scans SET status = 'waiting' WHERE status = 'reading'").run();
+    // After a restore, the notification may be about scans the books no longer have.
+    syncScansNotification(this.ctx);
     this.kick();
   }
 
@@ -244,7 +250,9 @@ export class ScanReader {
       void this.read(row, settings.apiKey, settings.model).finally(() => {
         this.running--;
         this.kick();
-        if (this.running === 0) for (const done of this.idleWaiters.splice(0)) done();
+        if (this.running > 0) return;
+        if (this.readSome) this.finished();
+        for (const done of this.idleWaiters.splice(0)) done();
       });
     }
   }
@@ -277,10 +285,23 @@ export class ScanReader {
       const update = this.ctx.db.prepare("UPDATE scans SET status = ?, reading = ?, error = ? WHERE id = ? AND filename = ? AND status = 'reading'");
       const reading = result.status === 'ready' ? JSON.stringify(result.reading) : null;
       const error = result.status === 'failed' ? result.error : null;
-      if (update.run(result.status, reading, error, row.id, row.filename).changes) this.changed();
+      if (update.run(result.status, reading, error, row.id, row.filename).changes) {
+        this.readSome = true;
+        this.changed();
+      }
     } catch (err) {
       // The database was closed (shutting down, or a test finishing).
       console.error(`Saving what was read from scan ${row.id} failed:`, (err as Error).message);
+    }
+  }
+
+  /** The pile has been read (nothing waiting, or no key to read the rest): says so under the bell. */
+  private finished(): void {
+    this.readSome = false;
+    try {
+      notifyScansRead(this.ctx);
+    } catch (err) {
+      console.error('Raising the scanned documents notification failed:', (err as Error).message);
     }
   }
 

@@ -2,6 +2,7 @@
 // running low) that someone should act on. Each is keyed by its condition, so it's raised once
 // while the condition lasts and removed when it ends; each person marks it read for themselves.
 // Like the people, they belong to the install: left out of backups, kept through restore and reset.
+import crypto from 'node:crypto';
 import { APP_NAME, APP_VERSION, diskSize, lowSpaceThreshold, type AppNotification, type DiskSpace, type NotificationKind, type Role, type UpdateStatus } from '@crafty/shared';
 import { diskSpace, listAutoBackups, sameDisk } from './autoBackup';
 import type { AppContext } from './context';
@@ -104,6 +105,43 @@ export function syncUpdateNotification(ctx: AppContext, available: UpdateStatus[
     link: '/settings/updates',
     audience: 'editors',
   });
+}
+
+// ---- Scanned documents ----
+
+const SCANS_KEY = 'scans-read:';
+
+const scansToCheck = (db: Db) =>
+  db.prepare("SELECT status, COUNT(*) AS n FROM scans WHERE status IN ('ready', 'failed') GROUP BY status").all() as { status: 'ready' | 'failed'; n: number }[];
+
+/**
+ * When Claude has finished reading a pile of scanned documents: a new notification (unread again
+ * for everyone, replacing the last one) saying how many are waiting to be checked.
+ */
+export function notifyScansRead(ctx: AppContext): void {
+  const counts = scansToCheck(ctx.db);
+  const ready = counts.find((c) => c.status === 'ready')?.n ?? 0;
+  const failed = counts.find((c) => c.status === 'failed')?.n ?? 0;
+  if (!ready && !failed) return;
+  const docs = (n: number) => `${n} document${n === 1 ? '' : 's'}`;
+  const parts = [ready && `${docs(ready)} ${ready === 1 ? 'is' : 'are'} ready to check`, failed && `${docs(failed)} couldn't be read and need${failed === 1 ? 's' : ''} filling in by hand`].filter(Boolean);
+  const message = `${parts.join(', and ')}.`;
+  const stale = openKeys(ctx.db, SCANS_KEY);
+  raiseNotification(ctx, {
+    key: `${SCANS_KEY}${crypto.randomUUID()}`,
+    kind: 'scans-read',
+    title: 'Scanned documents have been read',
+    message,
+    link: '/expenses/scans',
+    audience: 'editors',
+  });
+  resolveNotifications(ctx, stale);
+}
+
+/** Removes the scanned documents notification once none are left to check. */
+export function syncScansNotification(ctx: AppContext): void {
+  if (scansToCheck(ctx.db).length) return;
+  resolveNotifications(ctx, openKeys(ctx.db, SCANS_KEY));
 }
 
 // ---- Disk space ----
