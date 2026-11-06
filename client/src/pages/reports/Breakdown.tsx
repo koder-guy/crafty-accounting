@@ -14,6 +14,7 @@ import {
 } from '@crafty/shared';
 import { SectionHeading } from '../../components/SectionLayout';
 import { DateInput } from '../../components/DateInput';
+import { Pagination, usePagination } from '../../components/Pagination';
 import { Alert, Badge, Button, Card, CardHeader, EmptyState, Field, IconButton, Spinner } from '../../components/ui';
 import { useActiveTaxYear, useBreakdown, useBreakdownItems, type BreakdownSelection } from '../../lib/queries';
 import { printPage } from '../../lib/liveUpdates';
@@ -84,6 +85,7 @@ function Row({
   depth,
   selected,
   onSelect,
+  className = '',
 }: {
   name: ReactNode;
   note?: string;
@@ -95,12 +97,13 @@ function Row({
   depth: 0 | 1;
   selected: boolean;
   onSelect: () => void;
+  className?: string;
 }) {
   return (
     <tr
       onClick={onSelect}
       aria-selected={selected}
-      className={`cursor-pointer transition-colors hover:bg-surface-2/60 ${selected ? 'bg-accent-bg' : ''} ${depth === 0 ? 'font-medium text-ink' : 'text-ink/90'}`}
+      className={`cursor-pointer transition-colors hover:bg-surface-2/60 ${selected ? 'bg-accent-bg' : ''} ${depth === 0 ? 'font-medium text-ink' : 'text-ink/90'} ${className}`}
     >
       <td className={`py-2.5 pr-3 ${depth === 0 ? 'pl-5 sm:pl-6' : 'pl-10 sm:pl-12'}`}>
         <button
@@ -337,6 +340,8 @@ export function DrillDown({
 
 // ---- Page ----
 
+const NO_PAYEES: { payee: string; totalPence: number; count: number }[] = [];
+
 export function Breakdown() {
   const today = todayIso();
   const options = useMemo(() => presets(today), [today]);
@@ -352,11 +357,16 @@ export function Breakdown() {
     !isValidIsoDate(from) || !isValidIsoDate(to) ? 'Choose a start and end date' : from > to ? 'The start date must be on or before the end date' : null;
 
   const { data, isLoading, error } = useBreakdown(from, to);
+  const payeesTop = useRef<HTMLElement>(null);
+  const payeePages = usePagination(data?.payees ?? NO_PAYEES, payeesTop);
+  const payeesShown = new Set(payeePages.pageRows.map((p) => p.payee));
 
   const update = (changes: Record<string, string | null>) =>
     setParams(
       (prev) => {
         const next = new URLSearchParams(prev);
+        // A new period starts the payee table at its first page.
+        if ('from' in changes || 'to' in changes) next.delete('page');
         for (const [k, v] of Object.entries(changes)) {
           // An emptied date stays empty (''), rather than going back to the default.
           if (v !== null) next.set(k, v);
@@ -494,7 +504,7 @@ export function Breakdown() {
               )}
             </Card>
 
-            <Card className="print:break-inside-avoid">
+            <Card ref={payeesTop} className="print:break-inside-avoid">
               <CardHeader icon={<Store className="size-5 text-accent-soft" />} title="Spending by payee" />
               {data.payees.length === 0 ? (
                 <EmptyState title="No payments in this period" />
@@ -510,9 +520,11 @@ export function Breakdown() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-line">
+                      {/* Printing lists every payee; the screen shows one page of them. */}
                       {data.payees.map((p) => (
                         <Row
                           key={p.payee}
+                          className={payeesShown.has(p.payee) ? '' : 'hidden print:table-row'}
                           name={p.payee}
                           amount={p.totalPence}
                           disallowable={0}
@@ -528,6 +540,7 @@ export function Breakdown() {
                   </table>
                 </div>
               )}
+              <Pagination pagination={payeePages} noun="payees" />
             </Card>
           </div>
         </>
