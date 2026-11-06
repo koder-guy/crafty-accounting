@@ -1,8 +1,9 @@
 import { Fragment, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
-import { ArrowUpRight, ChevronRight, CircleSlash, ListOrdered, Plus, ScanText } from 'lucide-react';
+import { ArrowUpRight, ChevronRight, CircleSlash, Plus, ScanText } from 'lucide-react';
 import { formatDisplayDate, formatGBP, shortCategoryName, type Expense, type ExpenseWithLineItems } from '@crafty/shared';
 import { ConfirmDialog } from '../components/ConfirmDialog';
+import { recordedBy } from '../components/FormShell';
 import { Pagination, usePagination } from '../components/Pagination';
 import { ImportButton } from '../components/ImportTransactions';
 import { DeleteShownButton } from '../components/DeleteShownButton';
@@ -246,6 +247,7 @@ export function ExpenseList() {
                               <td />
                               <td colSpan={canEdit ? 7 : 6} className="px-4 py-4">
                                 <div className="space-y-3">
+                                  <ExpenseSummary expense={row} />
                                   <LineItemsTable expense={row} />
                                   <DocumentsTable documents={row.documents} />
                                   <NotesPanel notes={row.notes} />
@@ -294,6 +296,59 @@ export function ExpenseList() {
 const categorySummary = (names: string[]) =>
   `${shortCategoryName(names[0])}${names.length > 1 ? ` +${names.length - 1}` : ''}`;
 
+/**
+ * The boxes at the top of an expanded row, side by side from small screens up: the invoice and order
+ * numbers (only when it has either) and who added and last changed it.
+ */
+function ExpenseSummary({ expense }: { expense: Expense }) {
+  const changed = expense.updatedAt !== expense.createdAt;
+  return (
+    <div className="grid gap-3 sm:grid-cols-2">
+      {(expense.invoiceNumber || expense.orderNumber) && (
+        <PairBox
+          label="Invoice and order numbers"
+          rows={[
+            ['Invoice #', expense.invoiceNumber],
+            ['Order #', expense.orderNumber],
+          ]}
+        />
+      )}
+      <PairBox
+        label="Who added and changed it"
+        rows={[
+          ['Added by', recordedBy(expense.createdBy, expense.createdAt)],
+          ['Last changed by', changed ? recordedBy(expense.updatedBy, expense.updatedAt) : null],
+        ]}
+      />
+    </div>
+  );
+}
+
+/**
+ * Two labelled values boxed like the notes: the first in the header strip, the second below. The rows
+ * share one grid (subgrid), so both values start 20px after the wider label. A missing value shows a dash.
+ */
+function PairBox({ label, rows: [first, second] }: { label: string; rows: [[string, string | null], [string, string | null]] }) {
+  const labelClass = 'text-xs font-medium tracking-wide whitespace-nowrap text-faint uppercase';
+  return (
+    <dl aria-label={label} className="grid grid-cols-[auto_minmax(0,1fr)] rounded-lg border border-line bg-page/40 text-sm">
+      {/* leading-4 keeps the strip the height of the tables' header rows, whatever the value's size. */}
+      <div className="col-span-2 grid grid-cols-subgrid gap-x-5 border-b border-line px-4 py-2 leading-4">
+        <dt className={labelClass}>
+          <DetailHeading>{first[0]}</DetailHeading>
+        </dt>
+        <dd className="truncate text-ink" title={first[1] ?? undefined}>
+          <DetailHeading>{first[1] ?? '—'}</DetailHeading>
+        </dd>
+      </div>
+      <div className="col-span-2 grid grid-cols-subgrid items-baseline gap-x-5 px-4 py-2">
+        <dt className={labelClass}>{second[0]}</dt>
+        <dd className="break-words text-ink">{second[1] ?? '—'}</dd>
+      </div>
+    </dl>
+  );
+}
+
 /** Read-only line items shown under an expanded row. */
 function LineItemsTable({ expense }: { expense: ExpenseWithLineItems }) {
   return (
@@ -303,7 +358,7 @@ function LineItemsTable({ expense }: { expense: ExpenseWithLineItems }) {
         <thead className="text-xs tracking-wide text-faint uppercase">
           <tr className="border-b border-line">
             <th scope="col" className="px-4 py-2 text-left font-medium">
-              <DetailHeading icon={ListOrdered}>Line items</DetailHeading>
+              <DetailHeading>Line items</DetailHeading>
             </th>
             <th scope="col" className="px-4 py-2 text-left font-medium">
               <DetailHeading>Category</DetailHeading>

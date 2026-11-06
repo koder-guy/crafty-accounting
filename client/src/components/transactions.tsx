@@ -640,16 +640,14 @@ export function TransactionCard({
 }
 
 /**
- * A heading in the tables under an expanded row, the first after a purple icon for what the table holds.
- * Every heading's baseline sits a whole number of pixels down its 16px band (`--detail-heading-baseline`
- * in index.css), so they all line up and render alike.
+ * A heading in the tables and boxes under an expanded row. Every heading's baseline sits a whole number
+ * of pixels down its 16px band (`--detail-heading-baseline` in index.css), so they all line up and render alike.
  */
-export function DetailHeading({ icon: Icon, children }: { icon?: LucideIcon; children: ReactNode }) {
+export function DetailHeading({ children }: { children: ReactNode }) {
   return (
     // The text is trimmed to cap height and baseline (text-box), so its bottom is the baseline: put at the
-    // band's foot, then moved up to the chosen baseline. The icon stays centred in the band.
-    <span className="inline-flex h-4 items-center gap-1.5 align-top">
-      {Icon && <Icon className="size-3.5 shrink-0 text-accent-soft" aria-hidden />}
+    // band's foot, then moved up to the chosen baseline.
+    <span className="inline-flex h-4 align-top">
       <span className="relative top-[calc(var(--detail-heading-baseline)-16px)] self-end [text-box:trim-both_cap_alphabetic]">
         {children}
       </span>
@@ -672,7 +670,7 @@ export function DocumentsTable({ documents }: { documents: TransactionDocument[]
         <thead className="text-xs tracking-wide text-faint uppercase">
           <tr className="border-b border-line">
             <th scope="col" className="px-4 py-2 text-left font-medium">
-              <DetailHeading icon={FileText}>Documents</DetailHeading>
+              <DetailHeading>Documents</DetailHeading>
             </th>
             <th scope="col" className="px-4 py-2 text-right font-medium">
               <DetailHeading>Actions</DetailHeading>
@@ -722,7 +720,7 @@ export function NotesPanel({ notes }: { notes: string | null }) {
   return (
     <section aria-label="Notes" className="rounded-lg border border-line bg-page/40 text-sm">
       <div className="border-b border-line px-4 py-2 text-xs font-medium tracking-wide text-faint uppercase">
-        <DetailHeading icon={NotebookPen}>Notes</DetailHeading>
+        <DetailHeading>Notes</DetailHeading>
       </div>
       <p className="px-4 py-2 break-words whitespace-pre-wrap text-ink">{notes.trim()}</p>
     </section>
