@@ -237,6 +237,9 @@ export function hasData(db: Db): boolean {
 }
 
 /** Removes every tax year (and with it all transactions and submissions) and all documents. */
+/** The name sample transactions are recorded as added by. */
+export const SAMPLE_DATA_BY = 'Sample data';
+
 export function clearData(db: Db, uploadsDir: string): void {
   db.transaction(() => {
     db.prepare('DELETE FROM tax_years').run();
@@ -265,13 +268,15 @@ export function generateSampleData(db: Db, uploadsDir: string, today = todayIso(
   const insertYear = db.prepare(
     'INSERT INTO tax_years (label, start_date, end_date, other_income_pence, submission_method) VALUES (?, ?, ?, 1200000, ?)',
   );
+  // Shown as Added by, so sample transactions don't look like they're missing who added them.
+  const by = `'${SAMPLE_DATA_BY}'`;
   const incomeRow = db.prepare(
-    `INSERT INTO incomes (tax_year_id, date, description, reference, payment_method, amount_pence, category_id, notes)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO incomes (tax_year_id, date, description, reference, payment_method, amount_pence, category_id, notes, created_by, updated_by)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ${by}, ${by})`,
   );
   const expenseRow = db.prepare(
-    `INSERT INTO expenses (tax_year_id, date, payee, invoice_number, order_number, payment_method, total_pence, notes)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO expenses (tax_year_id, date, payee, invoice_number, order_number, payment_method, total_pence, notes, created_by, updated_by)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ${by}, ${by})`,
   );
   const documentRow = db.prepare('INSERT INTO documents (filename, income_id, expense_id) VALUES (?, ?, ?)');
   // The last argument lists the attached documents' filenames (nulls are skipped).
@@ -293,7 +298,7 @@ export function generateSampleData(db: Db, uploadsDir: string, today = todayIso(
      VALUES (?, ?, ?, ?, ?, ?)`,
   );
   const insertTrip = db.prepare(
-    'INSERT INTO mileage_trips (tax_year_id, date, description, vehicle, distance_tenths) VALUES (?, ?, ?, ?, ?)',
+    `INSERT INTO mileage_trips (tax_year_id, date, description, vehicle, distance_tenths, created_by, updated_by) VALUES (?, ?, ?, ?, ?, ${by}, ${by})`,
   );
   const insertHomeMonth = db.prepare('INSERT INTO home_working_months (tax_year_id, month_index, hours) VALUES (?, ?, ?)');
   const insertSubmission = db.prepare('INSERT INTO mtd_submissions (tax_year_id, quarter, submitted_on, reference) VALUES (?, ?, ?, ?)');

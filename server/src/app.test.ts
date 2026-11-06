@@ -3068,6 +3068,9 @@ describe('sample data', () => {
     expect((await agent.get('/api/sample-data').expect(200)).body).toEqual({ loaded: false, canLoad: true });
     const { body } = await agent.post('/api/sample-data').expect(201);
     expect(body.taxYears).toBe(5);
+    expect(ctx.db.prepare("SELECT COUNT(*) AS n FROM incomes WHERE created_by IS NOT 'Sample data' OR updated_by IS NOT 'Sample data'").get()).toEqual({ n: 0 });
+    expect(ctx.db.prepare("SELECT COUNT(*) AS n FROM expenses WHERE created_by IS NOT 'Sample data' OR updated_by IS NOT 'Sample data'").get()).toEqual({ n: 0 });
+    expect(ctx.db.prepare("SELECT COUNT(*) AS n FROM mileage_trips WHERE created_by IS NOT 'Sample data'").get()).toEqual({ n: 0 });
     expect((await agent.get('/api/sample-data')).body).toEqual({ loaded: true, canLoad: false });
     await agent.post('/api/sample-data').expect(409);
 
