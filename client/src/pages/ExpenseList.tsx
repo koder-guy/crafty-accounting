@@ -295,34 +295,37 @@ const categorySummary = (names: string[]) =>
 /** Read-only line items shown under an expanded row. */
 function LineItemsTable({ expense }: { expense: ExpenseWithLineItems }) {
   return (
-    <table className="w-full rounded-lg border border-line bg-page/40 text-sm">
-      <thead className="text-xs tracking-wide text-faint uppercase">
-        <tr className="border-b border-line">
-          <th scope="col" className="px-4 py-2 text-left font-medium">
-            <DetailHeading icon={ListOrdered}>Line item</DetailHeading>
-          </th>
-          <th scope="col" className="px-4 py-2 text-left font-medium">Category</th>
-          <th scope="col" className="px-4 py-2 text-right font-medium">Amount</th>
-        </tr>
-      </thead>
-      <tbody className="divide-y divide-line">
-        {expense.lineItems.map((li) => (
-          <tr key={li.id}>
-            <td className="px-4 py-2 text-ink">
-              {li.description}
-              {li.disallowable && (
-                <span className="ml-2">
-                  <Badge tone="out">Disallowable</Badge>
-                </span>
-              )}
-            </td>
-            <td className="px-4 py-2 text-muted" title={li.categoryName}>
-              {shortCategoryName(li.categoryName)}
-            </td>
-            <td className="tabular px-4 py-2 text-right text-ink">{formatGBP(li.amountPence)}</td>
+    // Boxed in a div: a table's collapsed border can't have rounded corners.
+    <div className="overflow-hidden rounded-lg border border-line bg-page/40">
+      <table className="w-full text-sm">
+        <thead className="text-xs tracking-wide text-faint uppercase">
+          <tr className="border-b border-line">
+            <th scope="col" className="px-4 py-2 text-left font-medium">
+              <DetailHeading icon={ListOrdered}>Line item</DetailHeading>
+            </th>
+            <th scope="col" className="px-4 py-2 text-left font-medium">Category</th>
+            <th scope="col" className="px-4 py-2 text-right font-medium">Amount</th>
           </tr>
-        ))}
-      </tbody>
-    </table>
+        </thead>
+        <tbody className="divide-y divide-line">
+          {expense.lineItems.map((li) => (
+            <tr key={li.id}>
+              <td className="px-4 py-2 text-ink">
+                {li.description}
+                {li.disallowable && (
+                  <span className="ml-2">
+                    <Badge tone="out">Disallowable</Badge>
+                  </span>
+                )}
+              </td>
+              <td className="px-4 py-2 text-muted" title={li.categoryName}>
+                {shortCategoryName(li.categoryName)}
+              </td>
+              <td className="tabular px-4 py-2 text-right text-ink">{formatGBP(li.amountPence)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }

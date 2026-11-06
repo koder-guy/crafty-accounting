@@ -651,9 +651,10 @@ export function TransactionCard({
 /** A heading in the tables under an expanded row, after a purple icon for what the table holds. */
 export function DetailHeading({ icon: Icon, children }: { icon: LucideIcon; children: ReactNode }) {
   return (
-    <span className="inline-flex items-center gap-1.5">
+    // The text is trimmed to its capitals (text-box), so centring lines up their middle with the icon's.
+    <span className="inline-flex h-4 items-center gap-1.5 align-top">
       <Icon className="size-3.5 shrink-0 text-accent-soft" aria-hidden />
-      {children}
+      <span className="[text-box:trim-both_cap_alphabetic]">{children}</span>
     </span>
   );
 }
@@ -667,33 +668,36 @@ export function DocumentsTable({ documents }: { documents: TransactionDocument[]
   const iconButton =
     'inline-flex size-7 items-center justify-center rounded-md text-muted transition-colors hover:bg-accent-bg hover:text-accent-soft';
   return (
-    <table className="w-full rounded-lg border border-line bg-page/40 text-sm">
-      <thead className="text-xs tracking-wide text-faint uppercase">
-        <tr className="border-b border-line">
-          <th scope="col" className="px-4 py-2 text-left font-medium">
-            <DetailHeading icon={FileText}>Document</DetailHeading>
-          </th>
-          <th scope="col" className="px-4 py-2 text-right font-medium">Actions</th>
-        </tr>
-      </thead>
-      <tbody className="divide-y divide-line">
-        {documents.map((d) => (
-          <tr key={d.id}>
-            <td className="px-4 py-2 break-all text-ink">{d.filename}</td>
-            <td className="w-px px-3 py-1 whitespace-nowrap">
-              <div className="flex justify-end gap-1">
-                <a href={documentUrl(d.filename, true)} download={d.filename} aria-label={`Download ${d.filename}`} title="Download" className={iconButton}>
-                  <Download className="size-4" aria-hidden />
-                </a>
-                <a href={documentUrl(d.filename)} target="_blank" rel="noreferrer" onClick={openInDocumentWindow} aria-label={`Open ${d.filename}`} title="Open document" className={iconButton}>
-                  <ExternalLink className="size-4" aria-hidden />
-                </a>
-              </div>
-            </td>
+    // Boxed in a div: a table's collapsed border can't have rounded corners.
+    <div className="overflow-hidden rounded-lg border border-line bg-page/40">
+      <table className="w-full text-sm">
+        <thead className="text-xs tracking-wide text-faint uppercase">
+          <tr className="border-b border-line">
+            <th scope="col" className="px-4 py-2 text-left font-medium">
+              <DetailHeading icon={FileText}>Document</DetailHeading>
+            </th>
+            <th scope="col" className="px-4 py-2 text-right font-medium">Actions</th>
           </tr>
-        ))}
-      </tbody>
-    </table>
+        </thead>
+        <tbody className="divide-y divide-line">
+          {documents.map((d) => (
+            <tr key={d.id}>
+              <td className="px-4 py-2 break-all text-ink">{d.filename}</td>
+              <td className="w-px px-3 py-1 whitespace-nowrap">
+                <div className="flex justify-end gap-1">
+                  <a href={documentUrl(d.filename, true)} download={d.filename} aria-label={`Download ${d.filename}`} title="Download" className={iconButton}>
+                    <Download className="size-4" aria-hidden />
+                  </a>
+                  <a href={documentUrl(d.filename)} target="_blank" rel="noreferrer" onClick={openInDocumentWindow} aria-label={`Open ${d.filename}`} title="Open document" className={iconButton}>
+                    <ExternalLink className="size-4" aria-hidden />
+                  </a>
+                </div>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
 
