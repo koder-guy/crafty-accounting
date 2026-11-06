@@ -172,7 +172,7 @@ export function Mileage() {
   const [toDelete, setToDelete] = useState<MileageTrip | null>(null);
   const formRef = useRef<HTMLDivElement>(null);
   const tripsRef = useRef<HTMLElement>(null);
-  const pagination = usePagination(data?.trips ?? EMPTY_TRIPS, tripsRef, 'trips');
+  const pagination = usePagination(data?.trips ?? EMPTY_TRIPS, tripsRef, { sizeKey: 'trips', defaultSize: 10 });
 
   // Bring the form into view when a trip is picked to edit or duplicate from the list below it.
   useEffect(() => {

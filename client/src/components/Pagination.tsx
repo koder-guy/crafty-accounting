@@ -4,19 +4,20 @@ import { useSearchParams } from 'react-router';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 export const PAGE_SIZES = [10, 15, 20, 30, 50, 100] as const;
-const DEFAULT_PAGE_SIZE = 20;
+/** Income and Expenses; a table with its own `sizeKey` can pass its own default. */
+const DEFAULT_PAGE_SIZE = 15;
 const PAGE_SIZE_KEY = 'crafty.pageSize';
 /** The page is kept in the URL, so it survives opening a row and coming back. */
 const PAGE_PARAM = 'page';
 
-function savedPageSize(key: string): number {
+function savedPageSize(key: string, fallback: number): number {
   try {
     const saved = Number(localStorage.getItem(key));
     if ((PAGE_SIZES as readonly number[]).includes(saved)) return saved;
   } catch {
     // Unreadable or blocked storage: use the default.
   }
-  return DEFAULT_PAGE_SIZE;
+  return fallback;
 }
 
 /**
@@ -24,10 +25,14 @@ function savedPageSize(key: string): number {
  * the transaction tables, or a table's own when it passes `sizeKey`. The page number is in the URL (`?page=`).
  * `scrollTo` is brought into view when the page changes, so the new page starts at its top.
  */
-export function usePagination<T>(rows: T[], scrollTo?: RefObject<HTMLElement | null>, sizeKey?: string) {
+export function usePagination<T>(
+  rows: T[],
+  scrollTo?: RefObject<HTMLElement | null>,
+  { sizeKey, defaultSize = DEFAULT_PAGE_SIZE }: { sizeKey?: string; defaultSize?: (typeof PAGE_SIZES)[number] } = {},
+) {
   const [params, setParams] = useSearchParams();
   const storageKey = sizeKey ? `${PAGE_SIZE_KEY}.${sizeKey}` : PAGE_SIZE_KEY;
-  const [pageSize, setPageSizeState] = useState(() => savedPageSize(storageKey));
+  const [pageSize, setPageSizeState] = useState(() => savedPageSize(storageKey, defaultSize));
   const pageCount = Math.max(1, Math.ceil(rows.length / pageSize));
   // Clamped, so a deleted last row or a narrower filter never leaves an empty page.
   const page = Math.min(Math.max(1, Math.floor(Number(params.get(PAGE_PARAM))) || 1), pageCount);
