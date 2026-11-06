@@ -45,7 +45,7 @@ import { compressPhoto } from '../lib/compressPhoto';
 import { useCanEdit } from '../lib/queries';
 import { CameraDialog, useCameraOption } from './CameraDialog';
 import { CategoryOptions } from './CategoryOptions';
-import { buttonClasses, IconButton, PaymentBadge, SOFT_DANGER } from './ui';
+import { Button, buttonClasses, IconButton, PaymentBadge, SOFT_DANGER } from './ui';
 
 // ---- Filters (kept in the URL so they survive navigation) ----
 
@@ -109,11 +109,23 @@ export function useTransactionFilters(taxYear: TaxYear | null) {
       { replace: true },
     );
 
+  /** Every filter back to all, and the table back to its first page. */
+  const clearAll = () =>
+    setParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        for (const k of FILTER_KEYS) next.delete(k);
+        next.delete('page');
+        return next;
+      },
+      { replace: true },
+    );
+
   const active = FILTER_KEYS.some((k) => params.get(k));
-  return { filters, months, month, get, set, active };
+  return { filters, months, month, get, set, clearAll, active };
 }
 
-/** The text search, then the payment method, category and tax month menus. */
+/** The text search, then the payment method, category and tax month menus, and Clear all. */
 export function FilterBar({
   filterState,
   categories,
@@ -128,14 +140,16 @@ export function FilterBar({
   id?: string;
   shown?: boolean;
 }) {
-  const { months, month, get, set } = filterState;
+  const { months, month, get, set, clearAll, active } = filterState;
   const [search, setSearch] = useState(get('search'));
-  const first = useRef(true);
+  // Skips the search effect on load and after Clear all, which has already emptied it in the URL.
+  // (Running it then would write back the filters from before the clear, as its `set` can be from that render.)
+  const skipSearchEffect = useRef(true);
 
   // Debounce typing into the search box.
   useEffect(() => {
-    if (first.current) {
-      first.current = false;
+    if (skipSearchEffect.current) {
+      skipSearchEffect.current = false;
       return;
     }
     const timer = setTimeout(() => set('search', search.trim()), 250);
@@ -182,6 +196,21 @@ export function FilterBar({
             </option>
           ))}
         </FilterSelect>
+        <span className="hidden h-6 w-px shrink-0 self-center bg-line-strong xl:block" aria-hidden />
+        <Button
+          variant="ghost"
+          className="justify-self-start"
+          disabled={!active && !search}
+          onClick={() => {
+            if (search) {
+              skipSearchEffect.current = true;
+              setSearch('');
+            }
+            clearAll();
+          }}
+        >
+          Clear all
+        </Button>
       </div>
     </div>
   );
