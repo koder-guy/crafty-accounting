@@ -17,7 +17,7 @@ import {
   FileBraces,
   FileSpreadsheet,
   FileText,
-  Notebook,
+  NotebookPen,
   ListFilter,
   Pencil,
   Search,
@@ -702,7 +702,7 @@ export function DocumentsTable({ documents }: { documents: TransactionDocument[]
 }
 
 /**
- * A notebook showing a transaction has notes: just a sign, not a control. Hovering shows the start
+ * A notebook and pen showing a transaction has notes: just a sign, not a control. Hovering shows the start
  * of the notes. `muted` for grey, as `DocIndicator`.
  */
 export function NotesIndicator({ notes, muted = false }: { notes: string | null; muted?: boolean }) {
@@ -711,7 +711,7 @@ export function NotesIndicator({ notes, muted = false }: { notes: string | null;
   const preview = text.length > 100 ? `${text.slice(0, 99).trimEnd()}…` : text;
   return (
     <span className={`inline-flex shrink-0 ${muted ? 'text-muted' : 'text-accent-soft'}`} role="img" aria-label="Has notes" title={preview}>
-      <Notebook className="size-3.5" aria-hidden />
+      <NotebookPen className="size-3.5" aria-hidden />
     </span>
   );
 }
@@ -722,7 +722,7 @@ export function NotesPanel({ notes }: { notes: string | null }) {
   return (
     <section aria-label="Notes" className="rounded-lg border border-line bg-page/40 text-sm">
       <div className="border-b border-line px-4 py-2 text-xs font-medium tracking-wide text-faint uppercase">
-        <DetailHeading icon={Notebook}>Notes</DetailHeading>
+        <DetailHeading icon={NotebookPen}>Notes</DetailHeading>
       </div>
       <p className="px-4 py-2 break-words whitespace-pre-wrap text-ink">{notes.trim()}</p>
     </section>
