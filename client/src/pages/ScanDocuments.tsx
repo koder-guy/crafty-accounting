@@ -127,7 +127,7 @@ export function ScanDocuments() {
                 <div className="flex items-start gap-3">
                   <ScanText className="mt-0.5 size-5 shrink-0 text-accent-soft" aria-hidden />
                   <div>
-                    <h2 className="text-base font-semibold text-ink">Add invoices and receipts</h2>
+                    <h2 className="text-base font-semibold text-ink">Add invoices and receipts to generate populated transactions</h2>
                     <p className="mt-0.5 text-sm text-muted">
                       Choose or drop as many PDFs and photos as you like. Claude reads them a couple at a time, each one a request to your
                       Anthropic account, and you can leave this page while it does. Nothing goes into the books until you check it and save it.
