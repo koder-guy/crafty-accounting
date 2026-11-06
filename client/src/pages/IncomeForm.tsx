@@ -206,7 +206,7 @@ export function IncomeForm() {
         }
       />
       <PageBody>
-        <BackLink to={backTo}>Back</BackLink>
+        <BackLink to={backTo} escape={false}>Back</BackLink>
         {guard}
         {original && (
           <div className="max-w-[876px]">

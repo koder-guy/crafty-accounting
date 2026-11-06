@@ -5,7 +5,26 @@ import { displayTaxYear, formatDisplayDate, isDateInTaxYear, todayIso, type TaxY
 import { ConfirmDialog } from './ConfirmDialog';
 import { Alert, Button } from './ui';
 
-export function BackLink({ to, children }: { to: string; children: ReactNode }) {
+/**
+ * The link back to the page this one came from. Escape follows it too, unless `escape` is false: forms leave it out,
+ * as their Escape goes through `useLeaveGuard`. Like the guard it listens on window, so a calendar or menu open on the
+ * page (listening on document, marking the key handled) or a dialog gets the key first.
+ */
+export function BackLink({ to, escape = true, children }: { to: string; escape?: boolean; children: ReactNode }) {
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!escape) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || e.repeat || e.isComposing || e.defaultPrevented) return;
+      if (document.querySelector('dialog[open]')) return;
+      e.preventDefault();
+      navigate(to);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [escape, navigate, to]);
+
   return (
     <Link to={to} className="inline-flex items-center gap-1.5 text-sm text-muted hover:text-ink">
       <ArrowLeft className="size-4" aria-hidden />

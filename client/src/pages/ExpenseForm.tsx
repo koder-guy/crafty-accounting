@@ -361,7 +361,7 @@ function ExpenseFormPage() {
       <>
         <PageHeader title={title} />
         <PageBody>
-          <BackLink to="/expenses/scans">Scanned documents</BackLink>
+          <BackLink to="/expenses/scans" escape={false}>Scanned documents</BackLink>
           {!scan ? (
             <Alert tone="info">This document has already been saved or discarded, perhaps in another window.</Alert>
           ) : scanFileError ? (
@@ -399,7 +399,7 @@ function ExpenseFormPage() {
         }
       />
       <PageBody>
-        <BackLink to={backTo}>Back</BackLink>
+        <BackLink to={backTo} escape={false}>Back</BackLink>
         {guard}
         {original && (
           <div className="max-w-[876px]">
