@@ -88,7 +88,7 @@ function App() {
         <Route
           path="expenses/scans"
           element={
-            <EditorOnly title="Scan documents">
+            <EditorOnly title="A.I. Document scanning">
               <ScanDocuments />
             </EditorOnly>
           }

@@ -113,7 +113,7 @@ export function ScanDocuments() {
 
   return (
     <>
-      <PageHeader title="Scan documents" subtitle="Claude reads each one; you check it before it goes into the books" />
+      <PageHeader title="A.I. Document scanning" subtitle="Claude reads each one; you check it before it goes into the books" />
       <PageBody>
         <BackLink to={tableUrl('/expenses')}>Expenses</BackLink>
         {isLoading ? (
