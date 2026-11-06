@@ -3669,7 +3669,9 @@ describe('scanning documents in bulk', () => {
         .post('/api/expenses')
         .field('data', JSON.stringify(expense(year, { scanId: id })))
         .attach('documents', Buffer.from('%PDF bead'), '2025-05-02_Bead World.pdf');
-    await save().expect(201);
+    const saved = (await save().expect(201)).body;
+    expect(saved).toMatchObject({ createdBy: NAME, updatedBy: NAME });
+    expect((await agent.get(`/api/expenses/${saved.id}`)).body).toMatchObject({ createdBy: NAME });
     expect((await agent.get('/api/scans')).body.scans).toEqual([]);
     expect(files()).toEqual(['2025-05-02_Bead World.pdf']);
 
