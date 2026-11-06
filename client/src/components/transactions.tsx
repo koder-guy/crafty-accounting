@@ -13,7 +13,6 @@ import {
   CreditCard,
   Download,
   ExternalLink,
-  Eye,
   FileBraces,
   FileSpreadsheet,
   FileText,
@@ -42,7 +41,6 @@ import { documentUrl } from '../lib/api';
 import { openInDocumentWindow } from '../lib/documentWindow';
 import { dismissWithoutClicking } from '../lib/menus';
 import { compressPhoto } from '../lib/compressPhoto';
-import { useCanEdit } from '../lib/queries';
 import { CameraDialog, useCameraOption } from './CameraDialog';
 import { CategoryOptions } from './CategoryOptions';
 import { Button, buttonClasses, IconButton, PaymentBadge, SOFT_DANGER } from './ui';
@@ -385,23 +383,16 @@ export function SortTh<K extends string>({
   );
 }
 
-export function RowActions({ viewTo, editTo, onDelete }: { viewTo: string; editTo: string; onDelete: () => void }) {
-  const canEdit = useCanEdit();
+/** Edit and Delete at the end of an Income or Expenses row, for editors. Clicking the row (or its description) opens it. */
+export function RowActions({ editTo, onDelete }: { editTo: string; onDelete: () => void }) {
   return (
     <div className="flex justify-end gap-0.5">
-      <IconLink to={viewTo} label="View">
-        <Eye className="size-4" />
+      <IconLink to={editTo} label="Edit">
+        <Pencil className="size-4" />
       </IconLink>
-      {canEdit && (
-        <>
-          <IconLink to={editTo} label="Edit">
-            <Pencil className="size-4" />
-          </IconLink>
-          <IconButton label="Delete" tone="danger" onClick={onDelete}>
-            <Trash2 className="size-4" />
-          </IconButton>
-        </>
-      )}
+      <IconButton label="Delete" tone="danger" onClick={onDelete}>
+        <Trash2 className="size-4" />
+      </IconButton>
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import { Fragment, useRef, useState } from 'react';
-import { useNavigate } from 'react-router';
+import { Link, useNavigate } from 'react-router';
 import { ArrowUpRight, ChevronRight, CircleSlash, ListOrdered, Plus, ScanText } from 'lucide-react';
 import { formatDisplayDate, formatGBP, shortCategoryName, type Expense, type ExpenseWithLineItems } from '@crafty/shared';
 import { ConfirmDialog } from '../components/ConfirmDialog';
@@ -166,9 +166,11 @@ export function ExpenseList() {
                       <SortTh label="Categories" sortKey="category" sort={sort} onSort={toggle} />
                       <SortTh label="Method" sortKey="method" sort={sort} onSort={toggle} />
                       <SortTh label="Amount" sortKey="amount" sort={sort} onSort={toggle} align="right" />
-                      <th scope="col" className="px-4 py-3 text-right font-medium">
-                        Actions
-                      </th>
+                      {canEdit && (
+                        <th scope="col" className="px-4 py-3 text-right font-medium">
+                          Actions
+                        </th>
+                      )}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-line">
@@ -195,7 +197,9 @@ export function ExpenseList() {
                             <td className="px-4 py-3 whitespace-nowrap text-muted">{formatDisplayDate(row.date)}</td>
                             <td className="w-1/3 max-w-0 px-4 py-3">
                               <div className="flex items-center gap-1.5 font-medium text-ink">
-                                <span className="truncate">{row.payee}</span>
+                                <Link to={`/expenses/${row.id}`} className="min-w-0 truncate rounded-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-soft">
+                                  {row.payee}
+                                </Link>
                                 <NotesIndicator notes={row.notes} muted />
                                 <DocIndicator documents={row.documents} muted />
                               </div>
@@ -231,18 +235,16 @@ export function ExpenseList() {
                               )}
                               {formatGBP(row.totalPence)}
                             </td>
-                            <td className="px-3 py-2">
-                              <RowActions
-                                viewTo={`/expenses/${row.id}`}
-                                editTo={`/expenses/${row.id}/edit`}
-                                onDelete={() => setToDelete(row)}
-                              />
-                            </td>
+                            {canEdit && (
+                              <td className="px-3 py-2">
+                                <RowActions editTo={`/expenses/${row.id}/edit`} onDelete={() => setToDelete(row)} />
+                              </td>
+                            )}
                           </tr>
                           {open && (
                             <tr id={`lines-${row.id}`} className="border-t-0! bg-surface-2/40">
                               <td />
-                              <td colSpan={7} className="px-4 py-4">
+                              <td colSpan={canEdit ? 7 : 6} className="px-4 py-4">
                                 <div className="space-y-3">
                                   <LineItemsTable expense={row} />
                                   <DocumentsTable documents={row.documents} />

@@ -1,5 +1,5 @@
 import { Fragment, useRef, useState } from 'react';
-import { useNavigate } from 'react-router';
+import { Link, useNavigate } from 'react-router';
 import { ArrowDownRight, ChevronRight, Plus } from 'lucide-react';
 import { formatDisplayDate, formatGBP, shortCategoryName, type Income } from '@crafty/shared';
 import { ConfirmDialog } from '../components/ConfirmDialog';
@@ -145,9 +145,11 @@ export function IncomeList() {
                       <SortTh label="Category" sortKey="category" sort={sort} onSort={toggle} />
                       <SortTh label="Method" sortKey="method" sort={sort} onSort={toggle} />
                       <SortTh label="Amount" sortKey="amount" sort={sort} onSort={toggle} align="right" />
-                      <th scope="col" className="px-4 py-3 text-right font-medium">
-                        Actions
-                      </th>
+                      {canEdit && (
+                        <th scope="col" className="px-4 py-3 text-right font-medium">
+                          Actions
+                        </th>
+                      )}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-line">
@@ -178,7 +180,9 @@ export function IncomeList() {
                             <td className="px-4 py-3 whitespace-nowrap text-muted">{formatDisplayDate(row.date)}</td>
                             <td className="w-2/3 max-w-0 px-4 py-3">
                               <div className="flex items-center gap-1.5 font-medium text-ink">
-                                <span className="truncate">{row.description}</span>
+                                <Link to={`/income/${row.id}`} className="min-w-0 truncate rounded-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-soft">
+                                  {row.description}
+                                </Link>
                                 <NotesIndicator notes={row.notes} muted />
                                 <DocIndicator documents={row.documents} muted />
                               </div>
@@ -192,18 +196,16 @@ export function IncomeList() {
                             <td className="tabular px-4 py-3 text-right font-semibold whitespace-nowrap text-in-soft">
                               {formatGBP(row.amountPence)}
                             </td>
-                            <td className="px-3 py-2">
-                              <RowActions
-                                viewTo={`/income/${row.id}`}
-                                editTo={`/income/${row.id}/edit`}
-                                onDelete={() => setToDelete(row)}
-                              />
-                            </td>
+                            {canEdit && (
+                              <td className="px-3 py-2">
+                                <RowActions editTo={`/income/${row.id}/edit`} onDelete={() => setToDelete(row)} />
+                              </td>
+                            )}
                           </tr>
                           {open && (
                             <tr id={`details-${row.id}`} className="border-t-0! bg-surface-2/40">
                               <td />
-                              <td colSpan={6} className="px-4 py-4">
+                              <td colSpan={canEdit ? 6 : 5} className="px-4 py-4">
                                 <div className="space-y-3">
                                   <DocumentsTable documents={row.documents} />
                                   <NotesPanel notes={row.notes} />
