@@ -305,8 +305,12 @@ function LineItemsTable({ expense }: { expense: ExpenseWithLineItems }) {
             <th scope="col" className="px-4 py-2 text-left font-medium">
               <DetailHeading icon={ListOrdered}>Line items</DetailHeading>
             </th>
-            <th scope="col" className="px-4 py-2 text-left font-medium">Category</th>
-            <th scope="col" className="px-4 py-2 text-right font-medium">Amount</th>
+            <th scope="col" className="px-4 py-2 text-left font-medium">
+              <DetailHeading>Category</DetailHeading>
+            </th>
+            <th scope="col" className="px-4 py-2 text-right font-medium">
+              <DetailHeading>Amount</DetailHeading>
+            </th>
           </tr>
         </thead>
         <tbody className="divide-y divide-line">

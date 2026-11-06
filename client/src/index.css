@@ -34,6 +34,11 @@
   html {
     color-scheme: dark;
   }
+  :root {
+    /* Where the headings in the tables under an expanded row (DetailHeading) put their baseline, down
+       from the top of their 16px band. A whole number keeps them all on the same pixel. */
+    --detail-heading-baseline: 13px;
+  }
   /* The page header is pinned on desktop (PageHeader); keep scrolled-to content out from under it. */
   @media (width >= 64rem) {
     html {

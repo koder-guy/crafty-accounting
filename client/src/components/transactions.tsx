@@ -639,13 +639,20 @@ export function TransactionCard({
   );
 }
 
-/** A heading in the tables under an expanded row, after a purple icon for what the table holds. */
-export function DetailHeading({ icon: Icon, children }: { icon: LucideIcon; children: ReactNode }) {
+/**
+ * A heading in the tables under an expanded row, the first after a purple icon for what the table holds.
+ * Every heading's baseline sits a whole number of pixels down its 16px band (`--detail-heading-baseline`
+ * in index.css), so they all line up and render alike.
+ */
+export function DetailHeading({ icon: Icon, children }: { icon?: LucideIcon; children: ReactNode }) {
   return (
-    // The text is trimmed to its capitals (text-box), so centring lines up their middle with the icon's.
+    // The text is trimmed to cap height and baseline (text-box), so its bottom is the baseline: put at the
+    // band's foot, then moved up to the chosen baseline. The icon stays centred in the band.
     <span className="inline-flex h-4 items-center gap-1.5 align-top">
-      <Icon className="size-3.5 shrink-0 text-accent-soft" aria-hidden />
-      <span className="[text-box:trim-both_cap_alphabetic]">{children}</span>
+      {Icon && <Icon className="size-3.5 shrink-0 text-accent-soft" aria-hidden />}
+      <span className="relative top-[calc(var(--detail-heading-baseline)-16px)] self-end [text-box:trim-both_cap_alphabetic]">
+        {children}
+      </span>
     </span>
   );
 }
@@ -667,7 +674,9 @@ export function DocumentsTable({ documents }: { documents: TransactionDocument[]
             <th scope="col" className="px-4 py-2 text-left font-medium">
               <DetailHeading icon={FileText}>Documents</DetailHeading>
             </th>
-            <th scope="col" className="px-4 py-2 text-right font-medium">Actions</th>
+            <th scope="col" className="px-4 py-2 text-right font-medium">
+              <DetailHeading>Actions</DetailHeading>
+            </th>
           </tr>
         </thead>
         <tbody className="divide-y divide-line">
