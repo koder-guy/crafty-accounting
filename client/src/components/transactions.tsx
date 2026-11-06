@@ -648,6 +648,16 @@ export function TransactionCard({
   );
 }
 
+/** A heading in the tables under an expanded row, after a purple icon for what the table holds. */
+export function DetailHeading({ icon: Icon, children }: { icon: LucideIcon; children: ReactNode }) {
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <Icon className="size-3.5 shrink-0 text-accent-soft" aria-hidden />
+      {children}
+    </span>
+  );
+}
+
 /**
  * The documents under an expanded Income or Expenses row, each with Download and Open (in the document window) buttons.
  * The buttons have no border and the rows are the height of the line items table's.
@@ -660,7 +670,9 @@ export function DocumentsTable({ documents }: { documents: TransactionDocument[]
     <table className="w-full rounded-lg border border-line bg-page/40 text-sm">
       <thead className="text-xs tracking-wide text-faint uppercase">
         <tr className="border-b border-line">
-          <th scope="col" className="px-4 py-2 text-left font-medium">Document</th>
+          <th scope="col" className="px-4 py-2 text-left font-medium">
+            <DetailHeading icon={FileText}>Document</DetailHeading>
+          </th>
           <th scope="col" className="px-4 py-2 text-right font-medium">Actions</th>
         </tr>
       </thead>
@@ -705,7 +717,9 @@ export function NotesPanel({ notes }: { notes: string | null }) {
   if (!notes?.trim()) return null;
   return (
     <section aria-label="Notes" className="rounded-lg border border-line bg-page/40 text-sm">
-      <div className="border-b border-line px-4 py-2 text-xs font-medium tracking-wide text-faint uppercase">Notes</div>
+      <div className="border-b border-line px-4 py-2 text-xs font-medium tracking-wide text-faint uppercase">
+        <DetailHeading icon={Notebook}>Notes</DetailHeading>
+      </div>
       <p className="px-4 py-2 break-words whitespace-pre-wrap text-ink">{notes.trim()}</p>
     </section>
   );

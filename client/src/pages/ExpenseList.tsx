@@ -1,6 +1,6 @@
 import { Fragment, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
-import { ArrowUpRight, ChevronRight, CircleSlash, Plus, ScanText } from 'lucide-react';
+import { ArrowUpRight, ChevronRight, CircleSlash, ListOrdered, Plus, ScanText } from 'lucide-react';
 import { formatDisplayDate, formatGBP, shortCategoryName, type Expense, type ExpenseWithLineItems } from '@crafty/shared';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { Pagination, usePagination } from '../components/Pagination';
@@ -12,6 +12,7 @@ import { PageBody, PageHeader } from '../components/PageHeader';
 import {
   attachedDocuments,
   DocIndicator,
+  DetailHeading,
   DocumentsTable,
   NotesIndicator,
   NotesPanel,
@@ -297,7 +298,9 @@ function LineItemsTable({ expense }: { expense: ExpenseWithLineItems }) {
     <table className="w-full rounded-lg border border-line bg-page/40 text-sm">
       <thead className="text-xs tracking-wide text-faint uppercase">
         <tr className="border-b border-line">
-          <th scope="col" className="px-4 py-2 text-left font-medium">Line item</th>
+          <th scope="col" className="px-4 py-2 text-left font-medium">
+            <DetailHeading icon={ListOrdered}>Line item</DetailHeading>
+          </th>
           <th scope="col" className="px-4 py-2 text-left font-medium">Category</th>
           <th scope="col" className="px-4 py-2 text-right font-medium">Amount</th>
         </tr>
