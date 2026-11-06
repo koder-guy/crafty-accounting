@@ -20,7 +20,7 @@ import { fraudPreventionHeaders, parseBrowserData, publicIp } from './fraudPreve
 import { hmrcAccessToken } from './hmrc';
 import { toInvoiceReading, type InvoiceInput } from './invoiceReader';
 import { HttpError } from './http';
-import { changeSummaries, newestTag } from './updates';
+import { changeSummaries, newestTag, startUpdateChecker } from './updates';
 import { checkDiskSpace, raiseNotification, syncUpdateNotification } from './notifications';
 import { clearData, generateSampleData } from './sampleData';
 
@@ -3122,6 +3122,44 @@ describe('updates', () => {
     expect(newestTag(['v1.9.2', 'v1.10.0', 'v1.9.10', 'main', '2.0.0', 'v2.0.0-beta'])).toBe('v1.10.0');
     expect(newestTag(['latest'])).toBeNull();
     expect(changeSummaries(['First\n\nbody', 'Version 1.2.3', "Merge branch 'x'", 'Second'])).toEqual(['Second', 'First']);
+  });
+
+  it('checks soon after starting, sooner just after an update, and refreshes open pages even when nothing is new', async () => {
+    github({ tags: [`v${APP_VERSION}`] });
+    const events: string[] = [];
+    const publish = ctx.liveUpdates.publish.bind(ctx.liveUpdates);
+    ctx.liveUpdates.publish = (event, from) => {
+      events.push(event.area);
+      publish(event, from);
+    };
+    const installDir = fs.mkdtempSync(path.join(os.tmpdir(), 'crafty-install-'));
+    vi.useFakeTimers({ toFake: ['setTimeout', 'setInterval'] });
+    try {
+      ctx.config.updates = { ...ctx.config.updates, autoCheck: true, install: 'native', installDir };
+      // An ordinary start: a minute.
+      let stop = startUpdateChecker(ctx);
+      await vi.advanceTimersByTimeAsync(10_000);
+      expect(githubRequests).toEqual([]);
+      await vi.advanceTimersByTimeAsync(50_000);
+      expect(githubRequests).toHaveLength(1);
+      expect(ctx.updates.status()).toMatchObject({ available: null, checkError: null });
+      expect(ctx.updates.status().checkedAt).not.toBeNull();
+      // Nothing new, but the page still needs to show it was checked.
+      expect(events).toEqual(['updates']);
+      stop();
+
+      // Started by an update from the app (its log is fresh): a few seconds.
+      fs.mkdirSync(path.join(installDir, 'logs'));
+      fs.writeFileSync(path.join(installDir, 'logs', 'update.log'), 'done');
+      githubRequests.length = 0;
+      stop = startUpdateChecker(ctx);
+      await vi.advanceTimersByTimeAsync(5_000);
+      expect(githubRequests).toHaveLength(1);
+      stop();
+    } finally {
+      vi.useRealTimers();
+      fs.rmSync(installDir, { recursive: true, force: true });
+    }
   });
 
   it('reports nothing until checked, then a newer release with its changes', async () => {

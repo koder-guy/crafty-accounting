@@ -136,10 +136,14 @@ export function UpdatesSettings() {
                 <dd>Version {status.currentVersion}</dd>
                 <dt className="text-muted">Last checked</dt>
                 <dd>
-                  {status.checkedAt ? dateTime(status.checkedAt) : <span className="text-muted">Not yet</span>}
+                  {status.checkedAt ? (
+                    dateTime(status.checkedAt)
+                  ) : (
+                    <span className="text-muted">{status.autoCheck ? 'Not yet since it started; it checks within a minute' : 'Not yet'}</span>
+                  )}
                   <span className="block text-xs text-faint">
                     {status.autoCheck
-                      ? 'Checks GitHub for new versions twice a day.'
+                      ? 'Checks GitHub for new versions shortly after starting, then twice a day.'
                       : "Doesn't check by itself (UPDATE_CHECK is off), only when you choose Check now."}
                   </span>
                 </dd>

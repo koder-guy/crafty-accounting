@@ -13,6 +13,8 @@ export const UPDATE_REPO = 'koder-guy/crafty-accounting';
 const GITHUB_API = `https://api.github.com/repos/${UPDATE_REPO}`;
 const CHECK_EVERY_MS = 12 * 60 * 60 * 1000;
 const UPDATE_LOG = 'update.log';
+/** How recent the update log must be for a start to count as just after an update. */
+const JUST_UPDATED_MS = 15 * 60 * 1000;
 
 type Version = [number, number, number];
 
@@ -184,16 +186,29 @@ export class Updates {
   }
 }
 
-/** Checks a minute after starting and then twice a day, unless UPDATE_CHECK is off. Returns a stop function. */
+/** Started by an update from Settings → Updates in the last few minutes: its log is fresh. */
+function justUpdated(installDir: string | null): boolean {
+  if (!installDir) return false;
+  try {
+    return Date.now() - fs.statSync(path.join(installDir, 'logs', UPDATE_LOG)).mtimeMs < JUST_UPDATED_MS;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Checks a minute after starting (a few seconds after an update from the app, so the page
+ * that started it soon says this is the newest version) and then twice a day, unless
+ * UPDATE_CHECK is off. Returns a stop function.
+ */
 export function startUpdateChecker(ctx: AppContext): () => void {
   if (!ctx.config.updates.autoCheck) return () => {};
   const tick = async () => {
-    const before = ctx.updates.status().available?.version;
     await ctx.updates.check();
-    // Open browsers' Settings → Updates pages depend on it; the bell has its own event.
-    if (ctx.updates.status().available?.version !== before) ctx.liveUpdates.publish({ area: 'updates', by: APP_NAME }, null);
+    // Open browsers' Settings → Updates pages show the result and when it was checked; the bell has its own event.
+    ctx.liveUpdates.publish({ area: 'updates', by: APP_NAME }, null);
   };
-  const first = setTimeout(() => void tick(), 60_000);
+  const first = setTimeout(() => void tick(), justUpdated(ctx.config.updates.installDir) ? 5_000 : 60_000);
   first.unref();
   const timer = setInterval(() => void tick(), CHECK_EVERY_MS);
   timer.unref();
