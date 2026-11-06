@@ -620,7 +620,7 @@ export function TransactionCard({
 }
 
 /**
- * The documents under an expanded Income or Expenses row, each with Open (in the document window) and Download buttons.
+ * The documents under an expanded Income or Expenses row, each with Download and Open (in the document window) buttons.
  * The buttons have no border and the rows are the height of the line items table's.
  */
 export function DocumentsTable({ documents }: { documents: TransactionDocument[] }) {
@@ -641,11 +641,11 @@ export function DocumentsTable({ documents }: { documents: TransactionDocument[]
             <td className="px-4 py-2 break-all text-ink">{d.filename}</td>
             <td className="w-px px-3 py-1 whitespace-nowrap">
               <div className="flex justify-end gap-1">
-                <a href={documentUrl(d.filename)} target="_blank" rel="noreferrer" onClick={openInDocumentWindow} aria-label={`Open ${d.filename}`} title="Open document" className={iconButton}>
-                  <ExternalLink className="size-4" aria-hidden />
-                </a>
                 <a href={documentUrl(d.filename, true)} download={d.filename} aria-label={`Download ${d.filename}`} title="Download" className={iconButton}>
                   <Download className="size-4" aria-hidden />
+                </a>
+                <a href={documentUrl(d.filename)} target="_blank" rel="noreferrer" onClick={openInDocumentWindow} aria-label={`Open ${d.filename}`} title="Open document" className={iconButton}>
+                  <ExternalLink className="size-4" aria-hidden />
                 </a>
               </div>
             </td>
