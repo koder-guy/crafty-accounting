@@ -8,7 +8,7 @@ import type { AppContext } from '../context';
 import { getClaudeSettings } from '../claudeSettings';
 import { ALLOWED_EXTENSIONS, createUploader, decodeUploadName, documentPath, ensureSpaceFor, uploadSpace } from '../documents';
 import { HttpError, parseId } from '../http';
-import { addScan, deleteScan, getScan, getScanRow, listScans, unreadableReason } from '../scans';
+import { addScan, deleteScan, fillFingerprints, getScan, getScanRow, listScans, unreadableReason } from '../scans';
 
 export function scansRouter(ctx: AppContext): Router {
   const router = Router();
@@ -18,6 +18,7 @@ export function scansRouter(ctx: AppContext): Router {
   router.get('/', (_req, res) => {
     // Picks up anything left waiting, e.g. after a key was saved again.
     ctx.scans.kick();
+    fillFingerprints(ctx);
     const list: ScanList = {
       scans: listScans(ctx.db),
       claudeConfigured: getClaudeSettings(ctx.db).apiKey !== null,

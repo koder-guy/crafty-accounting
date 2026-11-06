@@ -386,6 +386,16 @@ CREATE TABLE scans (
 );
 `,
   },
+  // Each scan's and document's SHA-256, so a file scanned again is noticed. Rows from before
+  // (and from older backups) start NULL and are filled in from their files when scans are listed.
+  {
+    version: 23,
+    sql: `
+ALTER TABLE scans ADD COLUMN sha256 TEXT;
+ALTER TABLE documents ADD COLUMN sha256 TEXT;
+CREATE INDEX idx_documents_sha256 ON documents (sha256);
+`,
+  },
 ];
 
 export const CURRENT_SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;

@@ -23,7 +23,7 @@ import { CategoryOptions } from '../components/CategoryOptions';
 import { BackLink, ChangedElsewhere, CopiedFrom, dateInYear, duplicateDate, useLeaveGuard, yearRangeHint } from '../components/FormShell';
 import { NoTaxYear } from '../components/NoTaxYear';
 import { ConfirmDialog } from '../components/ConfirmDialog';
-import { nextScanToCheck, scanCheckUrl } from './ScanDocuments';
+import { DuplicateNotice, nextScanToCheck, scanCheckUrl } from './ScanDocuments';
 import { PageBody, PageHeader } from '../components/PageHeader';
 import { DateInput } from '../components/DateInput';
 import { DocumentField, renamedDocuments, type DocumentRenames, PaymentMethodPicker, tableUrl } from '../components/transactions';
@@ -452,6 +452,7 @@ function ExpenseFormPage() {
                   </Button>
                 </div>
               </div>
+              <DuplicateNotice duplicates={scan.duplicates} />
               <ScanProblems reading={scan.reading} error={scan.error} />
               {save.error && (
                 <div className="mt-4">

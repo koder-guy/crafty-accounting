@@ -1,6 +1,6 @@
 import { useRef, useState, type DragEvent } from 'react';
-import { FileText, FileUp, LoaderCircle, RotateCw, ScanText, Trash2 } from 'lucide-react';
-import { diskSize, formatDisplayDate, formatGBP, MAX_PHOTO_BYTES, photoFilename, type Scan, type ScanList } from '@crafty/shared';
+import { Copy, ExternalLink, FileText, FileUp, LoaderCircle, RotateCw, ScanText, Trash2 } from 'lucide-react';
+import { diskSize, formatDisplayDate, formatGBP, MAX_PHOTO_BYTES, photoFilename, type Scan, type ScanDuplicate, type ScanList } from '@crafty/shared';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { BackLink } from '../components/FormShell';
 import { PageBody, PageHeader } from '../components/PageHeader';
@@ -26,6 +26,48 @@ export function nextScanToCheck(scans: Scan[], afterId?: number): Scan | null {
 }
 
 export const scanCheckUrl = (id: number) => `/expenses/new?scan=${id}`;
+
+/** One thing a scan looks like a copy of, as a sentence. */
+function duplicateText(d: ScanDuplicate): string {
+  const details = [d.date && formatDisplayDate(d.date), d.payee, d.totalPence !== null && formatGBP(d.totalPence)].filter(Boolean).join(', ');
+  if (d.kind === 'expense') {
+    return d.reason === 'same-file'
+      ? `The same file is attached to an expense already in the books${details ? `: ${details}` : ''}.`
+      : `An expense already in the books has the same date, payee, total and invoice or order number: ${details}.`;
+  }
+  return d.reason === 'same-file'
+    ? `The same file is also waiting to be checked, as ${d.name}.`
+    : `${d.name}, also waiting to be checked, looks like the same invoice${details ? `: ${details}` : ''}.`;
+}
+
+/** While checking a scanned document: what it looks like a copy of, with a link to each in a new tab. */
+export function DuplicateNotice({ duplicates }: { duplicates: ScanDuplicate[] }) {
+  if (!duplicates.length) return null;
+  return (
+    <div className="mt-4">
+      <Alert tone="warning">
+        <p className="font-medium">This may already be in the books.</p>
+        <ul className="mt-1 list-disc space-y-1 pl-5">
+          {duplicates.map((d) => (
+            <li key={`${d.kind}-${d.id}`}>
+              {duplicateText(d)}{' '}
+              <a
+                href={d.kind === 'expense' ? `/expenses/${d.id}` : scanFileUrl(d.id)}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1 font-medium underline underline-offset-2"
+              >
+                {d.kind === 'expense' ? 'Open the expense' : 'Open the document'}
+                <ExternalLink className="size-3.5" aria-hidden />
+              </a>
+            </li>
+          ))}
+        </ul>
+        <p className="mt-2">If it is a copy, discard this document. If it's a separate purchase, carry on.</p>
+      </Alert>
+    </div>
+  );
+}
 
 /** What a file will take on the server: photos are made into a JPEG of at most MAX_PHOTO_BYTES first. */
 const expectedBytes = (file: File) => (file.type.startsWith('image/') ? Math.min(file.size, MAX_PHOTO_BYTES) : file.size);
@@ -364,6 +406,12 @@ function ScanRow({
       <td className="tabular px-4 py-3 text-right text-out-soft">{total !== null ? formatGBP(total) : dash}</td>
       <td className="px-4 py-3 whitespace-nowrap">
         <ScanStatusBadge scan={scan} />
+        {scan.duplicates.length > 0 && (
+          <p className="mt-1 flex items-center gap-1 text-xs text-warn" title={scan.duplicates.map(duplicateText).join('\n')}>
+            <Copy className="size-3.5" aria-hidden />
+            Possible duplicate
+          </p>
+        )}
         {r && r.warnings.length > 0 && (
           <p className="mt-1 text-xs text-warn" title={r.warnings.join('\n')}>
             {r.warnings.length} {r.warnings.length === 1 ? 'thing' : 'things'} to look at

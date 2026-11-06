@@ -22,6 +22,7 @@ import { toInvoiceReading, type InvoiceInput } from './invoiceReader';
 import { HttpError } from './http';
 import { changeSummaries, newestTag, startUpdateChecker } from './updates';
 import { checkDiskSpace, raiseNotification, syncUpdateNotification } from './notifications';
+import { sameInvoice } from './scans';
 import { clearData, generateSampleData } from './sampleData';
 
 const NAME = 'Admin';
@@ -3757,6 +3758,95 @@ describe('scanning documents in bulk', () => {
 
     await agent.post('/api/reset').send({ confirm: 'RESET' }).expect(200);
     expect((await agent.get('/api/scans')).body.scans).toEqual([]);
+  });
+
+  describe('duplicates', () => {
+    const beads = () => [{ description: 'Glass beads', amountPence: 3000, categoryId: cat('costOfGoods') }];
+    const listed = async () =>
+      (await agent.get('/api/scans').expect(200)).body.scans as { id: number; originalName: string; duplicates: { reason: string; kind: string; id: number }[] }[];
+    const addExpense = async (year: number, overrides: Record<string, unknown>) =>
+      (await agent.post('/api/expenses').field('data', JSON.stringify(expense(year, { lineItems: beads(), ...overrides }))).expect(201)).body.id as number;
+
+    it('notices the same file again, in the books or waiting to be checked', async () => {
+      const year = await createYear();
+      const { id: scanId } = (await scan('%PDF bead').expect(201)).body;
+      await ctx.scans.idle();
+      // Saved with a different invoice number, so only the file can match.
+      const saved = await agent
+        .post('/api/expenses')
+        .field('data', JSON.stringify(expense(year, { scanId, invoiceNumber: 'OTHER' })))
+        .attach('documents', Buffer.from('%PDF bead'), 'beads.pdf')
+        .expect(201);
+
+      const again = (await scan('%PDF bead', 'again.pdf').expect(201)).body;
+      const copy = (await scan('%PDF bead', 'copy.pdf').expect(201)).body;
+      await scan('%PDF different', 'different.pdf').expect(201);
+      await ctx.scans.idle();
+      const scans = await listed();
+      expect(scans.find((s) => s.id === again.id)!.duplicates).toEqual([
+        { reason: 'same-file', kind: 'expense', id: saved.body.id, date: '2025-05-02', payee: 'Bead World', totalPence: 4550, name: null },
+        // Its reading also matches the other copy's; the same file is the reason given.
+        expect.objectContaining({ reason: 'same-file', kind: 'scan', id: copy.id, name: 'copy.pdf' }),
+        expect.objectContaining({ reason: 'same-invoice', kind: 'scan', name: 'different.pdf' }),
+      ]);
+      // Claude read the different file as the same invoice (INV-7) as the other two scans.
+      expect(scans.find((s) => s.originalName === 'different.pdf')!.duplicates.map((d) => [d.reason, d.kind])).toEqual([
+        ['same-invoice', 'scan'],
+        ['same-invoice', 'scan'],
+      ]);
+
+      // A document stored before fingerprints were kept is fingerprinted when scans are listed.
+      ctx.db.prepare('UPDATE documents SET sha256 = NULL').run();
+      expect((await listed()).find((s) => s.id === again.id)!.duplicates[0]).toMatchObject({ reason: 'same-file', kind: 'expense' });
+      expect(ctx.db.prepare('SELECT COUNT(*) AS n FROM documents WHERE sha256 IS NULL').get()).toEqual({ n: 0 });
+    });
+
+    it('matches an invoice in the books only when its invoice or order number agrees too', async () => {
+      const year = await createYear();
+      const same = await addExpense(year, { invoiceNumber: 'inv 7' });
+      await addExpense(year, { invoiceNumber: '' }); // No number: two purchases can share the rest.
+      await addExpense(year, { invoiceNumber: 'INV-8' });
+      await addExpense(year, { invoiceNumber: 'INV-7', payee: 'Hobbycraft' });
+      await addExpense(year, { invoiceNumber: 'INV-7', date: '2025-05-03' });
+      await scan('%PDF bead').expect(201);
+      await ctx.scans.idle();
+      expect((await listed())[0].duplicates).toEqual([
+        { reason: 'same-invoice', kind: 'expense', id: same, date: '2025-05-02', payee: 'Bead World', totalPence: 3000, name: null },
+      ]);
+    });
+
+    it('compares invoice numbers and order numbers', () => {
+      const a = { date: '2025-05-02', payee: 'Bead World', totalPence: 3000, invoiceNumber: 'INV-7', orderNumber: '' };
+      expect(sameInvoice(a, { ...a, payee: ' bead  world ', invoiceNumber: '#INV-7' })).toBe(true);
+      expect(sameInvoice(a, { ...a, invoiceNumber: 'INV-8' })).toBe(false);
+      expect(sameInvoice(a, { ...a, invoiceNumber: '' })).toBe(false);
+      expect(sameInvoice(a, { ...a, totalPence: 3001 })).toBe(false);
+      // The order number alone is enough, but a differing invoice number still rules it out.
+      const order = { ...a, invoiceNumber: '', orderNumber: '204-1234' };
+      expect(sameInvoice(order, { ...order, invoiceNumber: 'X1' })).toBe(true);
+      expect(sameInvoice({ ...order, invoiceNumber: 'X2' }, { ...order, invoiceNumber: 'X1' })).toBe(false);
+      expect(sameInvoice({ ...a, date: null }, { ...a, date: null })).toBe(false);
+    });
+  });
+
+  it('restores a backup made before fingerprints, and fingerprints its documents', async () => {
+    const old = new Database(':memory:');
+    old.exec('CREATE TABLE schema_migrations (version INTEGER PRIMARY KEY, applied_at TEXT)');
+    for (const migration of MIGRATIONS.filter((m) => m.version <= 22)) {
+      old.exec(migration.sql);
+      old.prepare('INSERT INTO schema_migrations (version) VALUES (?)').run(migration.version);
+    }
+    seedCategories(old);
+    old.prepare("INSERT INTO scans (filename, original_name, size_bytes, status) VALUES ('scan-0000000000000001.pdf', 'old.pdf', 8, 'failed')").run();
+    const dump = dumpSql(old);
+    old.close();
+    expect(dump).not.toMatch(/sha256/);
+    await agent.post('/api/restore').attach('file', Buffer.from(dump), 'backup.sql').expect(200);
+    fs.writeFileSync(path.join(ctx.paths.uploadsDir, 'scan-0000000000000001.pdf'), '%PDF old');
+    await scan('%PDF old', 'new.pdf').expect(201);
+    await ctx.scans.idle();
+    const scans = (await agent.get('/api/scans').expect(200)).body.scans as { originalName: string; duplicates: { reason: string; name: string }[] }[];
+    expect(scans.find((s) => s.originalName === 'new.pdf')!.duplicates).toEqual([expect.objectContaining({ reason: 'same-file', name: 'old.pdf' })]);
   });
 
   it('restores a backup made before scanning', async () => {

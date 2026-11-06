@@ -613,6 +613,24 @@ export interface Scan {
   error: string | null;
   uploadedBy: string | null;
   createdAt: string;
+  /** Expenses and other scans this looks like a copy of. */
+  duplicates: ScanDuplicate[];
+}
+
+/**
+ * Something a scan looks like a copy of: the same file, byte for byte, or an invoice with the same
+ * date, payee and total and the same invoice or order number (neither number differing).
+ */
+export interface ScanDuplicate {
+  reason: 'same-file' | 'same-invoice';
+  /** An expense in the books, or another scan waiting to be checked. */
+  kind: 'expense' | 'scan';
+  id: number;
+  date: string | null;
+  payee: string | null;
+  totalPence: number | null;
+  /** The file name, for a scan. */
+  name: string | null;
 }
 
 export interface ScanList {

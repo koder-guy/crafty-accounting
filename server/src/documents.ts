@@ -1,6 +1,7 @@
 // Attached documents live in DATA_DIR/uploads under their original filename,
 // or the name given when renamed. Names are validated (and checked for clashes)
 // before anything is written to disk or the database.
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import multer from 'multer';
@@ -108,6 +109,11 @@ function linkDocument(ctx: AppContext, from: string, to: string): void {
   }
 }
 
+/** A file's SHA-256, to notice the same file scanned again. */
+export function fileFingerprint(filePath: string): string {
+  return crypto.createHash('sha256').update(fs.readFileSync(filePath)).digest('hex');
+}
+
 export interface DocumentRename {
   from: string;
   to: string;
@@ -156,6 +162,9 @@ export function saveWithDocuments<T>(
     }
 
     const result = write(names);
+    // Fingerprinted, so scanning the same file again is noticed.
+    const fingerprint = ctx.db.prepare('UPDATE documents SET sha256 = ? WHERE filename = ? AND sha256 IS NULL');
+    for (const name of names) fingerprint.run(fileFingerprint(documentPath(ctx, name)), name);
     for (const name of change.removing) removeDocumentFile(ctx, name);
     for (const { from } of renaming) removeDocumentFile(ctx, from);
     placed.length = 0;
