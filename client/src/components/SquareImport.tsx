@@ -1,8 +1,9 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
-import { CircleCheck, CreditCard, TriangleAlert } from 'lucide-react';
+import { CircleCheck, TriangleAlert } from 'lucide-react';
 import { Link } from 'react-router';
 import { displayTaxYear, formatDisplayDate, formatGBP, type SquareImportResult, type SquarePayout } from '@crafty/shared';
 import { useActiveTaxYear, useImportSquarePayouts, useSquare, useSquarePayouts } from '../lib/queries';
+import { SquareLogo } from './SquareLogo';
 import { SubmittedFiguresNotice } from './SubmittedFiguresNotice';
 import { Alert, Button, Spinner } from './ui';
 
@@ -19,7 +20,7 @@ export function SquareImportButton() {
   return (
     <>
       <Button type="button" onClick={() => setOpen(true)} aria-label="Import from Square" title="Import from Square" className="size-9 shrink-0 !p-0">
-        <CreditCard className="size-4" aria-hidden />
+        <SquareLogo className="size-3.5" />
       </Button>
       {open && <SquareImportDialog onClose={() => setOpen(false)} />}
     </>
@@ -71,7 +72,7 @@ function SquareImportDialog({ onClose }: { onClose: () => void }) {
         <div
           className={`flex size-10 shrink-0 items-center justify-center rounded-full ${result ? 'bg-ok/10 text-in-soft' : 'bg-accent-bg text-accent-soft'}`}
         >
-          {result ? <CircleCheck className="size-5" aria-hidden /> : <CreditCard className="size-5" aria-hidden />}
+          {result ? <CircleCheck className="size-5" aria-hidden /> : <SquareLogo className="size-5" />}
         </div>
         <div className="min-w-0 flex-1">
           <h2 id={titleId} className="text-base font-semibold">

@@ -1,5 +1,6 @@
-import { CircleArrowUp, CreditCard, DatabaseBackup, Landmark, Layers, Sparkles, Tags, Users } from 'lucide-react';
+import { CircleArrowUp, DatabaseBackup, Landmark, Layers, Sparkles, Tags, Users } from 'lucide-react';
 import { SectionHeading, SectionLayout } from '../../components/SectionLayout';
+import { SquareLogo } from '../../components/SquareLogo';
 import { useCanEdit, useHmrc } from '../../lib/queries';
 
 const SECTIONS = [
@@ -7,7 +8,7 @@ const SECTIONS = [
   { to: '/settings/tax-years', label: 'Tax Years', icon: Layers },
   { to: '/settings/hmrc', label: 'HMRC', icon: Landmark },
   { to: '/settings/claude', label: 'Claude Integration', icon: Sparkles },
-  { to: '/settings/square', label: 'Square', icon: CreditCard },
+  { to: '/settings/square', label: 'Square', icon: SquareLogo },
   { to: '/settings/categories', label: 'Custom Categories', icon: Tags },
   { to: '/settings/backup', label: 'Backup and Restore', icon: DatabaseBackup },
   { to: '/settings/updates', label: 'Updates', icon: CircleArrowUp },
