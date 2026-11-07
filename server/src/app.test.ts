@@ -4006,6 +4006,7 @@ describe('Square', () => {
   type Entry = { type: string; effective_at?: string; gross: number; fee: number };
   let payouts: { id: string; status: string; amount: number; arrival_date: string; entries: Entry[] }[];
   let calls: string[];
+  let payoutsQuery: URLSearchParams;
 
   const charge = (gross: number, fee: number, at = '2025-11-01T11:00:00Z'): Entry => ({ type: 'CHARGE', effective_at: at, gross, fee });
   const refund = (gross: number, fee: number, at = '2025-11-01T15:00:00Z'): Entry => ({ type: 'REFUND', effective_at: at, gross: -gross, fee: -fee });
@@ -4036,6 +4037,7 @@ describe('Square', () => {
       if (path === '/v2/merchants/me') return json({ merchant: { id: 'M1', business_name: 'Hedgerow Crafts', currency: 'GBP' } });
       if (path === '/v2/locations') return json({ locations: [{ id: 'L1' }] });
       if (path === '/v2/payouts') {
+        payoutsQuery = url.searchParams;
         expect(url.searchParams.get('location_id')).toBe('L1');
         return json({ payouts: payouts.map(asSquare) });
       }
@@ -4060,6 +4062,7 @@ describe('Square', () => {
   const connect = () => agent.put('/api/square').send({ accessToken: TOKEN }).expect(200);
 
   it('checks a token with Square before saving it, and never sends it back', async () => {
+    const yearId = await createYear(2025);
     expect((await agent.get('/api/square').expect(200)).body).toMatchObject({ configured: false, environment: 'production', incomeCategoryId: cat('turnover'), feeCategoryId: cat('financeCharges') });
     const bad = await agent.put('/api/square').send({ accessToken: 'EAAAwrong' }).expect(422);
     expect(bad.body.error).toMatch(/didn’t accept the access token/);
@@ -4073,7 +4076,7 @@ describe('Square', () => {
     await agent.put('/api/square').send({ environment: 'production' }).expect(400);
 
     expect((await agent.delete('/api/square/token').expect(200)).body).toMatchObject({ configured: false, tokenHint: null, merchantName: null });
-    await agent.get('/api/square/payouts?from=2025-04-06').expect(404);
+    await agent.get(`/api/square/payouts?taxYearId=${yearId}`).expect(404);
   });
 
   it('refuses a Square account in another currency', async () => {
@@ -4084,19 +4087,20 @@ describe('Square', () => {
   });
 
   it('lets only editors connect, list payouts and import', async () => {
+    const yearId = await createYear(2025);
     const viewer = await addPerson('Accountant', 'read-only-password', 'viewer');
     await viewer.put('/api/square').send({ accessToken: TOKEN }).expect(403);
     await connect();
     expect((await viewer.get('/api/square').expect(200)).body).toMatchObject({ configured: true, tokenHint: '…WXYZ' });
-    await viewer.get('/api/square/payouts?from=2025-04-06').expect(403);
-    await viewer.post('/api/square/import').send({ payoutIds: ['po_1'] }).expect(403);
+    await viewer.get(`/api/square/payouts?taxYearId=${yearId}`).expect(403);
+    await viewer.post('/api/square/import').send({ taxYearId: yearId, payoutIds: ['po_1'] }).expect(403);
     await viewer.delete('/api/square/token').expect(403);
   });
 
   it('works out each payout’s sales, refunds and fees', async () => {
-    await createYear(2025);
+    const yearId = await createYear(2025);
     await connect();
-    const { body } = await agent.get('/api/square/payouts?from=2025-04-06').expect(200);
+    const { body } = await agent.get(`/api/square/payouts?taxYearId=${yearId}`).expect(200);
     expect(body.payouts.map((p: { id: string }) => p.id)).toEqual(['po_2', 'po_1']);
     expect(body.payouts[1]).toMatchObject({
       id: 'po_1',
@@ -4115,10 +4119,10 @@ describe('Square', () => {
   });
 
   it('dates sales by the UK day, so a late sale in summer is the next day', async () => {
-    await createYear(2025);
+    const yearId = await createYear(2025);
     await connect();
     payouts = [payout('po_late', '2025-06-17', [charge(2000, 35, '2025-06-14T23:30:00Z'), charge(1000, 18, '2025-06-15T10:00:00Z')])];
-    const [p] = (await agent.get('/api/square/payouts?from=2025-04-06').expect(200)).body.payouts;
+    const [p] = (await agent.get(`/api/square/payouts?taxYearId=${yearId}`).expect(200)).body.payouts;
     expect(p).toMatchObject({ saleDate: '2025-06-15', saleDates: ['2025-06-15'] });
   });
 
@@ -4127,22 +4131,44 @@ describe('Square', () => {
     await connect();
     payouts.push(payout('po_hold', '2025-11-12', [charge(4000, 70, '2025-11-11T10:00:00Z'), { type: 'RESERVE_HOLD', gross: -500, fee: 0 }]));
     payouts.push(payout('po_refunds', '2025-11-13', [refund(1000, 18)]));
-    payouts.push(payout('po_old', '2024-11-13', [charge(1000, 18, '2024-11-12T10:00:00Z')]));
-    const list = (await agent.get('/api/square/payouts?from=2024-04-06').expect(200)).body.payouts;
+    const list = (await agent.get(`/api/square/payouts?taxYearId=${yearId}`).expect(200)).body.payouts;
     const problem = (id: string) => list.find((p: { id: string }) => p.id === id).problem;
     expect(problem('po_hold')).toMatch(/aren’t sales or fees: reserve hold \(-£5\.00\)/);
     expect(problem('po_refunds')).toMatch(/no card sales/);
-    expect(problem('po_old')).toMatch(/no tax year for 12 Nov 2024/);
 
-    const refused = await agent.post('/api/square/import').send({ payoutIds: ['po_1', 'po_hold'] }).expect(422);
+    const refused = await agent.post('/api/square/import').send({ taxYearId: yearId, payoutIds: ['po_1', 'po_hold'] }).expect(422);
     expect(refused.body.error).toMatch(/^Nothing was imported/);
     expect((await agent.get(`/api/incomes?taxYearId=${yearId}`).expect(200)).body).toEqual([]);
+  });
+
+  it('lists and imports only the chosen tax year’s sales, whenever they were paid in', async () => {
+    const earlier = await createYear(2025);
+    const later = await createYear(2026);
+    await connect();
+    payouts.push(
+      payout('po_5apr', '2026-04-07', [charge(3000, 53, '2026-04-05T15:00:00Z')]),
+      payout('po_6apr', '2026-04-07', [charge(2000, 35, '2026-04-06T15:00:00Z')]),
+    );
+    const ids = async (yearId: number) =>
+      (await agent.get(`/api/square/payouts?taxYearId=${yearId}`).expect(200)).body.payouts.map((p: { id: string }) => p.id);
+    expect(await ids(earlier)).toEqual(['po_5apr', 'po_2', 'po_1']);
+    expect(payoutsQuery.get('begin_time')).toBe('2025-04-06T00:00:00Z');
+    expect(payoutsQuery.get('end_time')).toBe('2026-04-20T00:00:00Z');
+    expect(await ids(later)).toEqual(['po_6apr']);
+
+    const refused = await agent.post('/api/square/import').send({ taxYearId: earlier, payoutIds: ['po_5apr', 'po_6apr'] }).expect(422);
+    expect(refused.body.error).toMatch(/outside tax year 2025\/26/);
+    await agent.post('/api/square/import').send({ taxYearId: earlier, payoutIds: ['po_5apr'] }).expect(200);
+    const [inc] = (await agent.get(`/api/incomes?taxYearId=${earlier}`).expect(200)).body;
+    expect(inc).toMatchObject({ date: '2026-04-05', amountPence: 3000, reference: 'po_5apr' });
+    expect((await agent.get(`/api/incomes?taxYearId=${later}`).expect(200)).body).toEqual([]);
+    await agent.get('/api/square/payouts?taxYearId=999').expect(404);
   });
 
   it('imports each payout as its sales and an expense for the fees, once', async () => {
     const yearId = await createYear(2025);
     await connect();
-    const { body } = await agent.post('/api/square/import').send({ payoutIds: ['po_1', 'po_2'] }).expect(200);
+    const { body } = await agent.post('/api/square/import').send({ taxYearId: yearId, payoutIds: ['po_1', 'po_2'] }).expect(200);
     expect(body).toEqual({ imported: 2, alreadyImported: 0, incomePence: 12000, feesPence: 210, years: [{ taxYearId: yearId, label: '2025-26', firstDate: '2025-11-01' }] });
 
     const incomes = (await agent.get(`/api/incomes?taxYearId=${yearId}`).expect(200)).body;
@@ -4168,12 +4194,12 @@ describe('Square', () => {
 
     // Listed as imported, without fetching their entries again.
     calls = [];
-    const list = (await agent.get('/api/square/payouts?from=2025-04-06').expect(200)).body.payouts;
+    const list = (await agent.get(`/api/square/payouts?taxYearId=${yearId}`).expect(200)).body.payouts;
     expect(list.map((p: { incomeId: number | null }) => p.incomeId)).toEqual([incomes[0].id, incomes[1].id]);
     expect(list.map((p: { saleDate: string }) => p.saleDate)).toEqual(['2025-11-08', '2025-11-01']);
     expect(calls.some((c) => c.includes('payout-entries'))).toBe(false);
 
-    const again = await agent.post('/api/square/import').send({ payoutIds: ['po_1'] }).expect(200);
+    const again = await agent.post('/api/square/import').send({ taxYearId: yearId, payoutIds: ['po_1'] }).expect(200);
     expect(again.body).toMatchObject({ imported: 0, alreadyImported: 1 });
     expect((await agent.get(`/api/incomes?taxYearId=${yearId}`).expect(200)).body).toHaveLength(2);
   });
@@ -4181,12 +4207,12 @@ describe('Square', () => {
   it('knows a payout brought back from a JSON export by its reference', async () => {
     const yearId = await createYear(2025);
     await connect();
-    await agent.post('/api/square/import').send({ payoutIds: ['po_1'] }).expect(200);
+    await agent.post('/api/square/import').send({ taxYearId: yearId, payoutIds: ['po_1'] }).expect(200);
     const exported = (await agent.get(`/api/incomes/export.json?taxYearId=${yearId}`).expect(200)).body;
     await agent.post('/api/reset').send({ confirm: 'RESET' }).expect(200);
-    await createYear(2025);
+    const newYearId = await createYear(2025);
     await agent.post('/api/incomes/import').send(exported).expect(201);
-    const list = (await agent.get('/api/square/payouts?from=2025-04-06').expect(200)).body.payouts;
+    const list = (await agent.get(`/api/square/payouts?taxYearId=${newYearId}`).expect(200)).body.payouts;
     expect(list.find((p: { id: string }) => p.id === 'po_1').incomeId).not.toBeNull();
   });
 
@@ -4194,7 +4220,7 @@ describe('Square', () => {
     const yearId = await createYear(2025);
     await connect();
     const { body: hand } = await agent.post('/api/incomes').send(income(yearId, { date: '2025-11-01', amountPence: 9825 })).expect(201);
-    const list = (await agent.get('/api/square/payouts?from=2025-04-06').expect(200)).body.payouts;
+    const list = (await agent.get(`/api/square/payouts?taxYearId=${yearId}`).expect(200)).body.payouts;
     expect(list.find((p: { id: string }) => p.id === 'po_1').possibleDuplicate).toMatchObject({ id: hand.id, amountPence: 9825 });
   });
 
@@ -4207,7 +4233,7 @@ describe('Square', () => {
     await agent.put('/api/square').send({ feeCategoryId: cat('depreciation') }).expect(422);
     const { body: status } = await agent.put('/api/square').send({ incomeCategoryId: market.id, feeCategoryId: cardFees.id }).expect(200);
     expect(status).toMatchObject({ incomeCategoryId: market.id, feeCategoryId: cardFees.id });
-    await agent.post('/api/square/import').send({ payoutIds: ['po_1'] }).expect(200);
+    await agent.post('/api/square/import').send({ taxYearId: yearId, payoutIds: ['po_1'] }).expect(200);
     const [inc] = (await agent.get(`/api/incomes?taxYearId=${yearId}`).expect(200)).body;
     expect(inc.categoryId).toBe(market.id);
     const [exp] = (await agent.get(`/api/expenses?taxYearId=${yearId}`).expect(200)).body;
@@ -4218,15 +4244,15 @@ describe('Square', () => {
   });
 
   it('keeps the token out of backups and through a restore', async () => {
-    await createYear(2025);
+    const yearId = await createYear(2025);
     await connect();
-    await agent.post('/api/square/import').send({ payoutIds: ['po_1'] }).expect(200);
+    await agent.post('/api/square/import').send({ taxYearId: yearId, payoutIds: ['po_1'] }).expect(200);
     const dump = (await agent.get('/api/backup.sql').expect(200)).text;
     expect(dump).not.toMatch(/INSERT INTO "square_settings"/);
     expect(dump).not.toContain(TOKEN);
     await agent.post('/api/restore').attach('file', Buffer.from(dump), 'backup.sql').expect(200);
     expect((await agent.get('/api/square')).body).toMatchObject({ configured: true, merchantName: 'Hedgerow Crafts' });
-    const list = (await agent.get('/api/square/payouts?from=2025-04-06').expect(200)).body.payouts;
+    const list = (await agent.get(`/api/square/payouts?taxYearId=${yearId}`).expect(200)).body.payouts;
     expect(list.find((p: { id: string }) => p.id === 'po_1').incomeId).not.toBeNull();
   });
 
@@ -4251,7 +4277,7 @@ describe('Square', () => {
 
     await agent.post('/api/restore').attach('file', Buffer.from(dump), 'backup.sql').expect(200);
     expect((await agent.get('/api/square')).body).toMatchObject({ configured: true });
-    await agent.post('/api/square/import').send({ payoutIds: ['po_1'] }).expect(200);
+    await agent.post('/api/square/import').send({ taxYearId: 1, payoutIds: ['po_1'] }).expect(200);
     expect((await agent.get('/api/incomes?taxYearId=1').expect(200)).body).toHaveLength(2);
   });
 });

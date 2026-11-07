@@ -7,6 +7,7 @@
 // money as received when Square takes it for you), paid by bank transfer. A payout holding
 // anything else (holds, adjustments, chargebacks, loan repayments) is left to add by hand.
 import {
+  displayTaxYear,
   formatDisplayDate,
   formatGBP,
   isDateInTaxYear,
@@ -188,15 +189,24 @@ async function listLocationIds(ctx: AppContext, token: string, environment: Squa
   return (locations ?? []).map((l) => l.id);
 }
 
-/** Payouts made from `from` on, for every location (Square lists only the main one unless asked), newest first. */
-async function fetchPayouts(ctx: AppContext, token: string, environment: SquareEnvironment, from: string): Promise<SquarePayoutData[]> {
+/** Days after a tax year ends that a payout for its last sales may still be made (bank holidays at Easter). */
+const PAYOUT_LAG_DAYS = 14;
+
+const addDays = (iso: string, days: number) => new Date(Date.parse(`${iso}T00:00:00Z`) + days * 86_400_000).toISOString().slice(0, 10);
+
+/**
+ * Payouts that could hold a tax year's sales: made from its first day until a little after its
+ * last, for every location (Square lists only the main one unless asked), newest first.
+ */
+async function fetchPayouts(ctx: AppContext, token: string, environment: SquareEnvironment, year: TaxYear): Promise<SquarePayoutData[]> {
   const payouts = new Map<string, SquarePayoutData>();
   for (const locationId of await listLocationIds(ctx, token, environment)) {
     let cursor: string | undefined;
     do {
       const page = await callSquare<{ payouts?: SquarePayoutData[]; cursor?: string }>(ctx, token, environment, '/v2/payouts', {
         location_id: locationId,
-        begin_time: `${from}T00:00:00Z`,
+        begin_time: `${year.startDate}T00:00:00Z`,
+        end_time: `${addDays(year.endDate, PAYOUT_LAG_DAYS + 1)}T00:00:00Z`,
         sort_order: 'DESC',
         limit: '100',
         cursor,
@@ -396,16 +406,31 @@ const importedRow = (payout: SquarePayoutData, imported: Imported): SquarePayout
   possibleDuplicate: null,
 });
 
-/** Square's payouts from `from` on, newest first: those already imported, and what importing each of the others would add. */
-export async function listSquarePayouts(ctx: AppContext, from: string): Promise<SquarePayout[]> {
+function findTaxYear(ctx: AppContext, taxYearId: number): TaxYear {
+  const year = listTaxYears(ctx.db).find((y) => y.id === taxYearId);
+  if (!year) throw new HttpError(404, 'Tax year not found');
+  return year;
+}
+
+/** The tax year a payout belongs to: its sales' (or, imported, its income's), else the day it reached the bank. */
+const belongsTo = (p: SquarePayout, year: TaxYear) => isDateInTaxYear(p.saleDate ?? p.arrivalDate, year);
+
+/**
+ * Square's payouts for one tax year's sales, newest first: those already imported, and what
+ * importing each of the others would add. A payout early in the year for the last year's sales is
+ * left out, and one just after it ends for its last sales is in.
+ */
+export async function listSquarePayouts(ctx: AppContext, taxYearId: number): Promise<SquarePayout[]> {
+  const year = findTaxYear(ctx, taxYearId);
   const { token, environment } = requireToken(ctx);
-  const payouts = await fetchPayouts(ctx, token, environment, from);
+  const payouts = await fetchPayouts(ctx, token, environment, year);
   const imported = importedPayouts(ctx.db, payouts.map((p) => p.id));
   const taxYears = listTaxYears(ctx.db);
-  return inBatches(payouts, async (p) => {
+  const listed = await inBatches(payouts, async (p) => {
     const already = imported.get(p.id);
     return already ? importedRow(p, already) : describe(ctx, p, await fetchEntries(ctx, token, environment, p.id), taxYears);
   });
+  return listed.filter((p) => belongsTo(p, year));
 }
 
 function incomeNotes(p: SquarePayout): string {
@@ -420,7 +445,8 @@ function incomeNotes(p: SquarePayout): string {
  * figures. All or nothing: a payout that can't be imported refuses the lot. One imported already
  * (perhaps from another browser) is left out.
  */
-export async function importSquarePayouts(ctx: AppContext, payoutIds: string[], by: string): Promise<SquareImportResult> {
+export async function importSquarePayouts(ctx: AppContext, taxYearId: number, payoutIds: string[], by: string): Promise<SquareImportResult> {
+  const year = findTaxYear(ctx, taxYearId);
   const { token, environment } = requireToken(ctx);
   const ids = [...new Set(payoutIds)];
   const settings = getSquareSettings(ctx.db);
@@ -435,6 +461,13 @@ export async function importSquarePayouts(ctx: AppContext, payoutIds: string[], 
     }
     return describe(ctx, payout, await fetchEntries(ctx, token, environment, id), taxYears);
   });
+  const elsewhere = described.find((p) => !belongsTo(p, year));
+  if (elsewhere) {
+    throw new HttpError(
+      422,
+      `Nothing was imported. The payout of ${formatGBP(elsewhere.netPence)} on ${formatDisplayDate(elsewhere.arrivalDate)} is for sales outside tax year ${displayTaxYear(year.label)}.`,
+    );
+  }
   const refused = described.find((p) => p.problem);
   if (refused) {
     throw new HttpError(422, `Nothing was imported. The payout of ${formatGBP(refused.netPence)} on ${formatDisplayDate(refused.arrivalDate)} can’t be imported: ${refused.problem}`);

@@ -306,12 +306,12 @@ export function useSquareMutations() {
   };
 }
 
-/** Square's payouts from a date on, fetched from Square each time it's asked (Income → Import from Square). */
-export const useSquarePayouts = (from: string | null) =>
+/** Square's payouts for a tax year's sales, fetched from Square each time it's asked (Income → Import from Square). */
+export const useSquarePayouts = (taxYearId: number | null) =>
   useQuery({
-    queryKey: ['square-payouts', from],
-    queryFn: () => api.get<SquarePayoutList>(`/square/payouts?from=${from}`),
-    enabled: from !== null,
+    queryKey: ['square-payouts', taxYearId],
+    queryFn: () => api.get<SquarePayoutList>(`/square/payouts?taxYearId=${taxYearId}`),
+    enabled: taxYearId !== null,
     staleTime: Infinity,
     gcTime: 0,
     retry: false,
@@ -321,7 +321,7 @@ export function useImportSquarePayouts() {
   const invalidateIncomes = useInvalidateTransactions('incomes');
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (payoutIds: string[]) => api.post<SquareImportResult>('/square/import', { payoutIds }),
+    mutationFn: (body: { taxYearId: number; payoutIds: string[] }) => api.post<SquareImportResult>('/square/import', body),
     onSuccess: () => {
       invalidateIncomes();
       qc.invalidateQueries({ queryKey: ['expenses'] });

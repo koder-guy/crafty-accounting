@@ -2,7 +2,6 @@
 // Each payout Square makes to the bank becomes one income of the day's card sales (before Square's
 // fees, less refunds), dated the day of the sales, plus one expense for Square's fees.
 import { z } from 'zod';
-import { isValidIsoDate } from './taxYear';
 
 export const SQUARE_ENVIRONMENTS = ['production', 'sandbox'] as const;
 export type SquareEnvironment = (typeof SQUARE_ENVIRONMENTS)[number];
@@ -51,9 +50,9 @@ export interface SquareStatus {
   feeCategoryId: number;
 }
 
-/** Listing payouts: those that arrived from this date on. */
+/** Listing payouts: those for one tax year's sales. */
 export const squarePayoutsQuerySchema = z.object({
-  from: z.string().refine(isValidIsoDate, 'Enter a valid date'),
+  taxYearId: z.coerce.number().int().positive(),
 });
 
 export interface SquarePayout {
@@ -84,11 +83,13 @@ export interface SquarePayout {
 }
 
 export interface SquarePayoutList {
-  from: string;
+  taxYearId: number;
   payouts: SquarePayout[];
 }
 
 export const squareImportSchema = z.object({
+  /** The tax year being imported into; a payout for sales outside it is refused. */
+  taxYearId: id,
   payoutIds: z
     .array(z.string().regex(/^[\w-]{1,100}$/, 'Not a Square payout id'))
     .min(1, 'Choose at least one payout')

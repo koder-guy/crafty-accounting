@@ -1,9 +1,8 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { CircleCheck, CreditCard, TriangleAlert } from 'lucide-react';
 import { Link } from 'react-router';
-import { displayTaxYear, formatDisplayDate, formatGBP, isValidIsoDate, type SquareImportResult, type SquarePayout } from '@crafty/shared';
+import { displayTaxYear, formatDisplayDate, formatGBP, type SquareImportResult, type SquarePayout } from '@crafty/shared';
 import { useActiveTaxYear, useImportSquarePayouts, useSquare, useSquarePayouts } from '../lib/queries';
-import { DateInput } from './DateInput';
 import { SubmittedFiguresNotice } from './SubmittedFiguresNotice';
 import { Alert, Button, Spinner } from './ui';
 
@@ -30,9 +29,10 @@ export function SquareImportButton() {
 function SquareImportDialog({ onClose }: { onClose: () => void }) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const titleId = useId();
-  const { taxYear } = useActiveTaxYear();
-  const [from, setFrom] = useState(() => taxYear?.startDate ?? '');
-  const query = useSquarePayouts(isValidIsoDate(from) ? from : null);
+  // The year chosen in the sidebar when the dialog opened: only its sales are listed and imported.
+  const { taxYear: activeYear } = useActiveTaxYear();
+  const [taxYear] = useState(activeYear);
+  const query = useSquarePayouts(taxYear?.id ?? null);
   const run = useImportSquarePayouts();
   const [result, setResult] = useState<SquareImportResult | null>(null);
   // Payouts ticked or unticked by hand; the rest follow the default.
@@ -98,21 +98,10 @@ function SquareImportDialog({ onClose }: { onClose: () => void }) {
         </div>
       ) : (
         <>
-          <div className="flex flex-wrap items-end gap-3 px-6 pt-4">
-            <div className="w-44">
-              <label htmlFor="square-from" className="mb-1.5 block text-sm font-medium">
-                Payouts from
-              </label>
-              <DateInput id="square-from" value={from} onChange={(v) => { setFrom(v); setPicked(new Map()); }} />
-            </div>
-            {query.data && (
-              <p className="pb-2 text-sm text-muted">
-                {payouts.length === 0
-                  ? 'None since then.'
-                  : `${payoutsText(payouts.length)}: ${waiting.length} to import${imported ? `, ${imported} imported already` : ''}.`}
-              </p>
-            )}
-          </div>
+          <p className="px-6 pt-4 text-sm text-muted">
+            Payouts for sales in tax year <strong className="text-ink">{taxYear ? displayTaxYear(taxYear.label) : '…'}</strong>
+            {query.data && payouts.length > 0 && `: ${payoutsText(payouts.length)}, ${waiting.length} to import${imported ? `, ${imported} imported already` : ''}`}.
+          </p>
 
           <div className="mt-4 min-h-0 flex-1 overflow-y-auto border-y border-line">
             {query.isFetching ? (
@@ -124,9 +113,9 @@ function SquareImportDialog({ onClose }: { onClose: () => void }) {
                 <Alert>{query.error.message}</Alert>
               </div>
             ) : !query.data ? (
-              <p className="p-6 text-sm text-muted">Enter the date to fetch payouts from.</p>
+              <p className="p-6 text-sm text-muted">Choose a tax year in the sidebar first.</p>
             ) : payouts.length === 0 ? (
-              <p className="p-6 text-sm text-muted">Square has made no payouts to your bank since {formatDisplayDate(from)}.</p>
+              <p className="p-6 text-sm text-muted">Square has made no payouts to your bank for sales in this tax year.</p>
             ) : (
               <ul className="divide-y divide-line">
                 {payouts.map((p) => (
@@ -171,7 +160,7 @@ function SquareImportDialog({ onClose }: { onClose: () => void }) {
               variant="primary"
               disabled={chosen.length === 0 || query.isFetching}
               busy={run.isPending}
-              onClick={() => run.mutate(chosen.map((p) => p.id), { onSuccess: setResult })}
+              onClick={() => taxYear && run.mutate({ taxYearId: taxYear.id, payoutIds: chosen.map((p) => p.id) }, { onSuccess: setResult })}
             >
               Import {chosen.length > 0 ? payoutsText(chosen.length) : ''}
             </Button>
