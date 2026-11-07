@@ -1,4 +1,4 @@
-// Settings → Square (the access token, shown only as a hint, and the categories imports go into)
+// Settings → Square Integration (the access token, shown only as a hint, and the categories imports go into)
 // and Income → Import from Square.
 import { Router } from 'express';
 import { squareImportSchema, squarePayoutsQuerySchema, squareSettingsSchema, type SquarePayoutList } from '@crafty/shared';

@@ -12,7 +12,7 @@ const payoutsText = (n: number) => `${n.toLocaleString('en-GB')} ${n === 1 ? 'pa
 /** Ready to import: not in the books yet, and nothing stopping it. */
 const importable = (p: SquarePayout) => p.incomeId === null && p.problem === null;
 
-/** Income → Import from Square, shown once a Square access token is saved (Settings → Square). */
+/** Income → Import from Square, shown once a Square access token is saved (Settings → Square Integration). */
 export function SquareImportButton() {
   const { data: square } = useSquare();
   const [open, setOpen] = useState(false);

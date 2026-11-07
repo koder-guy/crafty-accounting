@@ -294,7 +294,7 @@ export function useClaudeMutations() {
   };
 }
 
-/** Settings → Square: whether a token is saved (shown only as a hint), and the categories imports go into. */
+/** Settings → Square Integration: whether a token is saved (shown only as a hint), and the categories imports go into. */
 export const useSquare = () => useQuery({ queryKey: ['square'], queryFn: () => api.get<SquareStatus>('/square') });
 
 export function useSquareMutations() {

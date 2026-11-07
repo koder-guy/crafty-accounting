@@ -225,13 +225,13 @@ export function SquareSettings() {
   return (
     <div className="space-y-6">
       <SettingsHeading
-        title="Square"
+        title="Square Integration"
         description="Import the card sales Square pays into your bank as income, with Square’s fees as an expense."
       />
       {isLoading ? (
         <Spinner />
       ) : error || !status ? (
-        <Alert>{error?.message ?? 'Could not load the Square settings'}</Alert>
+        <Alert>{error?.message ?? 'Could not load the Square Integration settings'}</Alert>
       ) : (
         <>
           <TokenCard status={status} canEdit={canEdit} />

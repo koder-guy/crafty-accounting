@@ -180,7 +180,7 @@ export async function checkSquareToken(ctx: AppContext, token: string, environme
 
 function requireToken(ctx: AppContext): { token: string; environment: SquareEnvironment } {
   const s = getSquareSettings(ctx.db);
-  if (!s.accessToken) throw new HttpError(404, 'Square isn’t connected. Add an access token in Settings → Square.');
+  if (!s.accessToken) throw new HttpError(404, 'Square isn’t connected. Add an access token in Settings → Square Integration.');
   return { token: s.accessToken, environment: s.environment };
 }
 

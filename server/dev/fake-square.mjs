@@ -1,6 +1,6 @@
 // A stand-in for Square's API, for trying Income → Import from Square without a Square account.
 // Run it, then start the server with SQUARE_API_URL=http://localhost:3199 (api-check-square in
-// .claude/launch.json) and save any access token in Settings → Square.
+// .claude/launch.json) and save any access token in Settings → Square Integration.
 import http from 'node:http';
 
 const PORT = Number(process.env.PORT ?? 3199);

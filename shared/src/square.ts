@@ -1,4 +1,4 @@
-// The Square connection (Settings → Square) and importing its payouts as income (Income → Import from Square).
+// The Square connection (Settings → Square Integration) and importing its payouts as income (Income → Import from Square).
 // Each payout Square makes to the bank becomes one income of the day's card sales (before Square's
 // fees, less refunds), dated the day of the sales, plus one expense for Square's fees.
 import { z } from 'zod';
