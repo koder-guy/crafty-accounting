@@ -20,7 +20,7 @@ export function squareRouter(ctx: AppContext): Router {
     const merchantName = input.accessToken ? await checkSquareToken(ctx, input.accessToken, environment) : null;
     ctx.db.transaction(() => {
       if (input.accessToken) saveSquareToken(ctx.db, input.accessToken, environment, merchantName, req.user!.name);
-      if (input.incomeCategoryId) saveSquareCategory(ctx.db, 'income', input.incomeCategoryId);
+      if (input.incomeCategoryId !== undefined) saveSquareCategory(ctx.db, 'income', input.incomeCategoryId);
       if (input.feeCategoryId !== undefined) saveSquareCategory(ctx.db, 'fee', input.feeCategoryId);
     })();
     res.json(squareStatus(ctx.db));

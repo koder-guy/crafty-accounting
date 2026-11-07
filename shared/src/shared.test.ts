@@ -8,6 +8,7 @@ import {
   buildSelfAssessmentSummary,
   isNeverAllowable,
   squareFeeCategory,
+  squareIncomeCategory,
   type Category,
   SA103S_FORMS,
   sa103sFormFor,
@@ -635,6 +636,27 @@ describe('squareFeeCategory', () => {
     expect(pick(custom('Square fees', 'turnover', 'INCOME'))).toBeNull();
     expect(pick(custom('Square fees', 'businessEntertainmentCosts'))).toBeNull();
     expect(pick(custom('Pitch fees', 'otherExpenses'))).toBeNull();
+    expect(pick()).toBeNull();
+  });
+});
+
+describe('squareIncomeCategory', () => {
+  let nextId = 200;
+  const custom = (name: string, type: Category['type'] = 'INCOME', hmrcCode = 'turnover'): Category => ({ id: nextId++, type, name, hmrcCode, isCustom: true, usageCount: 0 });
+  const standard: Category = { id: 1, type: 'INCOME', name: 'Turnover – takings, fees, sales or money earned', hmrcCode: 'turnover', isCustom: false, usageCount: 0 };
+  const pick = (...categories: Category[]) => squareIncomeCategory([standard, ...categories])?.name ?? null;
+
+  it('picks a custom income category named for Square, else for card sales', () => {
+    expect(pick(custom('Market sales'), custom('Square sales'))).toBe('Square sales');
+    expect(pick(custom('Card sales'), custom('Square takings'))).toBe('Square takings');
+    expect(pick(custom('Card payments'))).toBe('Card payments');
+    expect(pick(custom('Card sales', 'INCOME', 'other'))).toBe('Card sales');
+  });
+
+  it('leaves out other names and expense categories', () => {
+    expect(pick(custom('Market sales'), custom('Cash takings'))).toBeNull();
+    expect(pick(custom('Square fees', 'EXPENSE', 'financeCharges'))).toBeNull();
+    expect(pick(custom('Gift cards'))).toBeNull();
     expect(pick()).toBeNull();
   });
 });

@@ -4263,6 +4263,24 @@ describe('Square', () => {
     expect((await agent.put('/api/square').send({ feeCategoryId: null }).expect(200)).body).toMatchObject({ feeCategoryId: squareFees.id, feeCategoryAutomatic: true });
   });
 
+  it('puts the sales under a custom category named for Square, unless another is chosen', async () => {
+    const yearId = await createYear(2025);
+    await connect();
+    const { body: market } = await agent.post('/api/categories').send({ name: 'Market sales', mapsToCategoryId: cat('turnover') }).expect(201);
+    const { body: squareSales } = await agent.post('/api/categories').send({ name: 'Square sales', mapsToCategoryId: cat('turnover') }).expect(201);
+    expect((await agent.get('/api/square').expect(200)).body).toMatchObject({ incomeCategoryId: squareSales.id, incomeCategoryAutomatic: true });
+    const salesCategory = async (payoutId: string) => {
+      await agent.post('/api/square/import').send({ taxYearId: yearId, payoutIds: [payoutId] }).expect(200);
+      const incomes = (await agent.get(`/api/incomes?taxYearId=${yearId}`).expect(200)).body;
+      return incomes.find((i: { reference: string }) => i.reference === payoutId).categoryId;
+    };
+    expect(await salesCategory('po_1')).toBe(squareSales.id);
+
+    expect((await agent.put('/api/square').send({ incomeCategoryId: market.id }).expect(200)).body).toMatchObject({ incomeCategoryId: market.id, incomeCategoryAutomatic: false });
+    expect(await salesCategory('po_2')).toBe(market.id);
+    expect((await agent.put('/api/square').send({ incomeCategoryId: null }).expect(200)).body).toMatchObject({ incomeCategoryId: squareSales.id, incomeCategoryAutomatic: true });
+  });
+
   it('keeps the token out of backups and through a restore', async () => {
     const yearId = await createYear(2025);
     await connect();

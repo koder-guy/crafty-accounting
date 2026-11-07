@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { KeyRound, Tags } from 'lucide-react';
-import { formatDisplayDate, SQUARE_ENVIRONMENTS, squareFeeCategory, type SquareEnvironment, type SquareStatus } from '@crafty/shared';
+import { formatDisplayDate, SQUARE_ENVIRONMENTS, squareFeeCategory, squareIncomeCategory, type SquareEnvironment, type SquareStatus } from '@crafty/shared';
 import { CategoryOptions } from '../../components/CategoryOptions';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { Alert, Badge, Button, Card, CardHeader, Field, Spinner } from '../../components/ui';
@@ -175,7 +175,15 @@ function CategoriesCard({ status, canEdit }: { status: SquareStatus; canEdit: bo
   const { data: categories } = useCategories();
   const { save } = useSquareMutations();
   // Shows a choice straight away while it saves.
-  const incomeId = save.isPending && save.variables?.incomeCategoryId ? save.variables.incomeCategoryId : status.incomeCategoryId;
+  const savingIncome = save.isPending && save.variables?.incomeCategoryId !== undefined;
+  const incomeChoice = savingIncome
+    ? (save.variables!.incomeCategoryId ?? AUTOMATIC)
+    : status.incomeCategoryAutomatic
+      ? AUTOMATIC
+      : status.incomeCategoryId;
+  // What Automatic picks for sales: a custom category named for Square's sales, else Turnover.
+  const automaticIncome =
+    categories && (squareIncomeCategory(categories) ?? categories.find((c) => c.type === 'INCOME' && !c.isCustom && c.hmrcCode === 'turnover'));
   const savingFee = save.isPending && save.variables?.feeCategoryId !== undefined;
   const feeChoice = savingFee ? (save.variables!.feeCategoryId ?? AUTOMATIC) : status.feeCategoryAutomatic ? AUTOMATIC : status.feeCategoryId;
   const feeCategories = (categories ?? []).filter((c) => c.hmrcCode !== 'depreciation');
@@ -195,14 +203,19 @@ function CategoriesCard({ status, canEdit }: { status: SquareStatus; canEdit: bo
           <Spinner />
         ) : (
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Sales go under" htmlFor="square-income-category">
+            <Field
+              label="Sales go under"
+              htmlFor="square-income-category"
+              hint="Automatic uses a custom category named for Square, such as “Square sales”, or else one for card sales, such as “Card sales”."
+            >
               <select
                 id="square-income-category"
                 className="field"
-                value={incomeId}
+                value={incomeChoice}
                 disabled={!canEdit || save.isPending}
-                onChange={(e) => save.mutate({ incomeCategoryId: Number(e.target.value) })}
+                onChange={(e) => save.mutate({ incomeCategoryId: e.target.value === AUTOMATIC ? null : Number(e.target.value) })}
               >
+                <option value={AUTOMATIC}>Automatic{automaticIncome ? `: ${automaticIncome.name}` : ''}</option>
                 <CategoryOptions categories={categories} type="INCOME" />
               </select>
             </Field>

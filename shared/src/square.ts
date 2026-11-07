@@ -27,7 +27,8 @@ export const squareSettingsSchema = z
       .optional(),
     /** Only sent with a new token: a token belongs to one or the other. */
     environment: z.enum(SQUARE_ENVIRONMENTS, 'Choose production or sandbox').optional(),
-    incomeCategoryId: id.optional(),
+    /** Null goes back to choosing automatically (`squareIncomeCategory`). */
+    incomeCategoryId: id.nullable().optional(),
     /** Null goes back to choosing automatically (`squareFeeCategory`). */
     feeCategoryId: id.nullable().optional(),
   })
@@ -51,8 +52,22 @@ export interface SquareStatus {
   /** Where imported sales and fees go: the saved choices, or the standard Turnover and Bank, credit card and other financial charges. */
   incomeCategoryId: number;
   feeCategoryId: number;
+  /** No sales category has been chosen, so it's picked automatically (`squareIncomeCategory`). */
+  incomeCategoryAutomatic: boolean;
   /** No fees category has been chosen, so it's picked automatically (`squareFeeCategory`). */
   feeCategoryAutomatic: boolean;
+}
+
+const SALES_WORDS = /\b(sales?|takings|income|payments?|receipts?)\b/i;
+
+/**
+ * The custom income category for Square's sales, when none has been chosen: one named for Square,
+ * such as "Square sales" or "Square takings", else one named for card sales, such as "Card sales"
+ * or "Card payments". The first by the categories' order wins.
+ */
+export function squareIncomeCategory(categories: Category[]): Category | null {
+  const custom = categories.filter((c) => c.type === 'INCOME' && c.isCustom);
+  return custom.find((c) => /\bsquare\b/i.test(c.name)) ?? custom.find((c) => /\bcards?\b/i.test(c.name) && SALES_WORDS.test(c.name)) ?? null;
 }
 
 const FEE_WORDS = /\b(fees?|charges?|commissions?|processing)\b/i;

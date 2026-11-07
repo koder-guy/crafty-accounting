@@ -15,6 +15,7 @@ import {
   SQUARE_INCOME_DESCRIPTION,
   SQUARE_PAYEE,
   squareFeeCategory,
+  squareIncomeCategory,
   squareTokenHint,
   type Category,
   type SquareEnvironment,
@@ -58,6 +59,7 @@ export interface SquareSettings {
   tokenAddedAt: string | null;
   incomeCategory: Category;
   feeCategory: Category;
+  incomeCategoryAutomatic: boolean;
   feeCategoryAutomatic: boolean;
 }
 
@@ -76,6 +78,7 @@ export function getSquareSettings(db: Db): SquareSettings {
   const row = db.prepare('SELECT * FROM square_settings WHERE id = 1').get() as Row | undefined;
   const categories = listCategories(db);
   const token = row?.access_token ?? null;
+  const savedIncome = savedCategory(categories, row?.income_category_id ?? null, 'INCOME');
   const savedFee = savedCategory(categories, row?.fee_category_id ?? null, 'EXPENSE');
   return {
     accessToken: token,
@@ -83,9 +86,11 @@ export function getSquareSettings(db: Db): SquareSettings {
     merchantName: token ? (row?.merchant_name ?? null) : null,
     tokenAddedBy: token ? (row?.token_added_by ?? null) : null,
     tokenAddedAt: token ? (row?.token_added_at ?? null) : null,
-    incomeCategory: savedCategory(categories, row?.income_category_id ?? null, 'INCOME') ?? standardCategory(categories, 'INCOME', 'turnover'),
+    // Unless one is chosen, a custom category named for Square's sales, else the standard one.
+    incomeCategory: savedIncome ?? squareIncomeCategory(categories) ?? standardCategory(categories, 'INCOME', 'turnover'),
     // Unless one is chosen, a custom category named for Square's fees, else the standard one.
     feeCategory: savedFee ?? squareFeeCategory(categories) ?? standardCategory(categories, 'EXPENSE', 'financeCharges'),
+    incomeCategoryAutomatic: savedIncome === null,
     feeCategoryAutomatic: savedFee === null,
   };
 }
@@ -101,6 +106,7 @@ export function squareStatus(db: Db): SquareStatus {
     tokenAddedAt: s.tokenAddedAt,
     incomeCategoryId: s.incomeCategory.id,
     feeCategoryId: s.feeCategory.id,
+    incomeCategoryAutomatic: s.incomeCategoryAutomatic,
     feeCategoryAutomatic: s.feeCategoryAutomatic,
   };
 }
@@ -114,11 +120,12 @@ export function saveSquareToken(db: Db, token: string, environment: SquareEnviro
   ).run(token, environment, merchantName, by);
 }
 
-/** Null (fees only) goes back to choosing automatically. */
+/** Null goes back to choosing automatically. */
 export function saveSquareCategory(db: Db, kind: 'income' | 'fee', categoryId: number | null): void {
+  const column = kind === 'income' ? 'income_category_id' : 'fee_category_id';
   if (categoryId === null) {
     ensureRow(db);
-    db.prepare('UPDATE square_settings SET fee_category_id = NULL WHERE id = 1').run();
+    db.prepare(`UPDATE square_settings SET ${column} = NULL WHERE id = 1`).run();
     return;
   }
   const category = listCategories(db).find((c) => c.id === categoryId);
@@ -126,7 +133,7 @@ export function saveSquareCategory(db: Db, kind: 'income' | 'fee', categoryId: n
   if (!category || category.type !== type) throw new HttpError(422, `Choose an ${kind === 'income' ? 'income' : 'expense'} category`);
   if (category.hmrcCode === 'depreciation') throw new HttpError(422, 'Fees can’t go under depreciation');
   ensureRow(db);
-  db.prepare(`UPDATE square_settings SET ${kind === 'income' ? 'income_category_id' : 'fee_category_id'} = ? WHERE id = 1`).run(categoryId);
+  db.prepare(`UPDATE square_settings SET ${column} = ? WHERE id = 1`).run(categoryId);
 }
 
 export function removeSquareToken(db: Db): void {
