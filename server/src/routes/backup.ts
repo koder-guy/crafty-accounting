@@ -123,10 +123,12 @@ export function backupRouter(ctx: AppContext): Router {
   });
 
   router.post('/reset', (req, res) => {
-    if ((req.body as { confirm?: unknown } | undefined)?.confirm !== 'RESET') {
-      throw new HttpError(400, 'Type RESET to confirm');
+    const body = req.body as { confirm?: unknown; keepCustomCategories?: unknown } | undefined;
+    if (body?.confirm !== 'RESET') throw new HttpError(400, 'Type RESET to confirm');
+    if (body.keepCustomCategories !== undefined && typeof body.keepCustomCategories !== 'boolean') {
+      throw new HttpError(400, 'keepCustomCategories must be true or false');
     }
-    resetToEmpty(ctx);
+    resetToEmpty(ctx, { keepCustomCategories: body.keepCustomCategories === true });
     res.json({ reset: true });
   });
 

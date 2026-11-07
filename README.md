@@ -149,7 +149,7 @@ Settings go in a `.env` file next to the app (the installers write one). Only in
 Also in **Settings → Backup and Restore**:
 - **Saved backups**: download any of the latest ten, or restore one in place after you type `RESTORE`. It replaces the database and every document; later backups stay in the folder.
 - **Restore from a backup file**: a `.zip` replaces the database and every document; an older `.sql` backup replaces the database and leaves documents alone.
-- **Start again with an empty database** deletes the books after you type `RESET`; the old database and documents are kept until the next reset.
+- **Start again with an empty database** deletes the books after you type `RESET`, optionally keeping your custom categories; the old database and documents are kept until the next reset.
 
 A restore is checked in a separate database before anything is replaced, and older backups are upgraded automatically. Backups don't include the people who can sign in, so a restore keeps them as they are.
 

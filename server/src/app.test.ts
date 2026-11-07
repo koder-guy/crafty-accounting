@@ -1967,6 +1967,37 @@ describe('backup and restore', () => {
     expect(await createYear()).toBe(1);
   });
 
+  it('keeps custom categories through a reset when asked, emptying everything else', async () => {
+    await seed();
+    const filament = (
+      await agent.post('/api/categories').send({ name: 'Printer filament', mapsToCategoryId: cat('costOfGoods') }).expect(201)
+    ).body;
+    const before = ctx.db.prepare('SELECT * FROM categories ORDER BY id').all();
+    await agent.post('/api/reset').send({ confirm: 'RESET', keepCustomCategories: 'yes' }).expect(400);
+
+    await agent.post('/api/reset').send({ confirm: 'RESET', keepCustomCategories: true }).expect(200);
+    const count = (table: string) => (ctx.db.prepare(`SELECT COUNT(*) AS n FROM ${table}`).get() as { n: number }).n;
+    for (const table of ['tax_years', 'incomes', 'expenses', 'expense_line_items', 'mtd_submissions', 'scans', 'documents', 'settings']) {
+      expect(count(table)).toBe(0);
+    }
+    expect(fs.readdirSync(path.join(dataDir, 'uploads'))).toHaveLength(0);
+    // Same rows, ids, names and mappings.
+    expect(ctx.db.prepare('SELECT * FROM categories ORDER BY id').all()).toEqual(before);
+    const categories = (await agent.get('/api/categories').expect(200)).body as { id: number; isCustom: boolean }[];
+    expect(categories.find((c) => c.id === filament.id)).toMatchObject({ name: 'Printer filament', isCustom: true });
+
+    // The kept category can be used in the new books.
+    const yearId = await createYear();
+    await agent
+      .post('/api/expenses')
+      .send(expense(yearId, { lineItems: [{ description: 'PLA', amountPence: 2000, categoryId: filament.id }] }))
+      .expect(201);
+
+    // Without the flag (false, too) they go.
+    await agent.post('/api/reset').send({ confirm: 'RESET', keepCustomCategories: false }).expect(200);
+    expect(count('categories WHERE is_custom = 1')).toBe(0);
+  });
+
   it('refuses files that are not backups or contain other statements', async () => {
     await createYear();
     await agent.post('/api/restore').attach('file', Buffer.from('hello'), 'backup.sql').expect(400);

@@ -15,11 +15,12 @@ export function BackupSettings() {
   const [done, setDone] = useState(false);
   const [confirmingReset, setConfirmingReset] = useState(false);
   const [resetDone, setResetDone] = useState(false);
+  const [keepCustomCategories, setKeepCustomCategories] = useState(false);
   const [dismissedCount, setDismissedCount] = useState(dismissedNoticeCount);
   const [noticesShown, setNoticesShown] = useState(false);
 
   const reset = async () => {
-    await api.post('/reset', { confirm: 'RESET' });
+    await api.post('/reset', { confirm: 'RESET', keepCustomCategories });
     setResetDone(true);
     // Back to a clean slate everywhere (including remembered UI state), staying signed in.
     await qc.resetQueries({ predicate: (q) => q.queryKey[0] !== 'me' });
@@ -110,7 +111,7 @@ export function BackupSettings() {
           <div className="space-y-4 px-5 pb-6 sm:px-6">
             <p className="text-sm text-muted">
               Deletes all tax years, income and expense transactions, attached documents, custom categories and MTD submission
-              records. The standard MTD categories and your sign-in password stay. A copy of the old data is kept on the server as{' '}
+              records. You can choose to keep your custom categories. The standard MTD categories and your sign-in password stay. A copy of the old data is kept on the server as{' '}
               <code>crafty.pre-reset.db</code> and <code>uploads.pre-reset</code> until the next reset. Saved backups in the backup folder
               stay as they are.
             </p>
@@ -118,6 +119,7 @@ export function BackupSettings() {
               variant="danger"
               onClick={() => {
                 setResetDone(false);
+                setKeepCustomCategories(false);
                 setConfirmingReset(true);
               }}
             >
@@ -155,9 +157,18 @@ export function BackupSettings() {
         onConfirm={reset}
       >
         <p>
-          All tax years, transactions, documents, custom categories and MTD submission records will be deleted, leaving an empty
-          database.
+          All tax years, transactions, documents{keepCustomCategories ? '' : ', custom categories'} and MTD submission records will
+          be deleted, leaving an empty database.
         </p>
+        <label className="flex items-center gap-3 text-ink">
+          <input
+            type="checkbox"
+            className="size-4 accent-[var(--color-accent)]"
+            checked={keepCustomCategories}
+            onChange={(e) => setKeepCustomCategories(e.target.checked)}
+          />
+          Keep my custom categories
+        </label>
         <p>Saved backups in the backup folder stay as they are. Use Back up now first if you might need any of it.</p>
       </ConfirmDialog>
     </>
