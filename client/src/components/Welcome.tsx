@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import { Link } from 'react-router';
 import { Layers, Sparkles, Wallet } from 'lucide-react';
 import { APP_NAME } from '@crafty/shared';
-import { useCanEdit, useLoadSampleData, useSampleData } from '../lib/queries';
+import { useCanEdit, useCategories, useLoadSampleData, useSampleData } from '../lib/queries';
 import { Alert, Button, ButtonLink, Card, DismissibleAlert } from './ui';
 
 function Option({ icon, title, children, action }: { icon: ReactNode; title: string; children: ReactNode; action: ReactNode }) {
@@ -21,6 +21,8 @@ export function Welcome() {
   const canEdit = useCanEdit();
   const load = useLoadSampleData();
   const { data: sample } = useSampleData();
+  const { data: categories } = useCategories();
+  const customCount = categories?.filter((c) => c.isCustom).length ?? 0;
 
   if (!canEdit) {
     return (
@@ -70,6 +72,12 @@ export function Welcome() {
             Settings → Backup and Restore
           </Link>
           .
+          {customCount > 0 && (
+            <span className="mt-2 block text-out-soft">
+              Your {customCount === 1 ? 'custom category' : `${customCount} custom categories`} will be deleted and replaced by the
+              sample ones.
+            </span>
+          )}
         </Option>
       </div>
 

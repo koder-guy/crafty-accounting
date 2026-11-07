@@ -3114,6 +3114,19 @@ describe('sample data', () => {
     expect((await agent.get('/api/sample-data')).body).toEqual({ loaded: false, canLoad: false });
   });
 
+  it('replaces custom categories left from earlier with the sample ones', async () => {
+    await agent.post('/api/categories').send({ name: 'Beads', mapsToCategoryId: cat('adminCosts') }).expect(201);
+    await agent.post('/api/categories').send({ name: 'Glitter', mapsToCategoryId: cat('costOfGoods') }).expect(201);
+    await agent.post('/api/sample-data').expect(201);
+    const custom = (ctx.db.prepare('SELECT name, hmrc_code FROM categories WHERE is_custom = 1 ORDER BY name').all() as { name: string; hmrc_code: string }[]);
+    expect(custom).toEqual([
+      { name: 'Beads', hmrc_code: 'costOfGoods' },
+      { name: 'Etsy sales', hmrc_code: 'turnover' },
+      { name: 'Printer filament', hmrc_code: 'costOfGoods' },
+      { name: 'Stall fees', hmrc_code: 'premisesRunningCosts' },
+    ]);
+  });
+
   it('refuses to overwrite existing data, and clears it on request', () => {
     generateSampleData(ctx.db, uploads(), '2026-10-26');
     expect(() => generateSampleData(ctx.db, uploads(), '2026-10-26')).toThrow(/already has data/);

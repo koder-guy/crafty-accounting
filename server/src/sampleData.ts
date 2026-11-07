@@ -259,10 +259,7 @@ export function generateSampleData(db: Db, uploadsDir: string, today = todayIso(
     ),
   );
   const custom = new Map<string, number>();
-  const insertCategory = db.prepare(
-    "INSERT INTO categories (type, name, hmrc_code, sort_order, is_custom) VALUES (?, ?, ?, 1000, 1) ON CONFLICT DO NOTHING",
-  );
-  const findCategory = db.prepare('SELECT id FROM categories WHERE is_custom = 1 AND type = ? AND name = ? COLLATE NOCASE');
+  const insertCategory = db.prepare("INSERT INTO categories (type, name, hmrc_code, sort_order, is_custom) VALUES (?, ?, ?, 1000, 1)");
   const lineCategory = (l: Line) => (l.custom ? custom.get(l.custom) : category.get(l.code));
   // A part-time job's salary, so the tax estimate has some tax to show alongside a modest craft profit.
   const insertYear = db.prepare(
@@ -346,9 +343,11 @@ export function generateSampleData(db: Db, uploadsDir: string, today = todayIso(
   let currentYearId = 0;
 
   db.transaction(() => {
+    // Custom categories left from earlier (a reset can keep them) give way to the sample ones, so
+    // names never clash. With no tax years, no transaction uses them.
+    db.prepare('DELETE FROM categories WHERE is_custom = 1').run();
     for (const c of CUSTOM_CATEGORIES) {
-      insertCategory.run(c.type, c.name, c.code);
-      custom.set(c.name, (findCategory.get(c.type, c.name) as { id: number }).id);
+      custom.set(c.name, Number(insertCategory.run(c.type, c.name, c.code).lastInsertRowid));
     }
     for (let startYear = currentStart - SAMPLE_PAST_YEARS; startYear <= currentStart; startYear++) {
       const year = taxYearFromStartYear(startYear);
