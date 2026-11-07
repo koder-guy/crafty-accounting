@@ -3999,3 +3999,259 @@ describe('scanning documents in bulk', () => {
     await ctx.scans.idle();
   });
 });
+
+describe('Square', () => {
+  const TOKEN = 'EAAAl-test-square-token-WXYZ';
+  const gbp = (amount: number) => ({ amount, currency_code: 'GBP' });
+  type Entry = { type: string; effective_at?: string; gross: number; fee: number };
+  let payouts: { id: string; status: string; amount: number; arrival_date: string; entries: Entry[] }[];
+  let calls: string[];
+
+  const charge = (gross: number, fee: number, at = '2025-11-01T11:00:00Z'): Entry => ({ type: 'CHARGE', effective_at: at, gross, fee });
+  const refund = (gross: number, fee: number, at = '2025-11-01T15:00:00Z'): Entry => ({ type: 'REFUND', effective_at: at, gross: -gross, fee: -fee });
+  const payout = (id: string, arrival_date: string, entries: Entry[]) => ({
+    id,
+    status: 'PAID',
+    arrival_date,
+    amount: entries.reduce((acc, e) => acc + e.gross - e.fee, 0),
+    entries,
+  });
+  const asSquare = (p: (typeof payouts)[number]) => ({ id: p.id, status: p.status, location_id: 'L1', amount_money: gbp(p.amount), arrival_date: p.arrival_date });
+  const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
+
+  beforeEach(() => {
+    calls = [];
+    payouts = [
+      payout('po_1', '2025-11-03', [charge(5000, 88), charge(5000, 87)]),
+      payout('po_2', '2025-11-10', [charge(3000, 53, '2025-11-08T10:00:00Z'), refund(1000, 18, '2025-11-08T12:00:00Z')]),
+    ];
+    ctx.fetch = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+      const url = new URL(String(input));
+      calls.push(`${url.host}${url.pathname}`);
+      if ((init?.headers as Record<string, string>).Authorization !== `Bearer ${TOKEN}`) {
+        return json({ errors: [{ category: 'AUTHENTICATION_ERROR', code: 'UNAUTHORIZED', detail: 'This request could not be authorized.' }] }, 401);
+      }
+      expect((init?.headers as Record<string, string>)['Square-Version']).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+      const path = url.pathname;
+      if (path === '/v2/merchants/me') return json({ merchant: { id: 'M1', business_name: 'Hedgerow Crafts', currency: 'GBP' } });
+      if (path === '/v2/locations') return json({ locations: [{ id: 'L1' }] });
+      if (path === '/v2/payouts') {
+        expect(url.searchParams.get('location_id')).toBe('L1');
+        return json({ payouts: payouts.map(asSquare) });
+      }
+      const one = path.match(/^\/v2\/payouts\/([^/]+)(\/payout-entries)?$/);
+      const p = one && payouts.find((x) => x.id === one[1]);
+      if (!p) return json({ errors: [{ code: 'NOT_FOUND', detail: 'Not found' }] }, 404);
+      if (!one![2]) return json({ payout: asSquare(p) });
+      return json({
+        payout_entries: p.entries.map((e, i) => ({
+          id: `poe_${i}`,
+          payout_id: p.id,
+          type: e.type,
+          effective_at: e.effective_at ?? '2025-11-01T09:00:00Z',
+          gross_amount_money: gbp(e.gross),
+          fee_amount_money: gbp(e.fee),
+          net_amount_money: gbp(e.gross - e.fee),
+        })),
+      });
+    }) as typeof fetch;
+  });
+
+  const connect = () => agent.put('/api/square').send({ accessToken: TOKEN }).expect(200);
+
+  it('checks a token with Square before saving it, and never sends it back', async () => {
+    expect((await agent.get('/api/square').expect(200)).body).toMatchObject({ configured: false, environment: 'production', incomeCategoryId: cat('turnover'), feeCategoryId: cat('financeCharges') });
+    const bad = await agent.put('/api/square').send({ accessToken: 'EAAAwrong' }).expect(422);
+    expect(bad.body.error).toMatch(/didn’t accept the access token/);
+    const { body } = await connect();
+    expect(body).toMatchObject({ configured: true, tokenHint: '…WXYZ', merchantName: 'Hedgerow Crafts', tokenAddedBy: NAME });
+    expect(JSON.stringify(body)).not.toContain(TOKEN);
+    expect(calls).toContain('connect.squareup.com/v2/merchants/me');
+
+    await agent.put('/api/square').send({ accessToken: TOKEN, environment: 'sandbox' }).expect(200);
+    expect(calls.at(-1)).toBe('connect.squareupsandbox.com/v2/merchants/me');
+    await agent.put('/api/square').send({ environment: 'production' }).expect(400);
+
+    expect((await agent.delete('/api/square/token').expect(200)).body).toMatchObject({ configured: false, tokenHint: null, merchantName: null });
+    await agent.get('/api/square/payouts?from=2025-04-06').expect(404);
+  });
+
+  it('refuses a Square account in another currency', async () => {
+    const real = ctx.fetch;
+    ctx.fetch = (async (input: string | URL | Request, init?: RequestInit) =>
+      String(input).endsWith('/v2/merchants/me') ? json({ merchant: { business_name: 'Elsewhere', currency: 'EUR' } }) : real(input, init)) as typeof fetch;
+    expect((await agent.put('/api/square').send({ accessToken: TOKEN }).expect(422)).body.error).toMatch(/EUR/);
+  });
+
+  it('lets only editors connect, list payouts and import', async () => {
+    const viewer = await addPerson('Accountant', 'read-only-password', 'viewer');
+    await viewer.put('/api/square').send({ accessToken: TOKEN }).expect(403);
+    await connect();
+    expect((await viewer.get('/api/square').expect(200)).body).toMatchObject({ configured: true, tokenHint: '…WXYZ' });
+    await viewer.get('/api/square/payouts?from=2025-04-06').expect(403);
+    await viewer.post('/api/square/import').send({ payoutIds: ['po_1'] }).expect(403);
+    await viewer.delete('/api/square/token').expect(403);
+  });
+
+  it('works out each payout’s sales, refunds and fees', async () => {
+    await createYear(2025);
+    await connect();
+    const { body } = await agent.get('/api/square/payouts?from=2025-04-06').expect(200);
+    expect(body.payouts.map((p: { id: string }) => p.id)).toEqual(['po_2', 'po_1']);
+    expect(body.payouts[1]).toMatchObject({
+      id: 'po_1',
+      arrivalDate: '2025-11-03',
+      netPence: 9825,
+      incomeId: null,
+      saleDate: '2025-11-01',
+      incomePence: 10000,
+      feesPence: 175,
+      refundsPence: 0,
+      taxYearLabel: '2025-26',
+      problem: null,
+      possibleDuplicate: null,
+    });
+    expect(body.payouts[0]).toMatchObject({ netPence: 1965, saleDate: '2025-11-08', incomePence: 2000, feesPence: 35, refundsPence: 1000, problem: null });
+  });
+
+  it('dates sales by the UK day, so a late sale in summer is the next day', async () => {
+    await createYear(2025);
+    await connect();
+    payouts = [payout('po_late', '2025-06-17', [charge(2000, 35, '2025-06-14T23:30:00Z'), charge(1000, 18, '2025-06-15T10:00:00Z')])];
+    const [p] = (await agent.get('/api/square/payouts?from=2025-04-06').expect(200)).body.payouts;
+    expect(p).toMatchObject({ saleDate: '2025-06-15', saleDates: ['2025-06-15'] });
+  });
+
+  it('leaves a payout holding anything but sales and fees to add by hand', async () => {
+    const yearId = await createYear(2025);
+    await connect();
+    payouts.push(payout('po_hold', '2025-11-12', [charge(4000, 70, '2025-11-11T10:00:00Z'), { type: 'RESERVE_HOLD', gross: -500, fee: 0 }]));
+    payouts.push(payout('po_refunds', '2025-11-13', [refund(1000, 18)]));
+    payouts.push(payout('po_old', '2024-11-13', [charge(1000, 18, '2024-11-12T10:00:00Z')]));
+    const list = (await agent.get('/api/square/payouts?from=2024-04-06').expect(200)).body.payouts;
+    const problem = (id: string) => list.find((p: { id: string }) => p.id === id).problem;
+    expect(problem('po_hold')).toMatch(/aren’t sales or fees: reserve hold \(-£5\.00\)/);
+    expect(problem('po_refunds')).toMatch(/no card sales/);
+    expect(problem('po_old')).toMatch(/no tax year for 12 Nov 2024/);
+
+    const refused = await agent.post('/api/square/import').send({ payoutIds: ['po_1', 'po_hold'] }).expect(422);
+    expect(refused.body.error).toMatch(/^Nothing was imported/);
+    expect((await agent.get(`/api/incomes?taxYearId=${yearId}`).expect(200)).body).toEqual([]);
+  });
+
+  it('imports each payout as its sales and an expense for the fees, once', async () => {
+    const yearId = await createYear(2025);
+    await connect();
+    const { body } = await agent.post('/api/square/import').send({ payoutIds: ['po_1', 'po_2'] }).expect(200);
+    expect(body).toEqual({ imported: 2, alreadyImported: 0, incomePence: 12000, feesPence: 210, years: [{ taxYearId: yearId, label: '2025-26', firstDate: '2025-11-01' }] });
+
+    const incomes = (await agent.get(`/api/incomes?taxYearId=${yearId}`).expect(200)).body;
+    expect(incomes).toHaveLength(2);
+    expect(incomes[1]).toMatchObject({
+      date: '2025-11-01',
+      description: 'Square card sales',
+      source: 'Square',
+      reference: 'po_1',
+      paymentMethod: 'bank_transfer',
+      amountPence: 10000,
+      categoryId: cat('turnover'),
+      createdBy: NAME,
+    });
+    expect(incomes[1].notes).toContain('Square paid £98.25 into the bank on 3 Nov 2025, after £1.75 of fees');
+    expect(incomes[0].notes).toContain('Less £10.00 of refunds');
+
+    const expenses = (await agent.get(`/api/expenses?taxYearId=${yearId}`).expect(200)).body;
+    expect(expenses).toHaveLength(2);
+    const fees = (await agent.get(`/api/expenses/${expenses[1].id}`).expect(200)).body;
+    expect(fees).toMatchObject({ date: '2025-11-01', payee: 'Square', orderNumber: 'po_1', paymentMethod: 'bank_transfer', totalPence: 175 });
+    expect(fees.lineItems).toMatchObject([{ description: 'Square card processing fees', amountPence: 175, categoryId: cat('financeCharges'), disallowable: false }]);
+
+    // Listed as imported, without fetching their entries again.
+    calls = [];
+    const list = (await agent.get('/api/square/payouts?from=2025-04-06').expect(200)).body.payouts;
+    expect(list.map((p: { incomeId: number | null }) => p.incomeId)).toEqual([incomes[0].id, incomes[1].id]);
+    expect(list.map((p: { saleDate: string }) => p.saleDate)).toEqual(['2025-11-08', '2025-11-01']);
+    expect(calls.some((c) => c.includes('payout-entries'))).toBe(false);
+
+    const again = await agent.post('/api/square/import').send({ payoutIds: ['po_1'] }).expect(200);
+    expect(again.body).toMatchObject({ imported: 0, alreadyImported: 1 });
+    expect((await agent.get(`/api/incomes?taxYearId=${yearId}`).expect(200)).body).toHaveLength(2);
+  });
+
+  it('knows a payout brought back from a JSON export by its reference', async () => {
+    const yearId = await createYear(2025);
+    await connect();
+    await agent.post('/api/square/import').send({ payoutIds: ['po_1'] }).expect(200);
+    const exported = (await agent.get(`/api/incomes/export.json?taxYearId=${yearId}`).expect(200)).body;
+    await agent.post('/api/reset').send({ confirm: 'RESET' }).expect(200);
+    await createYear(2025);
+    await agent.post('/api/incomes/import').send(exported).expect(201);
+    const list = (await agent.get('/api/square/payouts?from=2025-04-06').expect(200)).body.payouts;
+    expect(list.find((p: { id: string }) => p.id === 'po_1').incomeId).not.toBeNull();
+  });
+
+  it('points out an income already added by hand for the same day and amount', async () => {
+    const yearId = await createYear(2025);
+    await connect();
+    const { body: hand } = await agent.post('/api/incomes').send(income(yearId, { date: '2025-11-01', amountPence: 9825 })).expect(201);
+    const list = (await agent.get('/api/square/payouts?from=2025-04-06').expect(200)).body.payouts;
+    expect(list.find((p: { id: string }) => p.id === 'po_1').possibleDuplicate).toMatchObject({ id: hand.id, amountPence: 9825 });
+  });
+
+  it('imports into the categories chosen in Settings', async () => {
+    const yearId = await createYear(2025);
+    await connect();
+    const { body: market } = await agent.post('/api/categories').send({ name: 'Market sales', mapsToCategoryId: cat('turnover') }).expect(201);
+    const { body: cardFees } = await agent.post('/api/categories').send({ name: 'Card fees', mapsToCategoryId: cat('financeCharges') }).expect(201);
+    await agent.put('/api/square').send({ incomeCategoryId: cat('financeCharges') }).expect(422);
+    await agent.put('/api/square').send({ feeCategoryId: cat('depreciation') }).expect(422);
+    const { body: status } = await agent.put('/api/square').send({ incomeCategoryId: market.id, feeCategoryId: cardFees.id }).expect(200);
+    expect(status).toMatchObject({ incomeCategoryId: market.id, feeCategoryId: cardFees.id });
+    await agent.post('/api/square/import').send({ payoutIds: ['po_1'] }).expect(200);
+    const [inc] = (await agent.get(`/api/incomes?taxYearId=${yearId}`).expect(200)).body;
+    expect(inc.categoryId).toBe(market.id);
+    const [exp] = (await agent.get(`/api/expenses?taxYearId=${yearId}`).expect(200)).body;
+    expect((await agent.get(`/api/expenses/${exp.id}`).expect(200)).body.lineItems[0].categoryId).toBe(cardFees.id);
+    // A reset that drops the custom categories falls back to the standard ones.
+    await agent.post('/api/reset').send({ confirm: 'RESET' }).expect(200);
+    expect((await agent.get('/api/square').expect(200)).body).toMatchObject({ configured: true, incomeCategoryId: cat('turnover'), feeCategoryId: cat('financeCharges') });
+  });
+
+  it('keeps the token out of backups and through a restore', async () => {
+    await createYear(2025);
+    await connect();
+    await agent.post('/api/square/import').send({ payoutIds: ['po_1'] }).expect(200);
+    const dump = (await agent.get('/api/backup.sql').expect(200)).text;
+    expect(dump).not.toMatch(/INSERT INTO "square_settings"/);
+    expect(dump).not.toContain(TOKEN);
+    await agent.post('/api/restore').attach('file', Buffer.from(dump), 'backup.sql').expect(200);
+    expect((await agent.get('/api/square')).body).toMatchObject({ configured: true, merchantName: 'Hedgerow Crafts' });
+    const list = (await agent.get('/api/square/payouts?from=2025-04-06').expect(200)).body.payouts;
+    expect(list.find((p: { id: string }) => p.id === 'po_1').incomeId).not.toBeNull();
+  });
+
+  it('upgrades a backup made before Square imports', async () => {
+    await connect();
+    const old = new Database(':memory:');
+    old.exec('CREATE TABLE schema_migrations (version INTEGER PRIMARY KEY, applied_at TEXT)');
+    for (const migration of MIGRATIONS.filter((m) => m.version <= 23)) {
+      old.exec(migration.sql);
+      old.prepare('INSERT INTO schema_migrations (version) VALUES (?)').run(migration.version);
+    }
+    seedCategories(old);
+    old.prepare("INSERT INTO tax_years (label, start_date, end_date) VALUES ('2025-26', '2025-04-06', '2026-04-05')").run();
+    old
+      .prepare(
+        "INSERT INTO incomes (tax_year_id, date, description, payment_method, amount_pence, category_id) VALUES (1, '2025-11-01', 'Fair', 'cash', 500, (SELECT id FROM categories WHERE hmrc_code = 'turnover'))",
+      )
+      .run();
+    const dump = dumpSql(old);
+    old.close();
+    expect(dump).toMatch(/schema_version: 23/);
+
+    await agent.post('/api/restore').attach('file', Buffer.from(dump), 'backup.sql').expect(200);
+    expect((await agent.get('/api/square')).body).toMatchObject({ configured: true });
+    await agent.post('/api/square/import').send({ payoutIds: ['po_1'] }).expect(200);
+    expect((await agent.get('/api/incomes?taxYearId=1').expect(200)).body).toHaveLength(2);
+  });
+});

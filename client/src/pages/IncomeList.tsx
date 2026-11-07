@@ -5,6 +5,7 @@ import { formatDisplayDate, formatGBP, shortCategoryName, type Income } from '@c
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { Pagination, usePagination } from '../components/Pagination';
 import { ImportButton } from '../components/ImportTransactions';
+import { SquareImportButton } from '../components/SquareImport';
 import { DeleteShownButton } from '../components/DeleteShownButton';
 import { SubmittedFiguresNotice } from '../components/SubmittedFiguresNotice';
 import { NoTaxYear } from '../components/NoTaxYear';
@@ -89,6 +90,7 @@ export function IncomeList() {
                     </ButtonLink>
                   )}
                   {canEdit && <ImportButton kind="incomes" iconOnly />}
+                  {canEdit && <SquareImportButton />}
                   {filterState.filters && <ExportMenu href={(format) => exportUrl('incomes', filterState.filters!, format)} count={data?.length} iconOnly />}
                   {canEdit && (
                     <DeleteShownButton kind="incomes" rows={data ?? []} filtered={filterState.active} totalPence={total} taxYearId={taxYear.id} />

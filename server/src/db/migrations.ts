@@ -396,6 +396,29 @@ ALTER TABLE documents ADD COLUMN sha256 TEXT;
 CREATE INDEX idx_documents_sha256 ON documents (sha256);
 `,
   },
+  // The Square connection (Settings → Square): an access token, and the categories its payouts
+  // are imported into. Like the Claude key it belongs to the install, not the books: left out of
+  // backups, kept through a restore. Each income and fees expense imported from Square keeps the
+  // payout's id, so a payout is never imported twice.
+  {
+    version: 24,
+    sql: `
+CREATE TABLE square_settings (
+  id INTEGER PRIMARY KEY CHECK (id = 1),
+  access_token TEXT,
+  environment TEXT NOT NULL DEFAULT 'production' CHECK (environment IN ('production', 'sandbox')),
+  merchant_name TEXT,
+  token_added_by TEXT,
+  token_added_at TEXT,
+  income_category_id INTEGER,
+  fee_category_id INTEGER
+);
+ALTER TABLE incomes ADD COLUMN square_payout_id TEXT;
+ALTER TABLE expenses ADD COLUMN square_payout_id TEXT;
+CREATE UNIQUE INDEX idx_incomes_square_payout ON incomes (square_payout_id) WHERE square_payout_id IS NOT NULL;
+CREATE UNIQUE INDEX idx_expenses_square_payout ON expenses (square_payout_id) WHERE square_payout_id IS NOT NULL;
+`,
+  },
 ];
 
 export const CURRENT_SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;

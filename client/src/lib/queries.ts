@@ -23,6 +23,10 @@ import type {
   Income,
   ClaudeModel,
   ClaudeStatus,
+  SquareImportResult,
+  SquarePayoutList,
+  SquareSettingsInput,
+  SquareStatus,
   Scan,
   ScanList,
   MeResponse,
@@ -288,6 +292,42 @@ export function useClaudeMutations() {
     }),
     removeKey: useMutation({ mutationFn: () => api.delete<ClaudeStatus>('/claude/key'), onSuccess }),
   };
+}
+
+/** Settings → Square: whether a token is saved (shown only as a hint), and the categories imports go into. */
+export const useSquare = () => useQuery({ queryKey: ['square'], queryFn: () => api.get<SquareStatus>('/square') });
+
+export function useSquareMutations() {
+  const qc = useQueryClient();
+  const onSuccess = (status: SquareStatus) => qc.setQueryData(['square'], status);
+  return {
+    save: useMutation({ mutationFn: (body: SquareSettingsInput) => api.put<SquareStatus>('/square', body), onSuccess }),
+    removeToken: useMutation({ mutationFn: () => api.delete<SquareStatus>('/square/token'), onSuccess }),
+  };
+}
+
+/** Square's payouts from a date on, fetched from Square each time it's asked (Income → Import from Square). */
+export const useSquarePayouts = (from: string | null) =>
+  useQuery({
+    queryKey: ['square-payouts', from],
+    queryFn: () => api.get<SquarePayoutList>(`/square/payouts?from=${from}`),
+    enabled: from !== null,
+    staleTime: Infinity,
+    gcTime: 0,
+    retry: false,
+  });
+
+export function useImportSquarePayouts() {
+  const invalidateIncomes = useInvalidateTransactions('incomes');
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (payoutIds: string[]) => api.post<SquareImportResult>('/square/import', { payoutIds }),
+    onSuccess: () => {
+      invalidateIncomes();
+      qc.invalidateQueries({ queryKey: ['expenses'] });
+      qc.invalidateQueries({ queryKey: ['square-payouts'] });
+    },
+  });
 }
 
 /** Documents scanned in bulk, waiting to be checked (Expenses → Scan documents). Live updates refetch it as Claude reads each. */

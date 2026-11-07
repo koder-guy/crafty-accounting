@@ -12,6 +12,7 @@ import { dashboardRouter } from './routes/dashboard';
 import { documentsRouter } from './routes/documents';
 import { hmrcRouter } from './routes/hmrc';
 import { scansRouter } from './routes/scans';
+import { squareRouter } from './routes/square';
 import { mileageRouter } from './routes/mileage';
 import { mtdRouter } from './routes/mtd';
 import { notificationsRouter } from './routes/notifications';
@@ -97,6 +98,7 @@ export function createApp(ctx: AppContext) {
   app.use('/api/documents', documentsRouter(ctx));
   app.use('/api/scans', scansRouter(ctx));
   app.use('/api/claude', claudeRouter(ctx));
+  app.use('/api/square', squareRouter(ctx));
   app.use('/api/dashboard', dashboardRouter(ctx));
   app.use('/api/mtd', mtdRouter(ctx));
   app.use('/api/hmrc', hmrcRouter(ctx));

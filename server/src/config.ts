@@ -26,6 +26,8 @@ export interface Config {
     /** Overrides the redirect URI worked out from the address the app is reached at. */
     redirectUri: string | null;
   };
+  /** Sends Square's API calls here instead (SQUARE_API_URL), to try the import against a stand-in. For development only. */
+  squareApiUrl: string | null;
   updates: {
     /** Check GitHub for new releases twice a day (UPDATE_CHECK); Check now works either way. */
     autoCheck: boolean;
@@ -62,6 +64,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
       clientSecret: env.HMRC_CLIENT_SECRET?.trim() || null,
       redirectUri: env.HMRC_REDIRECT_URI?.trim() || null,
     },
+    squareApiUrl: env.SQUARE_API_URL?.trim().replace(/\/$/, '') || null,
     updates: { autoCheck: !/^(false|0)$/i.test(env.UPDATE_CHECK?.trim() ?? ''), ...installKind(env) },
   };
 }

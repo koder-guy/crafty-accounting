@@ -53,8 +53,8 @@ export const passwordChangeGuard: RequestHandler = (req, _res, next) => {
   next(new HttpError(403, 'Choose a new password before carrying on.'));
 };
 
-/** Backup downloads are for editors only: a backup is a full copy of the books, more than viewing and exporting. */
-const EDITOR_ONLY_DOWNLOADS = [/^\/backup\.(sql|zip)$/, /^\/backup\/auto(\/|$)/];
+/** Backup downloads are for editors only: a backup is a full copy of the books, more than viewing and exporting. So is listing Square payouts, which is the start of importing them. */
+const EDITOR_ONLY_DOWNLOADS = [/^\/backup\.(sql|zip)$/, /^\/backup\/auto(\/|$)/, /^\/square\/payouts$/];
 
 /** Changes a read-only person may still make, which only affect themselves. */
 const READ_ONLY_ALLOWED = [

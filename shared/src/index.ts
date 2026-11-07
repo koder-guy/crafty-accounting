@@ -11,6 +11,7 @@ export * from './yearComparison';
 export * from './photos';
 export * from './invoiceFilename';
 export * from './claude';
+export * from './square';
 export * from './diskSpace';
 export * from './types';
 
