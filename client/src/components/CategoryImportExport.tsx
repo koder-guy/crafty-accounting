@@ -90,7 +90,7 @@ function CategoryList({ summary }: { summary: CategoryImportSummary }) {
   return (
     <ul className="max-h-64 divide-y divide-line overflow-y-auto rounded-lg border border-line bg-surface-2">
       {summary.adding.map((c) => (
-        <li key={`${c.type}|${c.name}`} className="flex items-center justify-between gap-3 px-3 py-2">
+        <li key={`${c.type}|${c.name}`} className="flex items-center justify-between gap-3 py-2 pr-6 pl-3">
           <span className="min-w-0">
             <span className="font-medium text-ink">{c.name}</span>
             <span className="block truncate text-xs text-faint">→ {c.mapsTo}</span>
