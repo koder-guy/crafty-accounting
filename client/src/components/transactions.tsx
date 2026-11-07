@@ -196,7 +196,6 @@ export function FilterBar({
         </FilterSelect>
         <span className="hidden h-6 w-px shrink-0 self-center bg-line-strong xl:block" aria-hidden />
         <Button
-          variant="ghost"
           className="justify-self-start"
           disabled={!active && !search}
           onClick={() => {
