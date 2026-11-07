@@ -21,7 +21,7 @@ export function squareRouter(ctx: AppContext): Router {
     ctx.db.transaction(() => {
       if (input.accessToken) saveSquareToken(ctx.db, input.accessToken, environment, merchantName, req.user!.name);
       if (input.incomeCategoryId) saveSquareCategory(ctx.db, 'income', input.incomeCategoryId);
-      if (input.feeCategoryId) saveSquareCategory(ctx.db, 'fee', input.feeCategoryId);
+      if (input.feeCategoryId !== undefined) saveSquareCategory(ctx.db, 'fee', input.feeCategoryId);
     })();
     res.json(squareStatus(ctx.db));
   });

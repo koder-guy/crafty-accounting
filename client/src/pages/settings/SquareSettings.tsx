@@ -1,12 +1,14 @@
 import { useState, type FormEvent } from 'react';
 import { KeyRound, Tags } from 'lucide-react';
-import { formatDisplayDate, SQUARE_ENVIRONMENTS, type SquareEnvironment, type SquareStatus } from '@crafty/shared';
+import { formatDisplayDate, SQUARE_ENVIRONMENTS, squareFeeCategory, type SquareEnvironment, type SquareStatus } from '@crafty/shared';
 import { CategoryOptions } from '../../components/CategoryOptions';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { Alert, Badge, Button, Card, CardHeader, Field, Spinner } from '../../components/ui';
 import { useCanEdit, useCategories, useSquare, useSquareMutations } from '../../lib/queries';
 import { SettingsHeading } from './SettingsLayout';
 
+/** The fees category's choice when none is saved. */
+const AUTOMATIC = 'automatic';
 const DEVELOPER_APPS = 'https://developer.squareup.com/apps';
 const ENVIRONMENT_LABELS: Record<SquareEnvironment, string> = { production: 'Production', sandbox: 'Sandbox (for testing)' };
 
@@ -174,8 +176,12 @@ function CategoriesCard({ status, canEdit }: { status: SquareStatus; canEdit: bo
   const { save } = useSquareMutations();
   // Shows a choice straight away while it saves.
   const incomeId = save.isPending && save.variables?.incomeCategoryId ? save.variables.incomeCategoryId : status.incomeCategoryId;
-  const feeId = save.isPending && save.variables?.feeCategoryId ? save.variables.feeCategoryId : status.feeCategoryId;
+  const savingFee = save.isPending && save.variables?.feeCategoryId !== undefined;
+  const feeChoice = savingFee ? (save.variables!.feeCategoryId ?? AUTOMATIC) : status.feeCategoryAutomatic ? AUTOMATIC : status.feeCategoryId;
   const feeCategories = (categories ?? []).filter((c) => c.hmrcCode !== 'depreciation');
+  // What Automatic picks: a custom category named for Square's fees, else the standard one.
+  const automaticFee =
+    categories && (squareFeeCategory(categories) ?? categories.find((c) => c.type === 'EXPENSE' && !c.isCustom && c.hmrcCode === 'financeCharges'));
 
   return (
     <Card>
@@ -200,14 +206,19 @@ function CategoriesCard({ status, canEdit }: { status: SquareStatus; canEdit: bo
                 <CategoryOptions categories={categories} type="INCOME" />
               </select>
             </Field>
-            <Field label="Square’s fees go under" htmlFor="square-fee-category">
+            <Field
+              label="Square’s fees go under"
+              htmlFor="square-fee-category"
+              hint="Automatic uses a custom category named for Square’s fees, such as “Square fees”, or else one for card fees, such as “Card fees”."
+            >
               <select
                 id="square-fee-category"
                 className="field"
-                value={feeId}
+                value={feeChoice}
                 disabled={!canEdit || save.isPending}
-                onChange={(e) => save.mutate({ feeCategoryId: Number(e.target.value) })}
+                onChange={(e) => save.mutate({ feeCategoryId: e.target.value === AUTOMATIC ? null : Number(e.target.value) })}
               >
+                <option value={AUTOMATIC}>Automatic{automaticFee ? `: ${automaticFee.name}` : ''}</option>
                 <CategoryOptions categories={feeCategories} type="EXPENSE" />
               </select>
             </Field>

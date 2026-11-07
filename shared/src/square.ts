@@ -2,6 +2,8 @@
 // Each payout Square makes to the bank becomes one income of the day's card sales (before Square's
 // fees, less refunds), dated the day of the sales, plus one expense for Square's fees.
 import { z } from 'zod';
+import type { Category } from './types';
+import { isNeverAllowable } from './selfAssessment';
 
 export const SQUARE_ENVIRONMENTS = ['production', 'sandbox'] as const;
 export type SquareEnvironment = (typeof SQUARE_ENVIRONMENTS)[number];
@@ -26,7 +28,8 @@ export const squareSettingsSchema = z
     /** Only sent with a new token: a token belongs to one or the other. */
     environment: z.enum(SQUARE_ENVIRONMENTS, 'Choose production or sandbox').optional(),
     incomeCategoryId: id.optional(),
-    feeCategoryId: id.optional(),
+    /** Null goes back to choosing automatically (`squareFeeCategory`). */
+    feeCategoryId: id.nullable().optional(),
   })
   .refine((v) => v.accessToken !== undefined || v.incomeCategoryId !== undefined || v.feeCategoryId !== undefined, 'Nothing to save')
   .refine((v) => v.environment === undefined || v.accessToken !== undefined, { message: 'Enter the access token for that environment', path: ['accessToken'] });
@@ -48,6 +51,23 @@ export interface SquareStatus {
   /** Where imported sales and fees go: the saved choices, or the standard Turnover and Bank, credit card and other financial charges. */
   incomeCategoryId: number;
   feeCategoryId: number;
+  /** No fees category has been chosen, so it's picked automatically (`squareFeeCategory`). */
+  feeCategoryAutomatic: boolean;
+}
+
+const FEE_WORDS = /\b(fees?|charges?|commissions?|processing)\b/i;
+const CARD_WORDS = /\b(card|cards|payment|payments|merchant|transaction|transactions)\b/i;
+
+/**
+ * The custom expense category for Square's fees, when none has been chosen: one named for Square
+ * and its fees, such as "Square fees" or "Square processing fees", else one named for card or
+ * payment fees, such as "Card fees". The first by the categories' order wins; one under
+ * depreciation or entertainment (never allowable) is never picked.
+ */
+export function squareFeeCategory(categories: Category[]): Category | null {
+  const custom = categories.filter((c) => c.type === 'EXPENSE' && c.isCustom && c.hmrcCode !== 'depreciation' && !isNeverAllowable(c.hmrcCode));
+  const feeNamed = custom.filter((c) => FEE_WORDS.test(c.name));
+  return feeNamed.find((c) => /\bsquare\b/i.test(c.name)) ?? feeNamed.find((c) => CARD_WORDS.test(c.name)) ?? null;
 }
 
 /** Listing payouts: those for one tax year's sales. */

@@ -7,6 +7,8 @@ import {
   buildMtdPeriodSummary,
   buildSelfAssessmentSummary,
   isNeverAllowable,
+  squareFeeCategory,
+  type Category,
   SA103S_FORMS,
   sa103sFormFor,
   EXPENSE_CATEGORIES,
@@ -607,5 +609,32 @@ describe('invoice filenames', () => {
     expect(filenamePatternProblem('{date')).toMatch(/both its braces/);
     expect(filenamePatternProblem('{year}/{payee}')).toMatch(/can't contain/);
     expect(filenamePatternProblem(`{date}${'x'.repeat(200)}`)).toMatch(/under 200/);
+  });
+});
+
+describe('squareFeeCategory', () => {
+  let nextId = 100;
+  const custom = (name: string, hmrcCode = 'financeCharges', type: Category['type'] = 'EXPENSE'): Category => ({ id: nextId++, type, name, hmrcCode, isCustom: true, usageCount: 0 });
+  const standard: Category = { id: 1, type: 'EXPENSE', name: 'Bank, credit card and other financial charges', hmrcCode: 'financeCharges', isCustom: false, usageCount: 0 };
+  const pick = (...categories: Category[]) => squareFeeCategory([standard, ...categories])?.name ?? null;
+
+  it('picks a custom category named for Square’s fees', () => {
+    expect(pick(custom('Market pitch fees', 'otherExpenses'), custom('Square processing fees'))).toBe('Square processing fees');
+    expect(pick(custom('Square fees'))).toBe('Square fees');
+    expect(pick(custom('SQUARE charges', 'otherExpenses'))).toBe('SQUARE charges');
+  });
+
+  it('prefers Square by name over card fees in general', () => {
+    expect(pick(custom('Card fees'), custom('Square fees'))).toBe('Square fees');
+    expect(pick(custom('Card fees'), custom('Pitch fees', 'otherExpenses'))).toBe('Card fees');
+    expect(pick(custom('Payment processing fees'))).toBe('Payment processing fees');
+  });
+
+  it('leaves out names that aren’t about fees, income and never-allowable categories', () => {
+    expect(pick(custom('Square card reader', 'adminCosts'))).toBeNull();
+    expect(pick(custom('Square fees', 'turnover', 'INCOME'))).toBeNull();
+    expect(pick(custom('Square fees', 'businessEntertainmentCosts'))).toBeNull();
+    expect(pick(custom('Pitch fees', 'otherExpenses'))).toBeNull();
+    expect(pick()).toBeNull();
   });
 });

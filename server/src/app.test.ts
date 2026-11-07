@@ -4243,6 +4243,26 @@ describe('Square', () => {
     expect((await agent.get('/api/square').expect(200)).body).toMatchObject({ configured: true, incomeCategoryId: cat('turnover'), feeCategoryId: cat('financeCharges') });
   });
 
+  it('puts the fees under a custom category named for them, unless another is chosen', async () => {
+    const yearId = await createYear(2025);
+    await connect();
+    const { body: pitch } = await agent.post('/api/categories').send({ name: 'Pitch fees', mapsToCategoryId: cat('otherExpenses') }).expect(201);
+    const { body: squareFees } = await agent.post('/api/categories').send({ name: 'Square processing fees', mapsToCategoryId: cat('financeCharges') }).expect(201);
+    expect((await agent.get('/api/square').expect(200)).body).toMatchObject({ feeCategoryId: squareFees.id, feeCategoryAutomatic: true });
+    const feeLine = async (payoutId: string) => {
+      await agent.post('/api/square/import').send({ taxYearId: yearId, payoutIds: [payoutId] }).expect(200);
+      const expenses = (await agent.get(`/api/expenses?taxYearId=${yearId}`).expect(200)).body;
+      const fees = expenses.find((e: { orderNumber: string }) => e.orderNumber === payoutId);
+      return (await agent.get(`/api/expenses/${fees.id}`).expect(200)).body.lineItems[0].categoryId;
+    };
+    expect(await feeLine('po_1')).toBe(squareFees.id);
+
+    // A choice made in Settings wins, and choosing Automatic again goes back to the match.
+    expect((await agent.put('/api/square').send({ feeCategoryId: pitch.id }).expect(200)).body).toMatchObject({ feeCategoryId: pitch.id, feeCategoryAutomatic: false });
+    expect(await feeLine('po_2')).toBe(pitch.id);
+    expect((await agent.put('/api/square').send({ feeCategoryId: null }).expect(200)).body).toMatchObject({ feeCategoryId: squareFees.id, feeCategoryAutomatic: true });
+  });
+
   it('keeps the token out of backups and through a restore', async () => {
     const yearId = await createYear(2025);
     await connect();
