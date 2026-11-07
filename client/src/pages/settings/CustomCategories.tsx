@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { Pencil, Plus, Tags, Trash2 } from 'lucide-react';
 import { CASH_BASIS_UNUSED_CODE, type Category } from '@crafty/shared';
+import { ExportCategoriesButton, ImportCategoriesButton } from '../../components/CategoryImportExport';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { Alert, Badge, Button, Card, CardHeader, EmptyState, Field, IconButton, Spinner } from '../../components/ui';
 import { useCanEdit, useCategories, useCategoryMutations } from '../../lib/queries';
@@ -134,7 +135,16 @@ export function CustomCategories() {
           )}
 
           <Card>
-            <CardHeader icon={<Tags className="size-5 text-accent-soft" />} title="Your custom categories" />
+            <CardHeader
+              icon={<Tags className="size-5 text-accent-soft" />}
+              title="Your custom categories"
+              action={
+                <div className="flex items-center gap-2 print:hidden">
+                  {canEdit && <ImportCategoriesButton />}
+                  <ExportCategoriesButton count={custom.length} />
+                </div>
+              }
+            />
             {custom.length === 0 ? (
               <EmptyState title="No custom categories yet">
                 {canEdit

@@ -290,6 +290,53 @@ describe('custom categories', () => {
     expect(after).toEqual(before);
     expect((await agent.get('/api/categories')).body.some((c: { isCustom: boolean }) => c.isCustom)).toBe(false);
   });
+
+  it('exports and imports custom categories, leaving out ones already there', async () => {
+    await create('Printer filament', 'costOfGoods').expect(201);
+    await create('Etsy sales', 'turnover').expect(201);
+    const res = await agent.get('/api/categories/export.json').expect(200);
+    expect(res.headers['content-disposition']).toContain('custom-categories.json');
+    const file = JSON.parse(res.text);
+    expect(file.categories).toEqual([
+      { name: 'Etsy sales', type: 'INCOME', hmrcCode: 'turnover', mapsTo: expect.any(String) },
+      { name: 'Printer filament', type: 'EXPENSE', hmrcCode: 'costOfGoods', mapsTo: expect.any(String) },
+    ]);
+
+    const same = (await agent.post('/api/categories/import/preview').send(file).expect(200)).body;
+    expect(same).toMatchObject({ inFile: 2, adding: [], alreadyThere: 2, problems: [] });
+
+    file.categories.push({ name: 'Packaging', type: 'EXPENSE', hmrcCode: 'adminCosts' });
+    const preview = (await agent.post('/api/categories/import/preview').send(file).expect(200)).body;
+    expect(preview).toMatchObject({ inFile: 3, alreadyThere: 2, problems: [] });
+    expect(preview.adding).toEqual([{ name: 'Packaging', type: 'EXPENSE', mapsTo: expect.any(String) }]);
+    expect((await agent.get('/api/categories')).body.some((c: { name: string }) => c.name === 'Packaging')).toBe(false);
+
+    await agent.post('/api/categories/import').send(file).expect(201);
+    const packaging = (await agent.get('/api/categories')).body.find((c: { name: string }) => c.name === 'Packaging');
+    expect(packaging).toMatchObject({ type: 'EXPENSE', hmrcCode: 'adminCosts', isCustom: true });
+  });
+
+  it('imports nothing from a file with problems', async () => {
+    await create('Printer filament', 'costOfGoods').expect(201);
+    const file = {
+      categories: [
+        { name: 'Packaging', type: 'EXPENSE', hmrcCode: 'adminCosts' },
+        { name: 'Printer filament', type: 'EXPENSE', hmrcCode: 'adminCosts' },
+        { name: 'Stalls', type: 'EXPENSE', hmrcCode: 'noSuchField' },
+        { name: 'Old kit', type: 'EXPENSE', hmrcCode: 'depreciation' },
+        { name: '', type: 'EXPENSE', hmrcCode: 'adminCosts' },
+      ],
+    };
+    const preview = (await agent.post('/api/categories/import/preview').send(file).expect(200)).body;
+    expect(preview.adding).toEqual([]);
+    expect(preview.problems).toHaveLength(4);
+    expect(preview.problems[0]).toContain('already have it');
+    await agent.post('/api/categories/import').send(file).expect(422);
+    expect((await agent.get('/api/categories')).body.some((c: { name: string }) => c.name === 'Packaging')).toBe(false);
+
+    await agent.post('/api/categories/import/preview').send({ expenses: [] }).expect(422);
+    await agent.post('/api/categories/import/preview').send([]).expect(422);
+  });
 });
 
 describe('tax years', () => {
@@ -359,6 +406,7 @@ describe('read-only people', () => {
       viewer.post('/api/expenses').send(expense(yearId)),
       viewer.post('/api/incomes/import').send({ incomes: [] }),
       viewer.post('/api/expenses/import/preview').send({ expenses: [] }),
+      viewer.post('/api/categories/import').send({ categories: [] }),
       viewer.post('/api/mileage').send({ taxYearId: yearId, date: '2025-06-14', description: 'Trip', vehicle: 'car', distanceTenths: 10 }),
       viewer.put('/api/use-of-home').send({ taxYearId: yearId, months: [] }),
       viewer.put(`/api/tax-years/${yearId}/tax-settings`).send({ otherIncomePence: 1 }),

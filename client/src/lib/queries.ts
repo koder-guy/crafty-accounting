@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import type {
+  CategoryImportSummary,
   ImportSummary,
   MtdExpenses,
   SubmissionMethod,
@@ -201,8 +202,13 @@ export function useCategoryMutations() {
       mutationFn: (id: number) => api.delete<{ incomes: number; lineItems: number; reassignedTo: Category }>(`/categories/${id}`),
       onSuccess,
     }),
+    /** Imports a custom categories export; `importPreview` only says what importing would do. */
+    importRun: useMutation({ mutationFn: (file: unknown) => api.post<CategoryImportSummary>('/categories/import', file), onSuccess }),
+    importPreview: useMutation({ mutationFn: (file: unknown) => api.post<CategoryImportSummary>('/categories/import/preview', file) }),
   };
 }
+
+export const CATEGORIES_EXPORT_URL = '/api/categories/export.json';
 
 // ---- Transactions ----
 

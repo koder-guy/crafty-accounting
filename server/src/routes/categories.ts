@@ -3,7 +3,9 @@
 // MTD totals are unaffected by how finely transactions are categorised.
 import { Router } from 'express';
 import { customCategorySchema } from '@crafty/shared';
+import { categoriesExport, importCategories } from '../categoryImport';
 import type { AppContext } from '../context';
+import { sendJsonExport } from '../jsonExport';
 import { HttpError, parseId, parseWith } from '../http';
 import { getCategory, listCategories, standardCategoryFor } from '../repo';
 
@@ -12,6 +14,19 @@ export function categoriesRouter(ctx: AppContext): Router {
 
   router.get('/', (_req, res) => {
     res.json(listCategories(ctx.db));
+  });
+
+  router.get('/export.json', (_req, res) => {
+    sendJsonExport(res, 'custom-categories.json', { categories: categoriesExport(ctx) });
+  });
+
+  // Imports a JSON export (see categoryImport.ts); preview first to see what it would do.
+  router.post('/import/preview', (req, res) => {
+    res.json(importCategories(ctx, req.body, false));
+  });
+
+  router.post('/import', (req, res) => {
+    res.status(201).json(importCategories(ctx, req.body, true));
   });
 
   /** Validates the input and returns the standard category to map to. */

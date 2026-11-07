@@ -133,6 +133,19 @@ export const customCategorySchema = z.object({
   mapsToCategoryId: id,
 });
 
+/**
+ * One custom category as `GET /api/categories/export.json` writes it. The standard
+ * category it maps to is found by type and HMRC field; `mapsTo` (that category's
+ * name) is only there for people reading the file.
+ */
+export const customCategoryImportRowSchema = z.object({
+  name: customCategorySchema.shape.name,
+  type: z.enum(['INCOME', 'EXPENSE'], { message: 'Should be INCOME or EXPENSE' }),
+  hmrcCode: z.string().trim().min(1, 'Give the HMRC field it maps to').max(100),
+  mapsTo: z.string().nullish(),
+});
+export type CustomCategoryImportRow = z.infer<typeof customCategoryImportRowSchema>;
+
 export const mtdSubmissionSchema = z.object({
   submittedOn: isoDate,
   reference: optionalText(100),

@@ -581,6 +581,18 @@ export interface ImportSummary {
   problems: string[];
 }
 
+/** What importing a custom categories export does, or would do. */
+export interface CategoryImportSummary {
+  /** Categories in the file. */
+  inFile: number;
+  /** Categories added, or that would be, with the name of the standard category each maps to. */
+  adding: { name: string; type: CategoryType; mapsTo: string }[];
+  /** Categories the books already have (same name and type, mapped to the same standard category), left out. */
+  alreadyThere: number;
+  /** Reasons the file can't be imported; nothing is imported while there are any. */
+  problems: string[];
+}
+
 /** What Claude read from an invoice, to fill in a new expense for checking. */
 export interface InvoiceReading {
   /** ISO date, or null when the invoice shows none. */
