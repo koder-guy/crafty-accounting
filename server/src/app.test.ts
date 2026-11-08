@@ -144,6 +144,38 @@ describe('auth', () => {
     expect((await request(app).get('/api/auth/me').set('Cookie', cookie)).body.authenticated).toBe(false);
   });
 
+  it("doesn't let a sign-in to old data sign in to new data with the same SESSION_SECRET", async () => {
+    // The installers keep SESSION_SECRET in .env, so it outlives a data folder that's deleted and started again.
+    const env = { ADMIN_PASSWORD: PASSWORD, SESSION_SECRET: 'kept-in-env' };
+    const oldDir = fs.mkdtempSync(path.join(os.tmpdir(), 'crafty-test-'));
+    const newDir = fs.mkdtempSync(path.join(os.tmpdir(), 'crafty-test-'));
+    const before = createContext(loadConfig({ ...env, DATA_DIR: oldDir, CLIENT_DIST: path.join(oldDir, 'none') }));
+    await new Promise((r) => setTimeout(r, 5)); // so the new Admin isn't added in the same millisecond
+    const after = createContext(loadConfig({ ...env, DATA_DIR: newDir, CLIENT_DIST: path.join(newDir, 'none') }));
+    try {
+      const login = await request(createApp(before)).post('/api/auth/login').send({ name: NAME, password: PASSWORD }).expect(200);
+      const cookie = ([] as string[]).concat(login.headers['set-cookie'] ?? []).map((c) => c.split(';')[0]).join('; ');
+      await request(createApp(before)).get('/api/tax-years').set('Cookie', cookie).expect(200);
+
+      const app = createApp(after);
+      expect((await request(app).get('/api/auth/me').set('Cookie', cookie)).body).toEqual({ authenticated: false });
+      await request(app).get('/api/business').set('Cookie', cookie).expect(401);
+    } finally {
+      before.db.close();
+      after.db.close();
+      fs.rmSync(oldDir, { recursive: true, force: true });
+      fs.rmSync(newDir, { recursive: true, force: true });
+    }
+  });
+
+  it('keeps people signed in through a restore, which keeps them as they were', async () => {
+    const dump = (await agent.get('/api/backup.sql').expect(200)).text;
+    await agent.post('/api/restore').attach('file', Buffer.from(dump), 'backup.sql').expect(200);
+    await agent.get('/api/tax-years').expect(200);
+    await agent.post('/api/reset').send({ confirm: 'RESET' }).expect(200);
+    await agent.get('/api/tax-years').expect(200);
+  });
+
   it('creates Admin / admin on a new install, who must choose a new password first', async () => {
     const emptyDir = fs.mkdtempSync(path.join(os.tmpdir(), 'crafty-test-'));
     const fresh = createContext(loadConfig({ DATA_DIR: emptyDir, CLIENT_DIST: path.join(emptyDir, 'none') }));
@@ -3111,6 +3143,35 @@ describe('business details', () => {
     expect(body.details).toMatchObject({ ownerName: 'Jo Maker', postcode: 'OX10 8BA', utr: '1234567890', town: null, startDate: '2024-09-01' });
     expect(body).toMatchObject({ isSample: false, updatedBy: NAME, logo: null });
     await createYear();
+  });
+
+  it('asks for a sign-in before anything else, even with no business set up yet', async () => {
+    clearBusiness();
+    const anon = request(createApp(ctx));
+    // Nothing about the install or the business is given out before signing in.
+    expect((await anon.get('/api/auth/me').expect(200)).body).toEqual({ authenticated: false });
+    await anon.get('/api/health').expect(200);
+    for (const path of ['/api/business', '/api/business/logo', '/api/tax-years', '/api/tls', '/api/updates', '/api/notifications', '/api/events', '/api/backup.sql']) {
+      await anon.get(path).expect(401);
+    }
+    await anon.put('/api/business').send({ details: BUSINESS }).expect(401);
+    await anon.post('/api/sample-data').send({}).expect(401);
+    await anon.post('/api/restore').attach('file', Buffer.from('-- nothing'), 'backup.sql').expect(401);
+    expect(ctx.db.prepare('SELECT COUNT(*) AS n FROM business_details').get()).toEqual({ n: 0 });
+
+    // A first install: signing in with the default password, then choosing one, comes before the business.
+    const fresh = fs.mkdtempSync(path.join(os.tmpdir(), 'crafty-test-'));
+    const first = createContext(loadConfig({ DATA_DIR: fresh, CLIENT_DIST: path.join(fresh, 'none') }));
+    try {
+      const browser = request.agent(createApp(first));
+      await browser.get('/api/business').expect(401);
+      const { body } = await browser.post('/api/auth/login').send({ name: 'Admin', password: 'admin' }).expect(200);
+      expect(body.mustChangePassword).toBe(true);
+      expect((await browser.get('/api/business').expect(403)).body.error).toMatch(/password/i);
+    } finally {
+      first.db.close();
+      fs.rmSync(fresh, { recursive: true, force: true });
+    }
   });
 
   it('checks what it is given', async () => {

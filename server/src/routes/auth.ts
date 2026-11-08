@@ -20,20 +20,27 @@ declare global {
  * Marks sessions made since the sign-in cookie became a browser-session cookie
  * (no expiry, gone when the browser quits). Cookies from before then kept a
  * 30-day expiry, so they're refused and the person signs in once more.
+ * Version 3 also names when the person was added (`since`), see sessionUser.
  */
-const SESSION_VERSION = 2;
+const SESSION_VERSION = 3;
 
-/** The signed-in person's id, or null for no session or one from an older version. */
-function sessionUserId(req: Express.Request): number | null {
+/**
+ * The signed-in person, or null for no session, one from an older version, or one for someone
+ * no longer here. A session names the person by id and when they were added: SESSION_SECRET
+ * outlives the data (the installers keep it in .env), and a new database's first person has
+ * the same id as the last one's, so an old browser's cookie mustn't sign it in as them.
+ */
+function sessionUser(ctx: AppContext, req: Express.Request) {
   const s = req.session;
-  return s?.v === SESSION_VERSION && typeof s.userId === 'number' ? s.userId : null;
+  if (s?.v !== SESSION_VERSION || typeof s.userId !== 'number' || typeof s.since !== 'string') return null;
+  const user = getUser(ctx.db, s.userId);
+  return user && user.createdAt === s.since ? user : null;
 }
 
 /** Loads the signed-in user on every request, so a removed user is signed out straight away. */
 export function requireAuth(ctx: AppContext): RequestHandler {
   return (req, _res, next) => {
-    const userId = sessionUserId(req);
-    const user = userId === null ? null : getUser(ctx.db, userId);
+    const user = sessionUser(ctx, req);
     if (!user) {
       req.session = null;
       next(new HttpError(401, 'Please sign in'));
@@ -102,8 +109,7 @@ export function businessSetupGuard(ctx: AppContext): RequestHandler {
 export function authRouter(ctx: AppContext): Router {
   const router = Router();
 
-  const meResponse = (userId: number | null): MeResponse => {
-    const user = userId === null ? null : getUser(ctx.db, userId);
+  const meResponse = (user: ReturnType<typeof getUser>): MeResponse => {
     return user
       ? {
           authenticated: true,
@@ -128,8 +134,8 @@ export function authRouter(ctx: AppContext): Router {
     const { name, password } = parseWith(loginSchema, req.body);
     const user = authenticate(ctx.db, name, password);
     if (!user) throw new HttpError(401, 'Incorrect username or password');
-    req.session = { userId: user.id, v: SESSION_VERSION };
-    res.json(meResponse(user.id));
+    req.session = { userId: user.id, since: user.createdAt, v: SESSION_VERSION };
+    res.json(meResponse(getUser(ctx.db, user.id)));
   });
 
   router.post('/logout', (req, res) => {
@@ -138,9 +144,9 @@ export function authRouter(ctx: AppContext): Router {
   });
 
   router.get('/me', (req, res) => {
-    const userId = sessionUserId(req);
-    if (userId === null && req.session?.userId !== undefined) req.session = null;
-    res.json(meResponse(userId));
+    const user = sessionUser(ctx, req);
+    if (!user && req.session?.userId !== undefined) req.session = null;
+    res.json(meResponse(user));
   });
 
   return router;
