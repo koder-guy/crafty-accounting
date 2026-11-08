@@ -23,7 +23,7 @@ export function SettingsLayout() {
   return (
     <SectionLayout
       title="Settings"
-      subtitle="Manage your business details, users, tax years, categories, AI document scanning, the Square integration, backups, the HTTPS certificate, updates and other app settings."
+      subtitle="Manage your application settings here"
       sections={SECTIONS.filter((s) => (s.to !== '/settings/backup' || canEdit) && (s.to !== '/settings/hmrc' || hmrc?.configured))}
       ready={!!hmrc}
     />

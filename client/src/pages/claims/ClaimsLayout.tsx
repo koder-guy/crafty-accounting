@@ -11,7 +11,7 @@ export function ClaimsLayout() {
   return (
     <SectionLayout
       title="Simplified Expenses"
-      subtitle="Mileage and working from home, claimed at HMRC's flat rates instead of what they actually cost."
+      subtitle="Mileage and working from home, claimed at HMRC's flat rate"
       sections={SECTIONS}
       variant="tabs"
     />
