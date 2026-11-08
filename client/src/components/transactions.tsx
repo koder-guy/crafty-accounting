@@ -715,13 +715,18 @@ export function NotesIndicator({ notes, muted = false }: { notes: string | null;
 
 /** A transaction's notes under its expanded row, boxed like the tables above them. Nothing without notes. */
 export function NotesPanel({ notes }: { notes: string | null }) {
-  if (!notes?.trim()) return null;
+  return <TextPanel label="Notes" text={notes} />;
+}
+
+/** A labelled piece of text under an expanded row, boxed like the tables around it. Nothing without text. */
+export function TextPanel({ label, text }: { label: string; text: string | null }) {
+  if (!text?.trim()) return null;
   return (
-    <section aria-label="Notes" className="rounded-lg border border-line bg-page/40 text-sm">
+    <section aria-label={label} className="rounded-lg border border-line bg-page/40 text-sm">
       <div className="border-b border-line px-4 py-2 text-xs font-medium tracking-wide text-faint uppercase">
-        <DetailHeading>Notes</DetailHeading>
+        <DetailHeading>{label}</DetailHeading>
       </div>
-      <p className="px-4 py-2 break-words whitespace-pre-wrap text-ink">{notes.trim()}</p>
+      <p className="px-4 py-2 break-words whitespace-pre-wrap text-ink">{text.trim()}</p>
     </section>
   );
 }

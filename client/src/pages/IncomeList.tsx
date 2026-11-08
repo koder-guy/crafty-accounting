@@ -16,6 +16,7 @@ import {
   DocumentsTable,
   NotesIndicator,
   NotesPanel,
+  TextPanel,
   ExportMenu,
   FilterBar,
   FilterToggle,
@@ -156,8 +157,8 @@ export function IncomeList() {
                   </thead>
                   <tbody className="divide-y divide-line">
                     {pageRows.map((row) => {
-                      // Only a row with documents or notes has anything to show when expanded.
-                      const expandable = row.documents.length > 0 || !!row.notes?.trim();
+                      // Only a row with documents, a reference or notes has anything to show when expanded.
+                      const expandable = row.documents.length > 0 || !!row.reference?.trim() || !!row.notes?.trim();
                       const open = expandable && isExpanded(row.id);
                       return (
                         <Fragment key={row.id}>
@@ -210,6 +211,7 @@ export function IncomeList() {
                               <td colSpan={canEdit ? 6 : 5} className="px-4 py-4">
                                 <div className="space-y-3">
                                   <DocumentsTable documents={row.documents} />
+                                  <TextPanel label="Reference" text={row.reference} />
                                   <NotesPanel notes={row.notes} />
                                 </div>
                               </td>
