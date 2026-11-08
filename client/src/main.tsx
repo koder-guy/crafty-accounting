@@ -38,7 +38,7 @@ import { CustomCategories } from './pages/settings/CustomCategories';
 import { BackupSettings } from './pages/settings/BackupSettings';
 import { Users } from './pages/settings/Users';
 import { HmrcSettings } from './pages/settings/HmrcSettings';
-import { ClaudeSettings } from './pages/settings/ClaudeSettings';
+import { AiSettings } from './pages/settings/AiSettings';
 import { TlsSettings } from './pages/settings/TlsSettings';
 import { SquareSettings } from './pages/settings/SquareSettings';
 import { UpdatesSettings } from './pages/settings/UpdatesSettings';
@@ -143,7 +143,8 @@ function BusinessGate() {
           <Route path="users" element={<Users />} />
           <Route path="people" element={<Navigate to="/settings/users" replace />} />
           <Route path="hmrc" element={<HmrcSettings />} />
-          <Route path="claude" element={<ClaudeSettings />} />
+          <Route path="ai" element={<AiSettings />} />
+          <Route path="claude" element={<Navigate to="/settings/ai" replace />} />
           <Route path="https" element={<TlsSettings />} />
           <Route path="square" element={<SquareSettings />} />
           <Route

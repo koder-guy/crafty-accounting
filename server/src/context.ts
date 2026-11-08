@@ -5,7 +5,10 @@ import { openDatabase, type Db } from './db';
 import { LiveUpdates } from './liveUpdates';
 import type { DiskSpace } from '@crafty/shared';
 import { diskSpace } from './autoBackup';
-import { anthropicApi, type ClaudeApi } from './invoiceReader';
+import type { AiProvider } from '@crafty/shared';
+import type { DocumentReader } from './invoiceReader';
+import { anthropicReader } from './readers/anthropic';
+import { geminiReader } from './readers/gemini';
 import { ScanReader } from './scans';
 import { restartCaddyService, type CaddyRestarter } from './tlsCertificate';
 import { Updates } from './updates';
@@ -26,9 +29,9 @@ export interface AppContext {
   fetch: typeof fetch;
   /** Checking for and applying new versions (Settings → Updates). */
   updates: Updates;
-  /** Calls to Claude (checking a key, reading an invoice); tests replace it. */
-  claude: ClaudeApi;
-  /** Reads documents scanned in bulk with Claude, in the background. */
+  /** Calls to each AI provider (checking a key, reading an invoice); tests replace them. */
+  readers: Record<AiProvider, DocumentReader>;
+  /** Reads documents scanned in bulk with the chosen AI, in the background. */
   scans: ScanReader;
   /** Free and total space on the disk holding a folder; tests replace it. */
   diskSpace: (dir: string) => DiskSpace | null;
@@ -50,7 +53,7 @@ export function createContext(config: Config): AppContext {
   ensureFirstUser(db, config.adminName, config.adminPassword);
   const ctx = { config, db, paths, liveUpdates: new LiveUpdates(), fetch: (...args) => globalThis.fetch(...args) } as AppContext;
   ctx.updates = new Updates(ctx);
-  ctx.claude = anthropicApi;
+  ctx.readers = { claude: anthropicReader, gemini: geminiReader };
   ctx.scans = new ScanReader(ctx);
   ctx.diskSpace = diskSpace;
   ctx.restartCaddy = restartCaddyService;

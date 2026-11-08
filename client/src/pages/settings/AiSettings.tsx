@@ -1,7 +1,8 @@
 import { useLayoutEffect, useRef, useState, type FormEvent } from 'react';
-import { Cpu, FileText, KeyRound } from 'lucide-react';
+import { Cpu, FileText, KeyRound, Sparkles } from 'lucide-react';
 import {
-  CLAUDE_MODELS,
+  AI_PROVIDER_INFO,
+  AI_PROVIDERS,
   DEFAULT_FILENAME_PATTERN,
   EXAMPLE_INVOICE,
   FILENAME_FIELDS,
@@ -9,56 +10,101 @@ import {
   formatDisplayDate,
   invoiceFilename,
   MAX_FILENAME_PATTERN_LENGTH,
-  type ClaudeStatus,
+  type AiProvider,
+  type AiStatus,
 } from '@crafty/shared';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { Alert, Badge, Button, Card, CardHeader, Field, Spinner } from '../../components/ui';
-import { useCanEdit, useClaude, useClaudeMutations } from '../../lib/queries';
+import { useAi, useAiMutations, useCanEdit } from '../../lib/queries';
 import { SettingsHeading } from './SettingsLayout';
 
-const CONSOLE_KEYS = 'https://console.anthropic.com/settings/keys';
+/** The radio cards for providers and models. */
+const optionClass = (chosen: boolean) =>
+  `flex cursor-pointer items-start gap-3 rounded-lg border px-4 py-3 transition-colors has-disabled:cursor-default ${
+    chosen ? 'border-accent-soft/60 bg-accent-bg' : 'border-line-strong bg-surface-2/60 hover:border-accent-soft/40'
+  }`;
 
-/** Entering a key: Anthropic checks it before it's saved, and it's never shown again in full. */
-function KeyForm({ replacing, onDone }: { replacing: boolean; onDone: () => void }) {
-  const { save } = useClaudeMutations();
+/** Which AI reads documents. Each keeps its own key and model, so switching back loses neither. */
+function ProviderCard({ status, canEdit }: { status: AiStatus; canEdit: boolean }) {
+  const { save } = useAiMutations();
+  // Shows the choice straight away while it saves.
+  const chosen = save.isPending ? save.variables?.provider : status.provider;
+  return (
+    <Card>
+      <CardHeader icon={<Sparkles className="size-5 text-accent-soft" />} title="AI provider" />
+      <fieldset className="space-y-2 px-5 pb-6 sm:px-6" disabled={!canEdit || save.isPending}>
+        <legend className="sr-only">The AI that reads documents</legend>
+        {AI_PROVIDERS.map((p) => {
+          const info = AI_PROVIDER_INFO[p];
+          return (
+            <label key={p} className={optionClass(chosen === p)}>
+              <input
+                type="radio"
+                name="ai-provider"
+                value={p}
+                checked={chosen === p}
+                onChange={() => save.mutate({ provider: p })}
+                className="mt-1 size-4 accent-[var(--color-accent)]"
+              />
+              <span className="min-w-0 flex-1">
+                <span className="flex flex-wrap items-center gap-2">
+                  <span className="text-sm font-medium text-ink">{info.name}</span>
+                  <span className="text-sm text-muted">by {info.company}</span>
+                  {status.providers[p].configured && <Badge tone="ok">Key saved</Badge>}
+                </span>
+                <span className="block text-sm text-muted">{info.privacy}</span>
+              </span>
+            </label>
+          );
+        })}
+        {save.error && <Alert>{save.error.message}</Alert>}
+      </fieldset>
+    </Card>
+  );
+}
+
+/** Entering a key: the provider checks it before it's saved, and it's never shown again in full. */
+function KeyForm({ provider, replacing, onDone }: { provider: AiProvider; replacing: boolean; onDone: () => void }) {
+  const { saveProvider } = useAiMutations();
+  const info = AI_PROVIDER_INFO[provider];
   const [key, setKey] = useState('');
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
     if (!key.trim()) return;
-    save.mutate({ apiKey: key.trim() }, { onSuccess: () => { setKey(''); onDone(); } });
+    saveProvider.mutate({ provider, apiKey: key.trim() }, { onSuccess: () => { setKey(''); onDone(); } });
   };
 
   return (
     <form onSubmit={submit} noValidate className="space-y-3">
       <Field
-        label={replacing ? 'New API key' : 'Anthropic API key'}
-        htmlFor="claude-key"
-        error={save.error?.message}
+        label={replacing ? 'New API key' : `${info.company} API key`}
+        htmlFor="ai-key"
+        error={saveProvider.error?.message}
         hint={
           <>
-            Create one in the{' '}
-            <a href={CONSOLE_KEYS} target="_blank" rel="noreferrer" className="text-accent-soft underline-offset-2 hover:underline">
-              Anthropic Console
+            Create one in{' '}
+            <a href={info.console.url} target="_blank" rel="noreferrer" className="text-accent-soft underline-offset-2 hover:underline">
+              {info.console.name}
             </a>
-            . Anthropic bills it per use, separately from a Claude subscription.
+            . {info.billing}
           </>
         }
       >
         <input
-          id="claude-key"
+          id="ai-key"
           type="password"
           className="field font-mono"
           value={key}
-          placeholder="sk-ant-…"
+          placeholder={info.keyPlaceholder}
           autoComplete="off"
           spellCheck={false}
           onChange={(e) => setKey(e.target.value)}
         />
       </Field>
       <div className="flex flex-wrap gap-3">
-        <Button type="submit" variant="primary" busy={save.isPending} disabled={!key.trim()}>
-          {save.isPending ? 'Checking key…' : 'Save key'}
+        <Button type="submit" variant="primary" busy={saveProvider.isPending} disabled={!key.trim()}>
+          {saveProvider.isPending ? 'Checking key…' : 'Save key'}
         </Button>
         {replacing && (
           <Button type="button" variant="ghost" onClick={onDone}>
@@ -70,8 +116,10 @@ function KeyForm({ replacing, onDone }: { replacing: boolean; onDone: () => void
   );
 }
 
-function KeyCard({ status, canEdit }: { status: ClaudeStatus; canEdit: boolean }) {
-  const { removeKey } = useClaudeMutations();
+function KeyCard({ provider, status, canEdit }: { provider: AiProvider; status: AiStatus; canEdit: boolean }) {
+  const { removeKey } = useAiMutations();
+  const info = AI_PROVIDER_INFO[provider];
+  const key = status.providers[provider];
   const [replacing, setReplacing] = useState(false);
   const [confirmRemove, setConfirmRemove] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -80,32 +128,33 @@ function KeyCard({ status, canEdit }: { status: ClaudeStatus; canEdit: boolean }
     <Card>
       <CardHeader
         icon={<KeyRound className="size-5 text-accent-soft" />}
-        title="API key"
-        action={status.configured ? <Badge tone="ok">Connected</Badge> : <Badge>Not set</Badge>}
+        title={`${info.name} API key`}
+        action={key.configured ? <Badge tone="ok">Connected</Badge> : <Badge>Not set</Badge>}
       />
       <div className="space-y-5 px-5 pb-6 sm:px-6">
-        {status.configured && (
+        {key.configured && (
           <dl className="grid gap-3 text-sm sm:grid-cols-[160px_1fr]">
             <dt className="text-muted">Key</dt>
-            <dd className="font-mono break-all">{status.keyHint}</dd>
-            {status.keyAddedAt && (
+            <dd className="font-mono break-all">{key.keyHint}</dd>
+            {key.keyAddedAt && (
               <>
                 <dt className="text-muted">Added</dt>
                 <dd>
-                  {formatDisplayDate(status.keyAddedAt.slice(0, 10))}
-                  {status.keyAddedBy && ` by ${status.keyAddedBy}`}
+                  {formatDisplayDate(key.keyAddedAt.slice(0, 10))}
+                  {key.keyAddedBy && ` by ${key.keyAddedBy}`}
                 </dd>
               </>
             )}
           </dl>
         )}
 
-        {saved && <Alert tone="success" onDismiss={() => setSaved(false)}>Key checked with Anthropic and saved. Read an invoice now shows when you add an expense.</Alert>}
+        {saved && <Alert tone="success" onDismiss={() => setSaved(false)}>Key checked with {info.company} and saved. Scan documents on the Expenses page can read invoices now.</Alert>}
 
         {!canEdit ? (
-          !status.configured && <p className="text-sm text-muted">Ask an editor to add an API key.</p>
-        ) : !status.configured || replacing ? (
+          !key.configured && <p className="text-sm text-muted">Ask an editor to add an API key.</p>
+        ) : !key.configured || replacing ? (
           <KeyForm
+            provider={provider}
             replacing={replacing}
             onDone={() => {
               setSaved(true);
@@ -131,37 +180,36 @@ function KeyCard({ status, canEdit }: { status: ClaudeStatus; canEdit: boolean }
         onClose={() => setConfirmRemove(false)}
         onConfirm={async () => {
           setSaved(false);
-          await removeKey.mutateAsync();
+          await removeKey.mutateAsync(provider);
         }}
       >
-        <p>Read an invoice won't be offered until a key is added again. The key stays valid at Anthropic; delete it in the Anthropic Console if you no longer need it.</p>
+        <p>
+          Documents won't be read with {info.name} until a key is added again. The key stays valid at {info.company}; delete it in {info.console.name} if you no longer
+          need it.
+        </p>
       </ConfirmDialog>
     </Card>
   );
 }
 
-function ModelCard({ status, canEdit }: { status: ClaudeStatus; canEdit: boolean }) {
-  const { save } = useClaudeMutations();
+function ModelCard({ provider, status, canEdit }: { provider: AiProvider; status: AiStatus; canEdit: boolean }) {
+  const { saveProvider } = useAiMutations();
+  const info = AI_PROVIDER_INFO[provider];
   // Shows the choice straight away while it saves.
-  const chosen = save.isPending ? save.variables?.model : status.model;
+  const chosen = saveProvider.isPending ? saveProvider.variables?.model : status.providers[provider].model;
   return (
     <Card>
       <CardHeader icon={<Cpu className="size-5 text-accent-soft" />} title="Model" />
-      <fieldset className="space-y-2 px-5 pb-6 sm:px-6" disabled={!canEdit || save.isPending}>
-        <legend className="sr-only">The Claude model that reads invoices</legend>
-        {CLAUDE_MODELS.map((m) => (
-          <label
-            key={m.id}
-            className={`flex cursor-pointer items-start gap-3 rounded-lg border px-4 py-3 transition-colors has-disabled:cursor-default ${
-              chosen === m.id ? 'border-accent-soft/60 bg-accent-bg' : 'border-line-strong bg-surface-2/60 hover:border-accent-soft/40'
-            }`}
-          >
+      <fieldset className="space-y-2 px-5 pb-6 sm:px-6" disabled={!canEdit || saveProvider.isPending}>
+        <legend className="sr-only">The {info.name} model that reads invoices</legend>
+        {info.models.map((m) => (
+          <label key={m.id} className={optionClass(chosen === m.id)}>
             <input
               type="radio"
-              name="claude-model"
+              name="ai-model"
               value={m.id}
               checked={chosen === m.id}
-              onChange={() => save.mutate({ model: m.id })}
+              onChange={() => saveProvider.mutate({ provider, model: m.id })}
               className="mt-1 size-4 accent-[var(--color-accent)]"
             />
             <span>
@@ -170,16 +218,16 @@ function ModelCard({ status, canEdit }: { status: ClaudeStatus; canEdit: boolean
             </span>
           </label>
         ))}
-        {save.error && <Alert>{save.error.message}</Alert>}
-        <p className="pt-1 text-xs text-faint">Prices are rough guides for a one or two page invoice, at Anthropic's prices.</p>
+        {saveProvider.error && <Alert>{saveProvider.error.message}</Alert>}
+        <p className="pt-1 text-xs text-faint">Prices are rough guides for a one or two page invoice, at {info.company}'s prices.</p>
       </fieldset>
     </Card>
   );
 }
 
-/** How documents Claude read are named, from fields of what it read. Other documents keep their names. */
-function FilenameCard({ status, canEdit }: { status: ClaudeStatus; canEdit: boolean }) {
-  const { save } = useClaudeMutations();
+/** How documents the AI read are named, from fields of what it read. Other documents keep their names. */
+function FilenameCard({ status, canEdit }: { status: AiStatus; canEdit: boolean }) {
+  const { save } = useAiMutations();
   // Null until something is typed, so a change saved elsewhere shows.
   const [draft, setDraft] = useState<string | null>(null);
   const pattern = draft ?? status.filenamePattern;
@@ -224,17 +272,17 @@ function FilenameCard({ status, canEdit }: { status: ClaudeStatus; canEdit: bool
       <CardHeader icon={<FileText className="size-5 text-accent-soft" />} title="Document names" />
       <form onSubmit={submit} noValidate className="space-y-4 px-5 pb-6 sm:px-6">
         <p className="text-sm text-muted">
-          An invoice or receipt Claude reads is attached to the expense under a name made from what it read. Documents added any other way keep their own names, and any name can still be changed before saving.
+          An invoice or receipt the AI reads is attached to the expense under a name made from what it read. Documents added any other way keep their own names, and any name can still be changed before saving.
         </p>
         <Field
           label="Pattern"
-          htmlFor="claude-filename-pattern"
+          htmlFor="ai-filename-pattern"
           error={problem ?? save.error?.message}
           hint="A field the invoice doesn't show is left out, along with the text just before it. The file's extension is added at the end."
         >
           <input
             ref={input}
-            id="claude-filename-pattern"
+            id="ai-filename-pattern"
             className="field font-mono"
             value={pattern}
             maxLength={MAX_FILENAME_PATTERN_LENGTH}
@@ -306,23 +354,25 @@ function FilenameCard({ status, canEdit }: { status: ClaudeStatus; canEdit: bool
   );
 }
 
-export function ClaudeSettings() {
-  const { data: status, isLoading, error } = useClaude();
+export function AiSettings() {
+  const { data: status, isLoading, error } = useAi();
   const canEdit = useCanEdit();
   return (
     <div className="space-y-6">
       <SettingsHeading
-        title="Claude Integration"
-        description="Let Claude read invoices and receipts and fill in new expenses for you to check. Each invoice read is sent to Anthropic."
+        title="AI Document Scanning"
+        description="Let an AI, Claude or Gemini, read invoices and receipts and fill in new expenses for you to check. Each document read is sent to the provider chosen."
       />
       {isLoading ? (
         <Spinner />
       ) : error || !status ? (
-        <Alert>{error?.message ?? 'Could not load the Claude settings'}</Alert>
+        <Alert>{error?.message ?? 'Could not load the AI settings'}</Alert>
       ) : (
         <>
-          <KeyCard status={status} canEdit={canEdit} />
-          <ModelCard status={status} canEdit={canEdit} />
+          <ProviderCard status={status} canEdit={canEdit} />
+          {/* Remounted per provider, so a half-typed key or a notice doesn't carry over. */}
+          <KeyCard key={`key-${status.provider}`} provider={status.provider} status={status} canEdit={canEdit} />
+          <ModelCard key={`model-${status.provider}`} provider={status.provider} status={status} canEdit={canEdit} />
           <FilenameCard status={status} canEdit={canEdit} />
         </>
       )}

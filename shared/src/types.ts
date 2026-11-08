@@ -7,6 +7,7 @@ import type { Vehicle } from './mileage';
 import type { TaxEstimate } from './taxEstimate';
 import type { Role } from './schemas';
 import type { TaxMonth } from './taxYear';
+import type { AiProvider } from './aiReading';
 
 export interface TaxYear {
   id: number;
@@ -593,7 +594,7 @@ export interface CategoryImportSummary {
   problems: string[];
 }
 
-/** What Claude read from an invoice, to fill in a new expense for checking. */
+/** What the AI read from an invoice, to fill in a new expense for checking. */
 export interface InvoiceReading {
   /** ISO date, or null when the invoice shows none. */
   date: string | null;
@@ -609,7 +610,7 @@ export interface InvoiceReading {
   warnings: string[];
 }
 
-/** Where a scanned document is in being read: waiting its turn, with Claude, read, or not readable. */
+/** Where a scanned document is in being read: waiting its turn, with the AI, read, or not readable. */
 export type ScanStatus = 'waiting' | 'reading' | 'ready' | 'failed';
 
 /** A document scanned in bulk (Expenses → Scan documents), waiting to be checked and saved as an expense. */
@@ -619,7 +620,7 @@ export interface Scan {
   originalName: string;
   sizeBytes: number;
   status: ScanStatus;
-  /** What Claude read, once `ready`. */
+  /** What the AI read, once `ready`. */
   reading: InvoiceReading | null;
   /** Why it couldn't be read, when `failed`. */
   error: string | null;
@@ -648,8 +649,10 @@ export interface ScanDuplicate {
 export interface ScanList {
   /** Oldest first. */
   scans: Scan[];
-  /** Whether a Claude key is saved; without one, waiting documents stay waiting and nothing more can be added. */
-  claudeConfigured: boolean;
+  /** Whether the chosen AI has a key saved; without one, waiting documents stay waiting and nothing more can be added. */
+  aiConfigured: boolean;
+  /** The AI chosen to read documents. */
+  aiProvider: AiProvider;
   /** The largest file the server takes. */
   maxUploadBytes: number;
   /** Free space on the disk holding the documents, and how much must stay free; null if it can't be read. */

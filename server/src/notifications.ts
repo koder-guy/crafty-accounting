@@ -116,7 +116,7 @@ const scansToCheck = (db: Db) =>
   db.prepare("SELECT status, COUNT(*) AS n FROM scans WHERE status IN ('ready', 'failed') GROUP BY status").all() as { status: 'ready' | 'failed'; n: number }[];
 
 /**
- * When Claude has finished reading a pile of scanned documents: a new notification (unread again
+ * When the AI has finished reading a pile of scanned documents: a new notification (unread again
  * for everyone, replacing the last one) saying how many are waiting to be checked.
  */
 export function notifyScansRead(ctx: AppContext): void {

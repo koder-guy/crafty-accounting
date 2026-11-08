@@ -1,46 +1,31 @@
 // Documents scanned in bulk (Expenses → Scan documents). Each is stored in uploads/ as scan-….ext
-// with a row in `scans`, then read by Claude in the background, a few at a time, so a long pile
+// with a row in `scans`, then read by the chosen AI (Claude or Gemini) in the background, a few at a time, so a long pile
 // keeps going after the page is closed. Someone then checks each reading in the expense form;
 // saving it as an expense (with `scanId`) removes the scan.
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import { CASH_BASIS_UNUSED_CODE, type InvoiceReading, type Scan, type ScanDuplicate, type ScanStatus } from '@crafty/shared';
+import { AI_PROVIDER_INFO, CASH_BASIS_UNUSED_CODE, type InvoiceReading, type Scan, type ScanDuplicate, type ScanStatus } from '@crafty/shared';
 import type { AppContext } from './context';
-import { getClaudeSettings } from './claudeSettings';
+import { activeReader, getAiSettings, type ActiveReader } from './aiSettings';
 import type { Db } from './db';
 import { documentPath, fileFingerprint, removeDocumentFile } from './documents';
 import { HttpError } from './http';
-import { MAX_INVOICE_IMAGE_BYTES, type InvoiceMediaType } from './invoiceReader';
+import { invoiceMediaType, unreadableReason } from './invoiceReader';
 import { notifyScansRead, syncScansNotification } from './notifications';
 import { listCategories } from './repo';
 
-/** How many documents Claude reads at once: quicker than one by one, within Anthropic's rate limits. */
+/** How many documents are read at once: quicker than one by one, within the providers' rate limits. */
 const READERS_AT_ONCE = 2;
 
-const READABLE: Record<string, InvoiceMediaType> = {
-  '.pdf': 'application/pdf',
-  '.jpg': 'image/jpeg',
-  '.jpeg': 'image/jpeg',
-  '.png': 'image/png',
-  '.webp': 'image/webp',
-};
+/** Why the chosen AI can't read a file with this name and size, or null if it can. */
+export const scanProblem = (db: Db, name: string, sizeBytes: number) => unreadableReason(getAiSettings(db).provider, name, sizeBytes);
 
-/** Why Claude can't read a file with this name and size, or null if it can. */
-export function unreadableReason(name: string, sizeBytes: number): string | null {
-  const mediaType = READABLE[path.extname(name).toLowerCase()];
-  if (!mediaType) return 'Claude can read PDF, JPG, PNG and WebP files, not this one. Check it and fill it in yourself.';
-  if (mediaType !== 'application/pdf' && sizeBytes > MAX_INVOICE_IMAGE_BYTES) {
-    return 'The image is too large for Claude to read (the most is 5 MB). Check it and fill it in yourself.';
-  }
-  return null;
-}
-
-/** The categories Claude may choose from: expense ones, without depreciation (cash basis). */
+/** The categories the AI may choose from: expense ones, without depreciation (cash basis). */
 export function readableCategories(db: Db) {
   return listCategories(db)
     .filter((c) => c.type === 'EXPENSE' && c.hmrcCode !== CASH_BASIS_UNUSED_CODE)
-    .map(({ id, name, hmrcCode }) => ({ id, name, hmrcCode }));
+    .map(({ id, name, hmrcCode, isCustom }) => ({ id, name, hmrcCode, isCustom }));
 }
 
 interface ScanRow {
@@ -191,13 +176,13 @@ export function getScan(db: Db, id: number): Scan | null {
 
 /**
  * Stores an uploaded file as a new scan, moving it out of the temporary folder (the same disk).
- * One Claude can't read is recorded as failed straight away, so it can still be filled in by hand.
+ * One the chosen AI can't read is recorded as failed straight away, so it can still be filled in by hand.
  */
 export function addScan(ctx: AppContext, upload: { path: string; originalName: string; size: number }, by: string): Scan {
   const filename = `scan-${crypto.randomBytes(8).toString('hex')}${path.extname(upload.originalName).toLowerCase()}`;
   const sha256 = fileFingerprint(upload.path);
   fs.renameSync(upload.path, documentPath(ctx, filename));
-  const problem = unreadableReason(upload.originalName, upload.size);
+  const problem = scanProblem(ctx.db, upload.originalName, upload.size);
   try {
     const { lastInsertRowid } = ctx.db
       .prepare('INSERT INTO scans (filename, original_name, size_bytes, status, error, uploaded_by, sha256) VALUES (?, ?, ?, ?, ?, ?, ?)')
@@ -218,7 +203,7 @@ export function deleteScan(ctx: AppContext, id: number): void {
   syncScansNotification(ctx);
 }
 
-/** Reads waiting scans with Claude in the background, a few at a time. */
+/** Reads waiting scans with the chosen AI in the background, a few at a time. */
 export class ScanReader {
   private running = 0;
   /** Whether anything has been read since the reader was last idle, for the notification. */
@@ -235,19 +220,19 @@ export class ScanReader {
     this.kick();
   }
 
-  /** Starts reading waiting scans, up to the limit. Without a Claude key they stay waiting. */
+  /** Starts reading waiting scans, up to the limit. Without a key for the chosen AI they stay waiting. */
   kick(): void {
     const { db } = this.ctx;
     while (this.running < READERS_AT_ONCE) {
-      const settings = getClaudeSettings(db);
-      if (!settings.apiKey) break;
+      const reader = activeReader(db);
+      if (!reader) break;
       const row = db.prepare("SELECT * FROM scans WHERE status = 'waiting' ORDER BY id LIMIT 1").get() as ScanRow | undefined;
       if (!row) break;
       // Claimed before anything is awaited, so two kicks can't take the same one.
       db.prepare("UPDATE scans SET status = 'reading' WHERE id = ?").run(row.id);
       this.running++;
       this.changed();
-      void this.read(row, settings.apiKey, settings.model).finally(() => {
+      void this.read(row, reader).finally(() => {
         this.running--;
         this.kick();
         if (this.running > 0) return;
@@ -263,12 +248,15 @@ export class ScanReader {
     return new Promise((resolve) => this.idleWaiters.push(resolve));
   }
 
-  private async read(row: ScanRow, apiKey: string, model: ReturnType<typeof getClaudeSettings>['model']): Promise<void> {
+  private async read(row: ScanRow, { provider, apiKey, model }: ActiveReader): Promise<void> {
     let result: { status: 'ready'; reading: InvoiceReading } | { status: 'failed'; error: string };
     try {
       const data = await fs.promises.readFile(documentPath(this.ctx, row.filename));
-      const mediaType = READABLE[path.extname(row.original_name).toLowerCase()];
-      const reading = await this.ctx.claude.readInvoice(apiKey, model, { data, mediaType, categories: readableCategories(this.ctx.db) });
+      const problem = unreadableReason(provider, row.original_name, row.size_bytes);
+      const mediaType = invoiceMediaType(provider, row.original_name);
+      // Chosen when another AI was, which could read it.
+      if (problem || !mediaType) throw new HttpError(422, problem ?? 'This file can\'t be read.');
+      const reading = await this.ctx.readers[provider].readInvoice(apiKey, model, { data, mediaType, categories: readableCategories(this.ctx.db) });
       result = { status: 'ready', reading };
     } catch (err) {
       const missing = (err as NodeJS.ErrnoException).code === 'ENOENT';
@@ -276,7 +264,7 @@ export class ScanReader {
         ? 'The file is missing from storage.'
         : err instanceof HttpError
           ? err.message
-          : 'Claude could not read it. Try again, or fill it in yourself.';
+          : `${AI_PROVIDER_INFO[provider].name} could not read it. Try again, or fill it in yourself.`;
       if (!missing && !(err instanceof HttpError)) console.error(`Reading scan ${row.id} failed:`, (err as Error).message);
       result = { status: 'failed', error: message };
     }
@@ -307,6 +295,6 @@ export class ScanReader {
 
   /** Tells every open browser, including the one that added the scan. */
   private changed(): void {
-    this.ctx.liveUpdates.publish({ area: 'scans', by: 'Claude' }, null);
+    this.ctx.liveUpdates.publish({ area: 'scans', by: AI_PROVIDER_INFO[getAiSettings(this.ctx.db).provider].name }, null);
   }
 }

@@ -464,6 +464,24 @@ CREATE TABLE tls_certificate (
 );
 `,
   },
+  // The Claude integration becomes AI document scanning, with Gemini (Google) as a second choice.
+  // Each provider keeps its own key and model, so switching back loses neither; `provider` is the
+  // one that reads documents. Installs from before it keep Claude.
+  {
+    version: 27,
+    sql: `
+ALTER TABLE claude_settings RENAME TO ai_settings;
+ALTER TABLE ai_settings RENAME COLUMN api_key TO claude_api_key;
+ALTER TABLE ai_settings RENAME COLUMN key_added_by TO claude_key_added_by;
+ALTER TABLE ai_settings RENAME COLUMN key_added_at TO claude_key_added_at;
+ALTER TABLE ai_settings RENAME COLUMN model TO claude_model;
+ALTER TABLE ai_settings ADD COLUMN provider TEXT NOT NULL DEFAULT 'claude';
+ALTER TABLE ai_settings ADD COLUMN gemini_api_key TEXT;
+ALTER TABLE ai_settings ADD COLUMN gemini_key_added_by TEXT;
+ALTER TABLE ai_settings ADD COLUMN gemini_key_added_at TEXT;
+ALTER TABLE ai_settings ADD COLUMN gemini_model TEXT;
+`,
+  },
 ];
 
 export const CURRENT_SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;

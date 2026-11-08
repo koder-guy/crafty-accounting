@@ -22,7 +22,7 @@ export function useLiveUpdates() {
     const refetch = (area?: string) =>
       qc.invalidateQueries({
         predicate: (q) =>
-          // An update check or the progress of an update changes nothing but its own status; nor do notifications, or Claude reading a scanned document.
+          // An update check or the progress of an update changes nothing but its own status; nor do notifications, or the AI reading a scanned document.
           area === 'updates' || area === 'notifications' || area === 'scans'
             ? q.queryKey[0] === area
             : q.queryKey[0] === 'me'

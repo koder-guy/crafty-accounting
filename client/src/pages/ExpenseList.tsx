@@ -28,7 +28,7 @@ import {
   useTransactionFilters,
 } from '../components/transactions';
 import { Alert, Badge, ButtonLink, Card, CardHeader, EmptyState, PaymentBadge, Spinner } from '../components/ui';
-import { exportUrl, useActiveTaxYear, useCanEdit, useCategories, useClaude, useDeleteTransaction, useExpandedRows, useExpenses, useScans } from '../lib/queries';
+import { exportUrl, useActiveTaxYear, useCanEdit, useCategories, useAi, useDeleteTransaction, useExpandedRows, useExpenses, useScans } from '../lib/queries';
 
 export function ExpenseList() {
   const { taxYear, isLoading: yearLoading } = useActiveTaxYear();
@@ -64,7 +64,7 @@ export function ExpenseList() {
     pagination.setPage(1, false);
   };
   const total = (data ?? []).reduce((acc, r) => acc + r.totalPence, 0);
-  const { data: claude } = useClaude();
+  const { data: ai } = useAi();
   const { data: scans } = useScans(canEdit);
   const toCheck = scans?.scans.length ?? 0;
 
@@ -94,7 +94,7 @@ export function ExpenseList() {
                       <Plus className="size-4" aria-hidden />
                     </ButtonLink>
                   )}
-                  {canEdit && (claude?.configured || toCheck > 0) && (
+                  {canEdit && (ai?.configured || toCheck > 0) && (
                     <ButtonLink
                       to="/expenses/scans"
                       aria-label={toCheck ? `Scan documents (${toCheck} to check)` : 'Scan documents'}

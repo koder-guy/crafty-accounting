@@ -21,8 +21,9 @@ import type {
   HmrcObligation,
   HmrcStatus,
   Income,
-  ClaudeModel,
-  ClaudeStatus,
+  AiModel,
+  AiProvider,
+  AiStatus,
   SquareImportResult,
   SquarePayoutList,
   SquareSettingsInput,
@@ -301,18 +302,24 @@ export function useSaveTransaction<T>(kind: Kind) {
   });
 }
 
-/** Settings → Claude Integration: whether a key is saved (shown only as a hint), the model and the filename pattern. */
-export const useClaude = () => useQuery({ queryKey: ['claude'], queryFn: () => api.get<ClaudeStatus>('/claude') });
+/** Settings → AI Document Scanning: the AI that reads documents, each one's key (shown only as a hint) and model, and the filename pattern. */
+export const useAi = () => useQuery({ queryKey: ['ai'], queryFn: () => api.get<AiStatus>('/ai') });
 
-export function useClaudeMutations() {
+export function useAiMutations() {
   const qc = useQueryClient();
-  const onSuccess = (status: ClaudeStatus) => qc.setQueryData(['claude'], status);
+  const onSuccess = (status: AiStatus) => qc.setQueryData(['ai'], status);
   return {
+    /** Which AI reads documents, or how they're named. */
     save: useMutation({
-      mutationFn: (body: { apiKey?: string; model?: ClaudeModel; filenamePattern?: string }) => api.put<ClaudeStatus>('/claude', body),
+      mutationFn: (body: { provider?: AiProvider; filenamePattern?: string }) => api.put<AiStatus>('/ai', body),
       onSuccess,
     }),
-    removeKey: useMutation({ mutationFn: () => api.delete<ClaudeStatus>('/claude/key'), onSuccess }),
+    /** One provider's key or model. */
+    saveProvider: useMutation({
+      mutationFn: ({ provider, ...body }: { provider: AiProvider; apiKey?: string; model?: AiModel }) => api.put<AiStatus>(`/ai/${provider}`, body),
+      onSuccess,
+    }),
+    removeKey: useMutation({ mutationFn: (provider: AiProvider) => api.delete<AiStatus>(`/ai/${provider}/key`), onSuccess }),
   };
 }
 
@@ -376,7 +383,7 @@ export function useImportSquarePayouts() {
   });
 }
 
-/** Documents scanned in bulk, waiting to be checked (Expenses → Scan documents). Live updates refetch it as Claude reads each. */
+/** Documents scanned in bulk, waiting to be checked (Expenses → Scan documents). Live updates refetch it as the AI reads each. */
 export const useScans = (enabled = true) => useQuery({ queryKey: ['scans'], queryFn: () => api.get<ScanList>('/scans'), enabled });
 
 export function useScanMutations() {

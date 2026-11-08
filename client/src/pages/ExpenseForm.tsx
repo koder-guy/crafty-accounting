@@ -31,7 +31,7 @@ import { SubmittedFiguresNotice } from '../components/SubmittedFiguresNotice';
 import { Alert, Button, Card, CardHeader, Field, IconButton, Spinner } from '../components/ui';
 import { ApiError, transactionForm } from '../lib/api';
 import { openDocumentWindow } from '../lib/documentWindow';
-import { scanFileUrl, useActiveTaxYear, useCategories, useExpense, useClaude, useSaveTransaction, useScanMutations, useScans, useTaxYears } from '../lib/queries';
+import { scanFileUrl, useActiveTaxYear, useCategories, useExpense, useAi, useSaveTransaction, useScanMutations, useScans, useTaxYears } from '../lib/queries';
 
 interface LineValues {
   /** Database id for existing line items; useFieldArray reserves "id". */
@@ -74,7 +74,7 @@ function ExpenseFormPage() {
   const [searchParams] = useSearchParams();
   const copyId = id ? null : Number(searchParams.get('copy')) || null;
   const { data: original, isLoading: loadingOriginal, error: originalError } = useExpense(copyId);
-  // Checking a scanned document: /expenses/new?scan=<id> fills the new form from what Claude read.
+  // Checking a scanned document: /expenses/new?scan=<id> fills the new form from what the AI read.
   const scanId = id || copyId ? null : Number(searchParams.get('scan')) || null;
   const { data: scanList, isLoading: loadingScans, error: scansError } = useScans(scanId !== null);
   const scan = scanList?.scans.find((s) => s.id === scanId) ?? null;
@@ -111,7 +111,7 @@ function ExpenseFormPage() {
   const [renames, setRenames] = useState<DocumentRenames>({});
   const [preparingPhoto, setPreparingPhoto] = useState(false);
   const [badDocumentNames, setBadDocumentNames] = useState(false);
-  const { data: claude } = useClaude();
+  const { data: ai } = useAi();
   // The scanned document, attached with the expense.
   const readFile = useRef<File | null>(null);
 
@@ -229,11 +229,11 @@ function ExpenseFormPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, existing, copyId, original, activeYear?.id, expenseCategories.length, scan?.id, scanFile, taxYear?.id]);
 
-  // Fills the form from what Claude read from a scanned document. The reading becomes what the form was loaded with,
+  // Fills the form from what the AI read from a scanned document. The reading becomes what the form was loaded with,
   // as the document stays to be checked if you leave, so only changes made here count.
   const fillFromInvoice = (reading: InvoiceReading, picked: File) => {
     const current = getValues();
-    // Named by the pattern in Settings → Claude Integration, from what was read.
+    // Named by the pattern in Settings → AI Document Scanning, from what was read.
     const amountPence = reading.totalPence ?? (reading.lineItems.reduce((sum, li) => sum + li.amountPence, 0) || null);
     const largest = reading.lineItems.reduce<(typeof reading.lineItems)[number] | null>((a, b) => (a && a.amountPence >= b.amountPence ? a : b), null);
     const extension = /\.[^.]+$/.exec(picked.name)?.[0] ?? '';
@@ -249,7 +249,7 @@ function ExpenseFormPage() {
         description: reading.lineItems[0]?.description ?? null,
       },
       extension,
-      claude?.filenamePattern,
+      ai?.filenamePattern,
     );
     const file = name ? new File([picked], name, { type: picked.type, lastModified: picked.lastModified }) : picked;
     reset({
@@ -367,7 +367,7 @@ function ExpenseFormPage() {
           ) : scanFileError ? (
             <Alert>{scanFileError}</Alert>
           ) : (
-            <Spinner label={scanChecked ? 'Loading…' : 'Claude is still reading this document…'} />
+            <Spinner label={scanChecked ? 'Loading…' : 'This document is still being read…'} />
           )}
         </PageBody>
       </>
@@ -672,7 +672,7 @@ function ExpenseFormPage() {
               onConfirm={() => leave(afterScan)}
               onClose={() => setConfirmSkip(false)}
             >
-              <p>The changes you made here aren't saved. The document stays to be checked later, as Claude read it.</p>
+              <p>The changes you made here aren't saved. The document stays to be checked later, as it was read.</p>
             </ConfirmDialog>
             <ConfirmDialog
               open={confirmDiscard}
@@ -695,7 +695,7 @@ function ExpenseFormPage() {
 
 const scanProgress = (left: number) => (left === 0 ? 'The last document to check' : `${left} more to check after this one`);
 
-/** Under the buttons while checking a scanned document: only what Claude flagged, or why it couldn't read it. */
+/** Under the buttons while checking a scanned document: only what the AI flagged, or why it couldn't be read. */
 function ScanProblems({ reading, error }: { reading: InvoiceReading | null; error: string | null }) {
   if (reading && !reading.warnings.length) return null;
   return (
@@ -708,7 +708,7 @@ function ScanProblems({ reading, error }: { reading: InvoiceReading | null; erro
             ))}
           </ul>
         ) : (
-          <p>{error ?? "Claude couldn't read this document, so fill it in yourself."}</p>
+          <p>{error ?? "This document couldn't be read, so fill it in yourself."}</p>
         )}
       </Alert>
     </div>

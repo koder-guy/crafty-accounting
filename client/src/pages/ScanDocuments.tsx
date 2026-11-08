@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type DragEvent } from 'react';
 import { Copy, ExternalLink, FileText, FileUp, LoaderCircle, RotateCw, ScanText, Trash2 } from 'lucide-react';
-import { diskSize, formatDisplayDate, formatGBP, MAX_PHOTO_BYTES, photoFilename, type Scan, type ScanDuplicate, type ScanList } from '@crafty/shared';
+import { AI_PROVIDER_INFO, diskSize, formatDisplayDate, formatGBP, MAX_PHOTO_BYTES, photoFilename, type Scan, type ScanDuplicate, type ScanList } from '@crafty/shared';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { BackLink } from '../components/FormShell';
 import { PageBody, PageHeader } from '../components/PageHeader';
@@ -80,7 +80,7 @@ type Stage =
   | { step: 'adding'; done: number; total: number }
   | { step: 'added'; added: number; problems: { name: string; message: string }[] };
 
-/** Expenses → Scan documents: add many invoices and receipts at once, then check each one Claude has read. */
+/** Expenses → Scan documents: add many invoices and receipts at once, then check each one the AI has read. */
 /** Marks the "documents have been read" notification read while this page shows them. */
 function useScansReadSeen() {
   const { data } = useNotifications();
@@ -113,7 +113,7 @@ export function ScanDocuments() {
     for (const [i, picked] of files.entries()) {
       setStage({ step: 'adding', done: i, total: files.length });
       try {
-        // Photos become a JPEG small enough for Claude to read, as Read an invoice does.
+        // Photos become a JPEG small enough for the AI to read, as Read an invoice does.
         let file = picked;
         if (picked.type.startsWith('image/')) {
           const compressed = await compressPhoto(picked);
@@ -170,7 +170,7 @@ export function ScanDocuments() {
 
   return (
     <>
-      <PageHeader title="A.I. Document scanning" subtitle="Claude reads each one; you check it before it goes into the books" />
+      <PageHeader title="AI Document Scanning" subtitle={`${data ? AI_PROVIDER_INFO[data.aiProvider].name : 'The AI'} reads each one; you check it before it goes into the books`} />
       <PageBody>
         <BackLink to={tableUrl('/expenses')}>Expenses</BackLink>
         {isLoading ? (
@@ -179,15 +179,15 @@ export function ScanDocuments() {
           <Alert>{error?.message ?? 'Could not load the scanned documents'}</Alert>
         ) : (
           <div className="max-w-[1100px] space-y-6">
-            {data.claudeConfigured ? (
+            {data.aiConfigured ? (
               <Card className="p-5 sm:p-6">
                 <div className="flex items-start gap-3">
                   <ScanText className="mt-0.5 size-5 shrink-0 text-accent-soft" aria-hidden />
                   <div>
                     <h2 className="text-base font-semibold text-ink">Add invoices and receipts to generate populated transactions</h2>
                     <p className="mt-0.5 text-sm text-muted">
-                      Choose or drop as many PDFs and photos as you like. Claude reads them a couple at a time, each one a request to your
-                      Anthropic account, and you can leave this page while it does. Nothing goes into the books until you check it and save it.
+                      Choose or drop as many PDFs and photos as you like. {AI_PROVIDER_INFO[data.aiProvider].name} reads them a couple at a time, each one a request to
+                      your {AI_PROVIDER_INFO[data.aiProvider].company} account, and you can leave this page while it does. Nothing goes into the books until you check it and save it.
                     </p>
                   </div>
                 </div>
@@ -273,7 +273,7 @@ export function ScanDocuments() {
                 {stage?.step === 'added' && (
                   <div className="mt-4">
                     <Alert tone={stage.problems.length ? (stage.added ? 'warning' : 'error') : 'success'} onDismiss={() => setStage(null)}>
-                      {stage.added > 0 && <p>Added {documents(stage.added)}. Each one can be checked as soon as Claude has read it.</p>}
+                      {stage.added > 0 && <p>Added {documents(stage.added)}. Each one can be checked as soon as it has been read.</p>}
                       {stage.problems.length > 0 && (
                         <>
                           <p className={stage.added ? 'mt-1' : ''}>Not added:</p>
@@ -292,7 +292,7 @@ export function ScanDocuments() {
               </Card>
             ) : (
               <Alert tone="info">
-                Adding documents needs an Anthropic API key, saved in Settings → Claude Integration.
+                Adding documents needs an API key for {AI_PROVIDER_INFO[data.aiProvider].name}, saved in Settings → AI Document Scanning.
                 {inProgress > 0 && ' Documents waiting to be read will be read once one is saved.'}
               </Alert>
             )}
@@ -318,7 +318,7 @@ export function ScanDocuments() {
               />
               {scans.length === 0 ? (
                 <EmptyState icon={<ScanText className="size-8" />} title="Nothing to check">
-                  Documents you add appear here while Claude reads them, then wait for you to check each one and save it as an expense.
+                  Documents you add appear here while they're read, then wait for you to check each one and save it as an expense.
                 </EmptyState>
               ) : (
                 <div className="relative overflow-x-auto">
@@ -350,7 +350,7 @@ export function ScanDocuments() {
                         <ScanRow
                           key={scan.id}
                           scan={scan}
-                          canRetry={data.claudeConfigured}
+                          canRetry={data.aiConfigured}
                           retrying={retry.isPending && retry.variables === scan.id}
                           onRetry={() => retry.mutate(scan.id)}
                           onDiscard={() => setDiscarding(scan)}

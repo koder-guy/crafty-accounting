@@ -1,7 +1,7 @@
-// The name given to an invoice once Claude has read it, so documents sort by date and say what they are.
-// It follows a pattern chosen in Settings → Claude Integration, such as the default
+// The name given to an invoice once the AI has read it, so documents sort by date and say what they are.
+// It follows a pattern chosen in Settings → AI Document Scanning, such as the default
 // {date}_{payee}_{invoice}_£{amount} → 2025-07-24_Amazon_DS-AEU-INV-GB-2025-394494656_£31.33.pdf
-// Only documents Claude read are renamed; files chosen any other way keep their names.
+// Only documents the AI read are renamed; files chosen any other way keep their names.
 
 import { penceToPounds } from './money';
 import { PAYMENT_METHOD_LABELS, type PaymentMethod } from './schemas';
@@ -11,7 +11,7 @@ export const MAX_FILENAME_PATTERN_LENGTH = 200;
 /** The longest name, before its extension. */
 const MAX_NAME_LENGTH = 200;
 
-/** What Claude read, as far as naming the file goes. */
+/** What the AI read, as far as naming the file goes. */
 export interface InvoiceNameParts {
   date: string | null;
   payee: string;

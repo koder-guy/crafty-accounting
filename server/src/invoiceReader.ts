@@ -1,24 +1,32 @@
-// Reads an invoice or receipt with Claude (Anthropic API) and returns what a new expense
-// needs. Nothing is saved: the form is filled in for the person to check.
-import Anthropic from '@anthropic-ai/sdk';
+// Reads an invoice or receipt with an AI (Claude or Gemini, `readers/`) and returns what a new
+// expense needs. Nothing is saved: the form is filled in for the person to check. The prompt, the
+// schema the reply must follow and the checks on it are shared, so both read the same way.
+import path from 'node:path';
 import { z } from 'zod';
-import { parsePoundsToPence, PAYMENT_METHODS, type ClaudeModel, type InvoiceReading } from '@crafty/shared';
+import { AI_PROVIDER_INFO, parsePoundsToPence, PAYMENT_METHODS, type AiModel, type AiProvider, type InvoiceReading } from '@crafty/shared';
 import { HttpError } from './http';
 
-export type InvoiceMediaType = 'application/pdf' | 'image/jpeg' | 'image/png' | 'image/webp';
+export type InvoiceMediaType = 'application/pdf' | 'image/jpeg' | 'image/png' | 'image/webp' | 'image/heic' | 'image/heif';
+
+export interface ReadableCategory {
+  id: number;
+  name: string;
+  hmrcCode: string;
+  isCustom: boolean;
+}
 
 export interface InvoiceInput {
   data: Buffer;
   mediaType: InvoiceMediaType;
   /** The expense categories a line may go in. */
-  categories: { id: number; name: string; hmrcCode: string }[];
+  categories: ReadableCategory[];
 }
 
-/** Calls to Claude through the Anthropic API, with the key saved in Settings → Claude Integration. Tests replace it. */
-export interface ClaudeApi {
-  /** Refuses (HttpError 422) a key Anthropic doesn't accept, or one that can't use the model. */
-  checkKey(apiKey: string, model: ClaudeModel): Promise<void>;
-  readInvoice(apiKey: string, model: ClaudeModel, input: InvoiceInput): Promise<InvoiceReading>;
+/** Calls to one AI provider, with the key saved in Settings → AI Document Scanning. Tests replace them. */
+export interface DocumentReader {
+  /** Refuses (HttpError 422) a key the provider doesn't accept, or one that can't use the model. */
+  checkKey(apiKey: string, model: AiModel): Promise<void>;
+  readInvoice(apiKey: string, model: AiModel, input: InvoiceInput): Promise<InvoiceReading>;
 }
 
 /** The payee for every order placed on Amazon. */
@@ -27,10 +35,48 @@ export const AMAZON_PAYEE = 'Amazon';
 /** The payee for every order placed on Temu, which sells through Whaleco UK Limited. */
 export const TEMU_PAYEE = 'Whaleco UK Limited (Temu)';
 
-/** The largest image the API takes. */
-export const MAX_INVOICE_IMAGE_BYTES = 5 * 1024 * 1024;
+/** The largest image Anthropic's API takes. */
+export const MAX_CLAUDE_IMAGE_BYTES = 5 * 1024 * 1024;
 
-const SYSTEM = `You read invoices and receipts for the bookkeeping of a UK sole trader who uses the cash basis and isn't VAT registered.
+/** The largest file sent to Gemini: Google takes 20 MB a request, and the file goes as base64, a third larger. */
+export const MAX_GEMINI_FILE_BYTES = 14 * 1024 * 1024;
+
+const COMMON_TYPES: Record<string, InvoiceMediaType> = {
+  '.pdf': 'application/pdf',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.png': 'image/png',
+  '.webp': 'image/webp',
+};
+
+/** The files each provider can read, by extension. Gemini also reads iPhone photos (HEIC). */
+const READABLE: Record<AiProvider, Record<string, InvoiceMediaType>> = {
+  claude: COMMON_TYPES,
+  gemini: { ...COMMON_TYPES, '.heic': 'image/heic', '.heif': 'image/heif' },
+};
+
+export function invoiceMediaType(provider: AiProvider, name: string): InvoiceMediaType | undefined {
+  return READABLE[provider][path.extname(name).toLowerCase()];
+}
+
+/** Why the provider can't read a file with this name and size, or null if it can. */
+export function unreadableReason(provider: AiProvider, name: string, sizeBytes: number): string | null {
+  const who = AI_PROVIDER_INFO[provider].name;
+  const mediaType = invoiceMediaType(provider, name);
+  if (!mediaType) {
+    const kinds = provider === 'gemini' ? 'PDF, JPG, PNG, WebP and HEIC' : 'PDF, JPG, PNG and WebP';
+    return `${who} can read ${kinds} files, not this one. Check it and fill it in yourself.`;
+  }
+  if (provider === 'claude' && mediaType !== 'application/pdf' && sizeBytes > MAX_CLAUDE_IMAGE_BYTES) {
+    return `The image is too large for ${who} to read (the most is 5 MB). Check it and fill it in yourself.`;
+  }
+  if (provider === 'gemini' && sizeBytes > MAX_GEMINI_FILE_BYTES) {
+    return `The file is too large for ${who} to read (the most is 14 MB). Check it and fill it in yourself.`;
+  }
+  return null;
+}
+
+export const SYSTEM = `You read invoices and receipts for the bookkeeping of a UK sole trader who uses the cash basis and isn't VAT registered.
 Read the document and fill in one expense:
 - date: when it was paid if shown, else the invoice date, as YYYY-MM-DD. UK documents write dates day first. null if there is none.
 - payee: the business that was paid, as it names itself.
@@ -40,7 +86,7 @@ Read the document and fill in one expense:
 - paymentMethod: "card", "cash" or "bank_transfer" only when the document says how it was paid (a card receipt, "paid by BACS"); otherwise null.
 - lineItems: what was bought, one line per item or group of similar items, with the amount actually paid including any VAT. Put delivery or postage on its own line. Spread a discount over the lines it applies to, so every amount is above zero and the lines add up to the total paid. If the lines can't be read, give one line for the whole total.
 - description: for each line, what was bought, as it would be written in a ledger: about 60 characters at most. A short description stays as printed. Shorten a long one, such as an Amazon product title, to what the item is, the brand if it helps, and the size or quantity; leave out sales wording, lists of uses or compatible models, and colour or style options unless they matter. For example "SUNNYCLUE 1 Box 600Pcs Assorted Glass Beads for Jewellery Making Kit, Mixed Colour Loose Spacer Beads Craft Supplies for Bracelets Necklaces DIY" becomes "SUNNYCLUE assorted glass beads, 600 pcs".
-- categoryId: for each line, the id of the category from the list that fits best, or null if none does.
+- categoryId: for each line, the id of the category from the list that fits best, or null if none does. The owner's own categories say which standard category they come under; prefer one of the owner's own when it fits.
 - total: the total paid, or null if the document shows none.
 Amounts are pounds as plain numbers in strings, e.g. "4.99", without £ or commas.
 Copy names and numbers faithfully; don't invent anything the document doesn't show.`;
@@ -57,7 +103,7 @@ const replySchema = z.object({
   total: z.string().nullable(),
 });
 
-function outputSchema(categoryIds: string[]) {
+export function outputSchema(categoryIds: string[]) {
   const nullableString = { type: ['string', 'null'] };
   return {
     type: 'object',
@@ -89,10 +135,27 @@ function outputSchema(categoryIds: string[]) {
   };
 }
 
-/** Turns Claude's reply into a reading, keeping only what fits the form, with warnings for what to check. */
-export function toInvoiceReading(reply: unknown, categories: InvoiceInput['categories']): InvoiceReading {
+/**
+ * The categories as the prompt lists them, one per line as `id: name`. The owner's own categories
+ * also say which standard category they come under, which helps when the name alone is vague.
+ */
+export function categoryListText(categories: ReadableCategory[]): string {
+  const standard = new Map(categories.filter((c) => !c.isCustom).map((c) => [c.hmrcCode, c.name]));
+  return categories
+    .map((c) => {
+      const under = c.isCustom ? standard.get(c.hmrcCode) : undefined;
+      return c.isCustom ? `${c.id}: ${c.name} (owner's own${under ? `, under ${under}` : ''})` : `${c.id}: ${c.name}`;
+    })
+    .join('\n');
+}
+
+/** The message sent with the document. */
+export const readRequest = (categories: ReadableCategory[]) => `Expense categories (id: name):\n${categoryListText(categories)}\n\nRead this document.`;
+
+/** Turns the AI's reply into a reading, keeping only what fits the form, with warnings for what to check. */
+export function toInvoiceReading(reply: unknown, categories: InvoiceInput['categories'], provider: AiProvider = 'claude'): InvoiceReading {
   const parsed = replySchema.safeParse(reply);
-  if (!parsed.success) throw new HttpError(502, 'Claude\'s reply couldn\'t be understood. Try again, or fill in the expense yourself.');
+  if (!parsed.success) throw new HttpError(502, `${AI_PROVIDER_INFO[provider].name}'s reply couldn't be understood. Try again, or fill in the expense yourself.`);
   const r = parsed.data;
   const warnings: string[] = [];
   const known = new Set(categories.map((c) => c.id));
@@ -133,72 +196,3 @@ export function toInvoiceReading(reply: unknown, categories: InvoiceInput['categ
   };
 }
 
-/** Turns the SDK's errors into ones the app can show. Never 401: the client would take it as being signed out. */
-function apiError(err: unknown): never {
-  if (err instanceof Anthropic.AuthenticationError || err instanceof Anthropic.PermissionDeniedError) {
-    throw new HttpError(502, 'Anthropic refused the API key saved in Settings → Claude Integration.');
-  }
-  if (err instanceof Anthropic.RateLimitError) throw new HttpError(503, 'The Anthropic API is busy or the account is out of credit. Try again later.');
-  if (err instanceof Anthropic.BadRequestError) throw new HttpError(422, `Claude couldn't read that file: ${err.message}`);
-  if (err instanceof Anthropic.APIError) throw new HttpError(502, `The Anthropic API didn't answer properly (${err.status ?? 'no connection'}). Try again later.`);
-  throw err;
-}
-
-export const anthropicApi: ClaudeApi = {
-  async checkKey(apiKey, model) {
-    try {
-      await new Anthropic({ apiKey, maxRetries: 0 }).models.retrieve(model);
-    } catch (err) {
-      if (err instanceof Anthropic.AuthenticationError) throw new HttpError(422, 'Anthropic didn\'t accept that key. Check you copied all of it.');
-      if (err instanceof Anthropic.PermissionDeniedError || err instanceof Anthropic.NotFoundError) {
-        throw new HttpError(422, 'That key can\'t use the chosen model. Try another model, or check the key\'s workspace in the Anthropic Console.');
-      }
-      if (err instanceof Anthropic.APIConnectionError) throw new HttpError(502, 'Couldn\'t reach Anthropic to check the key. Check the server is online.');
-      apiError(err);
-    }
-  },
-
-  async readInvoice(apiKey, model, { data, mediaType, categories }) {
-    const client = new Anthropic({ apiKey });
-    const categoryList = categories.map((c) => `${c.id}: ${c.name}`).join('\n');
-    const source = { type: 'base64' as const, data: data.toString('base64') };
-    const document =
-      mediaType === 'application/pdf'
-        ? { type: 'document' as const, source: { ...source, media_type: mediaType } }
-        : { type: 'image' as const, source: { ...source, media_type: mediaType } };
-
-    let response;
-    try {
-      response = await client.beta.messages.create({
-        model,
-        max_tokens: 16000,
-        // If a safety check declines the request, the API retries it on another model. Haiku has no fallback.
-        ...(model === 'claude-haiku-5-5' ? {} : { betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default' as const }),
-        output_config: {
-          effort: 'medium',
-          format: { type: 'json_schema', schema: outputSchema(categories.map((c) => String(c.id))) },
-        },
-        system: SYSTEM,
-        messages: [
-          {
-            role: 'user',
-            content: [document, { type: 'text', text: `Expense categories (id: name):\n${categoryList}\n\nRead this document.` }],
-          },
-        ],
-      });
-    } catch (err) {
-      apiError(err);
-    }
-
-    if (response.stop_reason === 'refusal') throw new HttpError(422, 'Claude declined to read this document.');
-    if (response.stop_reason === 'max_tokens') throw new HttpError(422, 'The invoice was too long to read in one go.');
-    const text = response.content.flatMap((b) => (b.type === 'text' ? [b.text] : [])).join('');
-    let reply: unknown;
-    try {
-      reply = JSON.parse(text);
-    } catch {
-      reply = null;
-    }
-    return toInvoiceReading(reply, categories);
-  },
-};

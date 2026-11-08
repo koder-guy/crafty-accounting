@@ -10,7 +10,7 @@ export * from './useOfHome';
 export * from './yearComparison';
 export * from './photos';
 export * from './invoiceFilename';
-export * from './claude';
+export * from './aiReading';
 export * from './square';
 export * from './diskSpace';
 export * from './businessDetails';

@@ -10,7 +10,7 @@ import { createApp } from './app';
 import { dumpSql } from './backup';
 import { NEXT_UPDATED_AT, nextTimestamp } from './repo';
 import { seedCategories, type Db } from './db';
-import { getClaudeSettings } from './claudeSettings';
+import { getAiSettings } from './aiSettings';
 import { MIGRATIONS } from './db/migrations';
 import { isAutoBackupDue, nextAutoBackup, runAutoBackup } from './autoBackup';
 import { loadConfig } from './config';
@@ -18,7 +18,8 @@ import { createContext, type AppContext } from './context';
 import { documentNameProblem } from './documents';
 import { fraudPreventionHeaders, parseBrowserData, publicIp } from './fraudPrevention';
 import { hmrcAccessToken } from './hmrc';
-import { toInvoiceReading, type InvoiceInput } from './invoiceReader';
+import { categoryListText, toInvoiceReading, type InvoiceInput } from './invoiceReader';
+import { geminiReader } from './readers/gemini';
 import { HttpError } from './http';
 import { changeSummaries, newestTag, startUpdateChecker } from './updates';
 import { checkDiskSpace, raiseNotification, syncUpdateNotification } from './notifications';
@@ -3701,7 +3702,7 @@ describe('reading invoices', () => {
   beforeEach(() => {
     checked = [];
     read = [];
-    ctx.claude = {
+    ctx.readers.claude = {
       async checkKey(apiKey, model) {
         checked.push({ apiKey, model });
         if (apiKey === 'sk-bad') throw new HttpError(422, "Anthropic didn't accept that key.");
@@ -3714,12 +3715,11 @@ describe('reading invoices', () => {
   });
 
   it('is off until a key is saved', async () => {
-    expect((await agent.get('/api/claude').expect(200)).body).toEqual({
+    const off = { configured: false, keyHint: null, keyAddedBy: null, keyAddedAt: null };
+    expect((await agent.get('/api/ai').expect(200)).body).toEqual({
+      provider: 'claude',
       configured: false,
-      keyHint: null,
-      keyAddedBy: null,
-      keyAddedAt: null,
-      model: 'claude-haiku-5-5',
+      providers: { claude: { ...off, model: 'claude-haiku-5-5' }, gemini: { ...off, model: 'gemini-3.8-flash' } },
       filenamePattern: '{date}_{payee}_{invoice}_£{amount}',
     });
     await agent.post('/api/scans').attach('document', PDF, 'invoice.pdf').expect(404);
@@ -3727,38 +3727,38 @@ describe('reading invoices', () => {
   });
 
   it('checks a key before saving it, and never sends it back', async () => {
-    await agent.put('/api/claude').send({ apiKey: 'sk-bad' }).expect(422);
-    expect((await agent.get('/api/claude')).body.configured).toBe(false);
-    await agent.put('/api/claude').send({ apiKey: 'has a space' }).expect(400);
-    await agent.put('/api/claude').send({}).expect(400);
-    await agent.put('/api/claude').send({ model: 'gpt-9' }).expect(400);
+    await agent.put('/api/ai/claude').send({ apiKey: 'sk-bad' }).expect(422);
+    expect((await agent.get('/api/ai')).body.configured).toBe(false);
+    await agent.put('/api/ai/claude').send({ apiKey: 'has a space' }).expect(400);
+    await agent.put('/api/ai/claude').send({}).expect(400);
+    await agent.put('/api/ai/claude').send({ model: 'gpt-9' }).expect(400);
 
-    const res = await agent.put('/api/claude').send({ apiKey: `  ${KEY} `, model: 'claude-sonnet-5-5' }).expect(200);
+    const res = await agent.put('/api/ai/claude').send({ apiKey: `  ${KEY} `, model: 'claude-sonnet-5-5' }).expect(200);
     expect(checked.at(-1)).toEqual({ apiKey: KEY, model: 'claude-sonnet-5-5' });
-    expect(res.body).toMatchObject({ configured: true, keyHint: 'sk-ant-api…WXYZ', keyAddedBy: NAME, model: 'claude-sonnet-5-5' });
-    expect(JSON.stringify((await agent.get('/api/claude')).body)).not.toContain('abcdefghij');
+    expect(res.body).toMatchObject({ configured: true, providers: { claude: { configured: true, keyHint: 'sk-ant-api…WXYZ', keyAddedBy: NAME, model: 'claude-sonnet-5-5' } } });
+    expect(JSON.stringify((await agent.get('/api/ai')).body)).not.toContain('abcdefghij');
 
     // Changing only the model keeps the key, without checking it again.
     const before = checked.length;
-    expect((await agent.put('/api/claude').send({ model: 'claude-haiku-5-5' }).expect(200)).body).toMatchObject({ configured: true, model: 'claude-haiku-5-5' });
+    expect((await agent.put('/api/ai/claude').send({ model: 'claude-haiku-5-5' }).expect(200)).body).toMatchObject({ configured: true, providers: { claude: { model: 'claude-haiku-5-5' } } });
     expect(checked).toHaveLength(before);
 
-    expect((await agent.delete('/api/claude/key').expect(200)).body).toMatchObject({ configured: false, keyHint: null, model: 'claude-haiku-5-5' });
+    expect((await agent.delete('/api/ai/claude/key').expect(200)).body).toMatchObject({ configured: false, providers: { claude: { configured: false, keyHint: null, model: 'claude-haiku-5-5' } } });
     await agent.post('/api/scans').attach('document', PDF, 'invoice.pdf').expect(404);
   });
 
   it('saves the document name pattern, checking it first', async () => {
-    await agent.put('/api/claude').send({ filenamePattern: '{date}/{payee}' }).expect(400);
-    await agent.put('/api/claude').send({ filenamePattern: '{total}' }).expect(400);
-    const res = await agent.put('/api/claude').send({ filenamePattern: '{year}-{month} {payee} £{amount}' }).expect(200);
+    await agent.put('/api/ai').send({ filenamePattern: '{date}/{payee}' }).expect(400);
+    await agent.put('/api/ai').send({ filenamePattern: '{total}' }).expect(400);
+    const res = await agent.put('/api/ai').send({ filenamePattern: '{year}-{month} {payee} £{amount}' }).expect(200);
     expect(res.body).toMatchObject({ configured: false, filenamePattern: '{year}-{month} {payee} £{amount}' });
     expect(checked).toEqual([]);
     // The default is stored as NULL, so it follows any later change to the default.
-    await agent.put('/api/claude').send({ filenamePattern: '{date}_{payee}_{invoice}_£{amount}' }).expect(200);
-    expect(ctx.db.prepare('SELECT filename_pattern FROM claude_settings').get()).toEqual({ filename_pattern: null });
+    await agent.put('/api/ai').send({ filenamePattern: '{date}_{payee}_{invoice}_£{amount}' }).expect(200);
+    expect(ctx.db.prepare('SELECT filename_pattern FROM ai_settings').get()).toEqual({ filename_pattern: null });
 
     const viewer = await addPerson('Accountant', 'read-only-password', 'viewer');
-    await viewer.put('/api/claude').send({ filenamePattern: '{payee}' }).expect(403);
+    await viewer.put('/api/ai').send({ filenamePattern: '{payee}' }).expect(403);
   });
 
   it('keeps Opus for an install that saved a key before Haiku became the default', () => {
@@ -3771,32 +3771,34 @@ describe('reading invoices', () => {
     MIGRATIONS.filter((m) => m.version <= 20).forEach(run);
     db.prepare("INSERT INTO claude_settings (id, api_key) VALUES (1, 'sk-old')").run();
     MIGRATIONS.filter((m) => m.version > 20).forEach(run);
-    expect(getClaudeSettings(db as Db).model).toBe('claude-opus-5-5');
+    expect(getAiSettings(db as Db).providers.claude.model).toBe('claude-opus-5-5');
     db.close();
   });
 
   it('lets only editors change it', async () => {
     const viewer = await addPerson('Accountant', 'read-only-password', 'viewer');
-    await viewer.put('/api/claude').send({ apiKey: KEY }).expect(403);
-    await agent.put('/api/claude').send({ apiKey: KEY }).expect(200);
-    await viewer.delete('/api/claude/key').expect(403);
-    expect((await viewer.get('/api/claude').expect(200)).body).toMatchObject({ configured: true, keyHint: 'sk-ant-api…WXYZ' });
+    await viewer.put('/api/ai/claude').send({ apiKey: KEY }).expect(403);
+    await agent.put('/api/ai/claude').send({ apiKey: KEY }).expect(200);
+    await viewer.delete('/api/ai/claude/key').expect(403);
+    expect((await viewer.get('/api/ai').expect(200)).body).toMatchObject({ configured: true, providers: { claude: { keyHint: 'sk-ant-api…WXYZ' } } });
     await viewer.post('/api/scans').attach('document', PDF, 'invoice.pdf').expect(403);
   });
 
   it('keeps the key out of backups and through a restore and a reset', async () => {
-    await agent.put('/api/claude').send({ apiKey: KEY, model: 'claude-sonnet-5-5', filenamePattern: '{payee} {date}' }).expect(200);
+    await agent.put('/api/ai/claude').send({ apiKey: KEY, model: 'claude-sonnet-5-5' }).expect(200);
+    await agent.put('/api/ai').send({ filenamePattern: '{payee} {date}' }).expect(200);
     const dump = (await agent.get('/api/backup.sql').expect(200)).text;
-    expect(dump).not.toMatch(/INSERT INTO "claude_settings"/);
+    expect(dump).not.toMatch(/INSERT INTO "ai_settings"/);
     expect(dump).not.toContain(KEY);
     await agent.post('/api/restore').attach('file', Buffer.from(dump), 'backup.sql').expect(200);
-    expect((await agent.get('/api/claude')).body).toMatchObject({ configured: true, model: 'claude-sonnet-5-5' });
+    expect((await agent.get('/api/ai')).body).toMatchObject({ configured: true, providers: { claude: { model: 'claude-sonnet-5-5' } } });
     await agent.post('/api/reset').send({ confirm: 'RESET' }).expect(200);
-    expect((await agent.get('/api/claude')).body).toMatchObject({ configured: true, model: 'claude-sonnet-5-5', filenamePattern: '{payee} {date}' });
+    expect((await agent.get('/api/ai')).body).toMatchObject({ configured: true, providers: { claude: { model: 'claude-sonnet-5-5' } }, filenamePattern: '{payee} {date}' });
   });
 
   it('upgrades a backup made before the Claude integration, keeping the saved key', async () => {
-    await agent.put('/api/claude').send({ apiKey: KEY, model: 'claude-haiku-5-5', filenamePattern: '{payee} {date}' }).expect(200);
+    await agent.put('/api/ai/claude').send({ apiKey: KEY, model: 'claude-haiku-5-5' }).expect(200);
+    await agent.put('/api/ai').send({ filenamePattern: '{payee} {date}' }).expect(200);
     const old = new Database(':memory:');
     old.exec('CREATE TABLE schema_migrations (version INTEGER PRIMARY KEY, applied_at TEXT)');
     for (const migration of MIGRATIONS.filter((m) => m.version <= 18)) {
@@ -3807,14 +3809,14 @@ describe('reading invoices', () => {
     const dump = dumpSql(old);
     old.close();
     expect(dump).toMatch(/schema_version: 18/);
-    expect(dump).not.toMatch(/claude_settings/);
+    expect(dump).not.toMatch(/claude_settings|ai_settings/);
 
     await agent.post('/api/restore').attach('file', Buffer.from(dump), 'backup.sql').expect(200);
-    expect((await agent.get('/api/claude')).body).toMatchObject({ configured: true, keyHint: 'sk-ant-api…WXYZ', model: 'claude-haiku-5-5', filenamePattern: '{payee} {date}' });
+    expect((await agent.get('/api/ai')).body).toMatchObject({ configured: true, providers: { claude: { keyHint: 'sk-ant-api…WXYZ', model: 'claude-haiku-5-5' } }, filenamePattern: '{payee} {date}' });
   });
 
   it('reads an invoice with the saved key and model, without saving anything', async () => {
-    await agent.put('/api/claude').send({ apiKey: KEY, model: 'claude-sonnet-5-5' }).expect(200);
+    await agent.put('/api/ai/claude').send({ apiKey: KEY, model: 'claude-sonnet-5-5' }).expect(200);
     const { id } = (await agent.post('/api/scans').attach('document', PDF, 'invoice.pdf').expect(201)).body;
     await ctx.scans.idle();
     expect((await agent.get(`/api/scans/${id}`).expect(200)).body.reading).toMatchObject({
@@ -3839,7 +3841,7 @@ describe('reading invoices', () => {
   });
 
   it('keeps files Claude cannot read without sending them, to fill in by hand', async () => {
-    await agent.put('/api/claude').send({ apiKey: KEY }).expect(200);
+    await agent.put('/api/ai/claude').send({ apiKey: KEY }).expect(200);
     const heic = (await agent.post('/api/scans').attach('document', Buffer.from('heic'), 'photo.heic').expect(201)).body;
     expect(heic).toMatchObject({ status: 'failed', error: expect.stringMatching(/PDF, JPG, PNG and WebP/) });
     const big = (await agent.post('/api/scans').attach('document', Buffer.alloc(5 * 1024 * 1024 + 1), 'big.jpg').expect(201)).body;
@@ -3847,6 +3849,140 @@ describe('reading invoices', () => {
     await agent.post('/api/scans').expect(400);
     await ctx.scans.idle();
     expect(read).toEqual([]);
+  });
+
+  describe('with Gemini', () => {
+    const GEMINI_KEY = 'AIzaSyA-abcdefghijklmnopqrstuvwxyz0123';
+    let geminiRead: { apiKey: string; model: string; input: InvoiceInput }[];
+    let geminiChecked: { apiKey: string; model: string }[];
+
+    beforeEach(() => {
+      geminiRead = [];
+      geminiChecked = [];
+      ctx.readers.gemini = {
+        async checkKey(apiKey, model) {
+          geminiChecked.push({ apiKey, model });
+          if (apiKey === 'AIza-bad') throw new HttpError(422, "Google didn't accept that key.");
+        },
+        async readInvoice(apiKey, model, input) {
+          geminiRead.push({ apiKey, model, input });
+          return toInvoiceReading(reply(), input.categories, 'gemini');
+        },
+      };
+    });
+
+    it('keeps each provider\'s key, and reads with the one chosen', async () => {
+      await agent.put('/api/ai/claude').send({ apiKey: KEY }).expect(200);
+      await agent.put('/api/ai/gemini').send({ apiKey: 'AIza-bad' }).expect(422);
+      await agent.put('/api/ai/gemini').send({ model: 'claude-haiku-5-5' }).expect(400);
+      await agent.put('/api/ai/openai').send({ apiKey: KEY }).expect(404);
+      await agent.put('/api/ai').send({ provider: 'openai' }).expect(400);
+
+      // Choosing Gemini before it has a key: documents wait.
+      expect((await agent.put('/api/ai').send({ provider: 'gemini' }).expect(200)).body).toMatchObject({ provider: 'gemini', configured: false });
+      expect((await agent.get('/api/scans').expect(200)).body).toMatchObject({ aiConfigured: false, aiProvider: 'gemini' });
+      await agent.post('/api/scans').attach('document', PDF, 'invoice.pdf').expect(404);
+
+      const res = await agent.put('/api/ai/gemini').send({ apiKey: GEMINI_KEY, model: 'gemini-3.5-flash-lite' }).expect(200);
+      expect(geminiChecked.at(-1)).toEqual({ apiKey: GEMINI_KEY, model: 'gemini-3.5-flash-lite' });
+      expect(res.body).toMatchObject({
+        provider: 'gemini',
+        configured: true,
+        providers: { claude: { configured: true, keyHint: 'sk-ant-api…WXYZ' }, gemini: { configured: true, keyHint: 'AIzaSyA-ab…0123', keyAddedBy: NAME, model: 'gemini-3.5-flash-lite' } },
+      });
+      expect(JSON.stringify(res.body)).not.toContain('abcdefghij');
+
+      const { id } = (await agent.post('/api/scans').attach('document', PDF, 'invoice.pdf').expect(201)).body;
+      await ctx.scans.idle();
+      expect((await agent.get(`/api/scans/${id}`).expect(200)).body).toMatchObject({ status: 'ready', reading: { payee: 'Bead World', totalPence: 3550 } });
+      expect(geminiRead.map(({ apiKey, model }) => ({ apiKey, model }))).toEqual([{ apiKey: GEMINI_KEY, model: 'gemini-3.5-flash-lite' }]);
+      expect(read).toEqual([]);
+
+      // Back to Claude, whose key was kept.
+      expect((await agent.put('/api/ai').send({ provider: 'claude' }).expect(200)).body).toMatchObject({ provider: 'claude', configured: true });
+      await agent.delete('/api/ai/gemini/key').expect(200);
+      expect((await agent.get('/api/ai')).body).toMatchObject({ configured: true, providers: { gemini: { configured: false } } });
+      const viewer = await addPerson('Accountant', 'read-only-password', 'viewer');
+      await viewer.put('/api/ai').send({ provider: 'gemini' }).expect(403);
+    });
+
+    it('reads iPhone photos (HEIC), which Claude can\'t', async () => {
+      await agent.put('/api/ai/gemini').send({ apiKey: GEMINI_KEY }).expect(200);
+      await agent.put('/api/ai').send({ provider: 'gemini' }).expect(200);
+      const heic = (await agent.post('/api/scans').attach('document', Buffer.from('heic'), 'photo.heic').expect(201)).body;
+      expect(heic.status).not.toBe('failed');
+      await ctx.scans.idle();
+      expect(geminiRead[0]!.input.mediaType).toBe('image/heic');
+      const big = (await agent.post('/api/scans').attach('document', Buffer.alloc(14 * 1024 * 1024 + 1), 'big.pdf').expect(201)).body;
+      expect(big).toMatchObject({ status: 'failed', error: expect.stringMatching(/too large for Gemini to read/) });
+
+      // A HEIC that failed under Claude can be read again once Gemini is chosen.
+      await agent.put('/api/ai/claude').send({ apiKey: KEY }).expect(200);
+      await agent.put('/api/ai').send({ provider: 'claude' }).expect(200);
+      const failed = (await agent.post('/api/scans').attach('document', Buffer.from('heic'), 'other.heic').expect(201)).body;
+      expect(failed.status).toBe('failed');
+      await agent.post(`/api/scans/${failed.id}/retry`).expect(422);
+      await agent.put('/api/ai').send({ provider: 'gemini' }).expect(200);
+      await agent.post(`/api/scans/${failed.id}/retry`).expect(200);
+      await ctx.scans.idle();
+      expect((await agent.get(`/api/scans/${failed.id}`).expect(200)).body.status).toBe('ready');
+    });
+
+    it('sends the document, prompt and schema to the Gemini API, and reads its JSON reply', async () => {
+      const expenseCats = categories.filter((c) => c.type === 'EXPENSE').map(({ id, name, hmrcCode, isCustom }) => ({ id, name, hmrcCode, isCustom }));
+      const calls: { url: string; body: Record<string, unknown> }[] = [];
+      const answer = (body: unknown) => new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      vi.stubGlobal('fetch', async (url: string | URL, init?: RequestInit) => {
+        calls.push({ url: String(url), body: JSON.parse(String(init?.body ?? '{}')) });
+        return answer({ candidates: [{ content: { role: 'model', parts: [{ text: JSON.stringify(reply()) }] }, finishReason: 'STOP' }] });
+      });
+      try {
+        const reading = await geminiReader.readInvoice(GEMINI_KEY, 'gemini-3.8-flash', { data: PDF, mediaType: 'application/pdf', categories: expenseCats });
+        expect(reading).toMatchObject({ payee: 'Bead World', totalPence: 3550, warnings: [] });
+        const { url, body } = calls[0]!;
+        expect(url).toContain('models/gemini-3.8-flash:generateContent');
+        const json = JSON.stringify(body);
+        expect(json).toContain(PDF.toString('base64'));
+        expect(json).toContain('application/pdf');
+        expect(json).toContain('ledger');
+        expect(body).toMatchObject({ generationConfig: { responseMimeType: 'application/json', responseJsonSchema: { type: 'object' } } });
+
+        vi.stubGlobal('fetch', async () => answer({ candidates: [{ content: { parts: [] }, finishReason: 'SAFETY' }] }));
+        await expect(geminiReader.readInvoice(GEMINI_KEY, 'gemini-3.8-flash', { data: PDF, mediaType: 'application/pdf', categories: expenseCats })).rejects.toMatchObject({ status: 422 });
+        vi.stubGlobal('fetch', async () => new Response(JSON.stringify({ error: { code: 400, message: 'API key not valid. Please pass a valid API key.', status: 'INVALID_ARGUMENT' } }), { status: 400 }));
+        await expect(geminiReader.checkKey('AIza-bad', 'gemini-3.8-flash')).rejects.toMatchObject({ status: 422 });
+      } finally {
+        vi.unstubAllGlobals();
+      }
+    });
+  });
+
+  it('tells the AI which standard category each of the owner\'s own comes under', async () => {
+    await agent.post('/api/categories').send({ name: 'Beads and findings', mapsToCategoryId: cat('costOfGoods') }).expect(201);
+    const all = (await agent.get('/api/categories').expect(200)).body as Category[];
+    const text = categoryListText(all.filter((c) => c.type === 'EXPENSE').map(({ id, name, hmrcCode, isCustom }) => ({ id, name, hmrcCode, isCustom })));
+    const own = all.find((c) => c.name === 'Beads and findings')!;
+    const standard = all.find((c) => c.hmrcCode === 'costOfGoods' && !c.isCustom)!;
+    expect(text).toContain(`${own.id}: Beads and findings (owner's own, under ${standard.name})`);
+    expect(text).toContain(`${standard.id}: ${standard.name}\n`);
+  });
+
+  it('upgrades the Claude settings to AI document scanning, keeping the key, model and pattern', () => {
+    const db = new Database(':memory:');
+    db.exec('CREATE TABLE schema_migrations (version INTEGER PRIMARY KEY, applied_at TEXT)');
+    const run = (m: (typeof MIGRATIONS)[number]) => {
+      db.exec(m.sql);
+      db.prepare('INSERT INTO schema_migrations (version) VALUES (?)').run(m.version);
+    };
+    MIGRATIONS.filter((m) => m.version <= 26).forEach(run);
+    db.prepare("INSERT INTO claude_settings (id, api_key, key_added_by, key_added_at, model, filename_pattern) VALUES (1, 'sk-old', 'Jo', '2026-10-01T09:00:00.000Z', 'claude-sonnet-5-5', '{payee} {date}')").run();
+    MIGRATIONS.filter((m) => m.version > 26).forEach(run);
+    const s = getAiSettings(db as Db);
+    expect(s.provider).toBe('claude');
+    expect(s.providers.claude).toEqual({ apiKey: 'sk-old', model: 'claude-sonnet-5-5', keyAddedBy: 'Jo', keyAddedAt: '2026-10-01T09:00:00.000Z' });
+    expect(s.providers.gemini).toEqual({ apiKey: null, model: 'gemini-3.8-flash', keyAddedBy: null, keyAddedAt: null });
+    expect(s.filenamePattern).toBe('{payee} {date}');
+    db.close();
   });
 
   it('puts every Temu order under Whaleco UK Limited (Temu), paid by card', () => {
@@ -3900,7 +4036,7 @@ describe('scanning documents in bulk', () => {
   beforeEach(async () => {
     read = [];
     failNext = null;
-    ctx.claude = {
+    ctx.readers.claude = {
       async checkKey() {},
       async readInvoice(_apiKey, _model, input) {
         read.push(input.data.toString());
@@ -3923,7 +4059,7 @@ describe('scanning documents in bulk', () => {
         );
       },
     };
-    await agent.put('/api/claude').send({ apiKey: KEY }).expect(200);
+    await agent.put('/api/ai/claude').send({ apiKey: KEY }).expect(200);
   });
 
   const scan = (body: string, name = 'invoice.pdf', who = agent) => who.post('/api/scans').attach('document', Buffer.from(body), name);
@@ -3936,7 +4072,7 @@ describe('scanning documents in bulk', () => {
     await ctx.scans.idle();
 
     const list = (await agent.get('/api/scans').expect(200)).body;
-    expect(list).toMatchObject({ claudeConfigured: true, maxUploadBytes: 20 * 1024 * 1024 });
+    expect(list).toMatchObject({ aiConfigured: true, maxUploadBytes: 20 * 1024 * 1024 });
     expect(list.scans.map((s: { originalName: string; status: string }) => [s.originalName, s.status])).toEqual([
       ['invoice.pdf', 'ready'],
       ['second.pdf', 'ready'],
@@ -4039,16 +4175,16 @@ describe('scanning documents in bulk', () => {
     const viewer = await addPerson('Accountant', 'read-only-password', 'viewer');
     await scan('%PDF viewer', 'v.pdf', viewer).expect(403);
 
-    await agent.delete('/api/claude/key').expect(200);
+    await agent.delete('/api/ai/claude/key').expect(200);
     await scan('%PDF later').expect(404);
     // Added just before the key was removed: it waits, and the list still shows it.
     ctx.db.prepare("INSERT INTO scans (filename, original_name, size_bytes) VALUES ('scan-0000000000000000.pdf', 'later.pdf', 10)").run();
     fs.writeFileSync(path.join(ctx.paths.uploadsDir, 'scan-0000000000000000.pdf'), '%PDF later');
     const list = (await viewer.get('/api/scans').expect(200)).body;
-    expect(list).toMatchObject({ claudeConfigured: false, scans: [{ status: 'waiting' }] });
+    expect(list).toMatchObject({ aiConfigured: false, scans: [{ status: 'waiting' }] });
     await viewer.delete(`/api/scans/${list.scans[0].id}`).expect(403);
 
-    await agent.put('/api/claude').send({ apiKey: KEY }).expect(200);
+    await agent.put('/api/ai/claude').send({ apiKey: KEY }).expect(200);
     await ctx.scans.idle();
     expect((await agent.get('/api/scans')).body.scans[0].status).toBe('ready');
     expect(read).toEqual(['%PDF later']);

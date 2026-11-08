@@ -8,7 +8,7 @@ import { authRouter, businessSetupGuard, passwordChangeGuard, readOnlyGuard, req
 import { businessRouter } from './routes/business';
 import { backupRouter } from './routes/backup';
 import { categoriesRouter } from './routes/categories';
-import { claudeRouter } from './routes/claude';
+import { aiRouter } from './routes/ai';
 import { dashboardRouter } from './routes/dashboard';
 import { documentsRouter } from './routes/documents';
 import { hmrcRouter } from './routes/hmrc';
@@ -102,7 +102,7 @@ export function createApp(ctx: AppContext) {
   app.use('/api/use-of-home', useOfHomeRouter(ctx));
   app.use('/api/documents', documentsRouter(ctx));
   app.use('/api/scans', scansRouter(ctx));
-  app.use('/api/claude', claudeRouter(ctx));
+  app.use('/api/ai', aiRouter(ctx));
   app.use('/api/square', squareRouter(ctx));
   app.use('/api/tls', tlsRouter(ctx));
   app.use('/api/dashboard', dashboardRouter(ctx));

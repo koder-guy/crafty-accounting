@@ -8,7 +8,7 @@ const SECTIONS = [
   { to: '/settings/users', label: 'Users', icon: Users },
   { to: '/settings/tax-years', label: 'Tax Years', icon: Layers },
   { to: '/settings/hmrc', label: 'HMRC', icon: Landmark },
-  { to: '/settings/claude', label: 'Claude Integration', icon: Sparkles },
+  { to: '/settings/ai', label: 'AI Document Scanning', icon: Sparkles },
   { to: '/settings/square', label: 'Square Integration', icon: SquareLogo },
   { to: '/settings/categories', label: 'Custom Categories', icon: Tags },
   { to: '/settings/backup', label: 'Backup and Restore', icon: DatabaseBackup },
@@ -23,7 +23,7 @@ export function SettingsLayout() {
   return (
     <SectionLayout
       title="Settings"
-      subtitle="Manage your business details, users, tax years, categories, the Claude and Square integrations, backups, the HTTPS certificate, updates and other app settings."
+      subtitle="Manage your business details, users, tax years, categories, AI document scanning, the Square integration, backups, the HTTPS certificate, updates and other app settings."
       sections={SECTIONS.filter((s) => (s.to !== '/settings/backup' || canEdit) && (s.to !== '/settings/hmrc' || hmrc?.configured))}
       ready={!!hmrc}
     />

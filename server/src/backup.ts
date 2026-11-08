@@ -21,9 +21,9 @@ import { syncScansNotification } from './notifications';
 
 const REQUIRED_TABLES = ['schema_migrations', 'tax_years', 'settings', 'categories', 'incomes', 'expenses', 'expense_line_items', 'mtd_submissions'];
 const ALLOWED_STATEMENT = /^(CREATE TABLE |CREATE INDEX |CREATE UNIQUE INDEX |INSERT INTO )/;
-const INSTALL_TABLES = new Set(['users', 'hmrc_connections', 'claude_settings', 'square_settings', 'tls_certificate', 'notifications', 'notification_reads']);
+const INSTALL_TABLES = new Set(['users', 'hmrc_connections', 'ai_settings', 'square_settings', 'tls_certificate', 'notifications', 'notification_reads']);
 /** Install tables copied across a restore as they are (users are handled on their own). */
-const KEPT_TABLES = ['hmrc_connections', 'claude_settings', 'square_settings', 'tls_certificate', 'notifications', 'notification_reads'];
+const KEPT_TABLES = ['hmrc_connections', 'ai_settings', 'square_settings', 'tls_certificate', 'notifications', 'notification_reads'];
 const MAX_ZIP_BYTES = 4 * 1024 ** 3;
 
 const quoteIdent = (name: string) => `"${name.replace(/"/g, '""')}"`;
@@ -54,7 +54,7 @@ export function dumpSql(db: Db): string {
     .all() as { name: string; sql: string }[];
   for (const table of tables) lines.push(`${table.sql.replace(/\s+/g, ' ')};`);
   for (const table of tables) {
-    // Sign-ins, the HMRC connection and the Claude key belong to the install, not the books,
+    // Sign-ins, the HMRC connection and the AI keys belong to the install, not the books,
     // so password hashes, HMRC tokens and API keys stay out of backups.
     if (INSTALL_TABLES.has(table.name)) continue;
     const select = db.prepare(`SELECT * FROM ${quoteIdent(table.name)} ORDER BY rowid`);
@@ -127,7 +127,7 @@ export function restoreBackup(ctx: AppContext, sql: string, uploadsFrom?: string
   const newDbFile = buildDatabaseFromDump(ctx, sql);
   const { dbFile, uploadsDir } = ctx.paths;
 
-  // Automatic backup settings, sign-ins, notifications, the HMRC connection and the Claude key belong to this install, so they survive a restore.
+  // Automatic backup settings, sign-ins, notifications, the HMRC connection and the AI keys belong to this install, so they survive a restore.
   const keepSettings = ctx.db.prepare("SELECT key, value FROM settings WHERE key LIKE 'auto\\_backup\\_%' ESCAPE '\\'").all() as {
     key: string;
     value: string | null;

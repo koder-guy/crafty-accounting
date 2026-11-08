@@ -1,20 +1,20 @@
 // Documents scanned in bulk, waiting to be checked (Expenses → Scan documents). The list stays
-// available without a Claude key, so what's there can still be checked; adding and retrying need one.
+// available without an AI key, so what's there can still be checked; adding and retrying need one.
 import fs from 'node:fs';
 import path from 'node:path';
 import { Router, type RequestHandler } from 'express';
 import type { ScanList } from '@crafty/shared';
 import type { AppContext } from '../context';
-import { getClaudeSettings } from '../claudeSettings';
+import { activeReader, getAiSettings } from '../aiSettings';
 import { ALLOWED_EXTENSIONS, createUploader, decodeUploadName, documentPath, ensureSpaceFor, uploadSpace } from '../documents';
 import { HttpError, parseId } from '../http';
 import { syncScansNotification } from '../notifications';
-import { addScan, deleteScan, fillFingerprints, getScan, getScanRow, listScans, unreadableReason } from '../scans';
+import { addScan, deleteScan, fillFingerprints, getScan, getScanRow, listScans, scanProblem } from '../scans';
 
 export function scansRouter(ctx: AppContext): Router {
   const router = Router();
   const upload = createUploader(ctx);
-  const needsKey: RequestHandler = (_req, _res, next) => (getClaudeSettings(ctx.db).apiKey ? next() : next(new HttpError(404, 'Not found')));
+  const needsKey: RequestHandler = (_req, _res, next) => (activeReader(ctx.db) ? next() : next(new HttpError(404, 'Not found')));
 
   router.get('/', (_req, res) => {
     // Picks up anything left waiting, e.g. after a key was saved again.
@@ -23,7 +23,8 @@ export function scansRouter(ctx: AppContext): Router {
     syncScansNotification(ctx);
     const list: ScanList = {
       scans: listScans(ctx.db),
-      claudeConfigured: getClaudeSettings(ctx.db).apiKey !== null,
+      aiConfigured: activeReader(ctx.db) !== null,
+      aiProvider: getAiSettings(ctx.db).provider,
       maxUploadBytes: ctx.config.maxUploadMb * 1024 * 1024,
       space: uploadSpace(ctx),
     };
@@ -61,7 +62,7 @@ export function scansRouter(ctx: AppContext): Router {
     const row = getScanRow(ctx.db, parseId(req.params.id));
     if (!row) throw new HttpError(404, 'That document has already been saved or discarded');
     if (row.status !== 'failed') throw new HttpError(409, 'Only a document that couldn\'t be read can be read again');
-    const problem = unreadableReason(row.original_name, row.size_bytes);
+    const problem = scanProblem(ctx.db, row.original_name, row.size_bytes);
     if (problem) throw new HttpError(422, problem);
     ctx.db.prepare("UPDATE scans SET status = 'waiting', error = NULL WHERE id = ?").run(row.id);
     ctx.scans.kick();
