@@ -17,7 +17,7 @@ export function MtdLayout() {
       subtitle={
         hmrc?.configured
           ? 'Send HMRC your figures each quarter, then confirm the year.'
-          : 'Export your figures each quarter for your bridging software, then record each submission.'
+          : 'Export your quarterly figures for your bridging provider'
       }
       sections={showDeclaration ? [QUARTERLY, FINAL_DECLARATION] : [QUARTERLY]}
       variant="tabs"
