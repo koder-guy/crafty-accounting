@@ -1,5 +1,5 @@
 import { useRef, useState, type FormEvent } from 'react';
-import { FileKey, LockKeyhole } from 'lucide-react';
+import { FileKey, FileUp, LockKeyhole } from 'lucide-react';
 import { daysUntil, formatDisplayDate, MAX_PFX_BYTES, PFX_EXTENSIONS, type TlsCertificateInfo, type TlsStatus } from '@crafty/shared';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { Alert, Badge, Button, Card, CardHeader, Field, Spinner } from '../../components/ui';
@@ -71,17 +71,24 @@ function UploadForm({ replacing, onDone, onCancel }: { replacing: boolean; onDon
         error={tooLarge ? "That's too large for a certificate file." : undefined}
         hint="A .pfx or .p12 file holding the certificate and its private key, with any intermediate certificates."
       >
-        <input
-          id="tls-file"
-          ref={fileInput}
-          type="file"
-          accept={PFX_EXTENSIONS.join(',')}
-          className="field file:mr-3 file:rounded-md file:border-0 file:bg-surface-2 file:px-3 file:py-1 file:text-sm file:text-ink"
-          onChange={(e) => {
-            upload.reset();
-            setFile(e.target.files?.[0] ?? null);
-          }}
-        />
+        <div className="flex items-center gap-3">
+          <input
+            id="tls-file"
+            ref={fileInput}
+            type="file"
+            accept={PFX_EXTENSIONS.join(',')}
+            className="sr-only"
+            onChange={(e) => {
+              upload.reset();
+              setFile(e.target.files?.[0] ?? null);
+            }}
+          />
+          <Button type="button" onClick={() => fileInput.current?.click()}>
+            <FileUp className="size-4" aria-hidden />
+            Choose file
+          </Button>
+          <span className="min-w-0 flex-1 truncate text-sm text-muted">{file ? file.name : 'No file chosen'}</span>
+        </div>
       </Field>
       <Field label="File password" htmlFor="tls-password" error={upload.error?.message} hint="Used only to open the file; it isn't saved. Leave it empty if the file has none.">
         <input
