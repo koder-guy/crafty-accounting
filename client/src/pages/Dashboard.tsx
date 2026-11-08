@@ -15,13 +15,14 @@ import {
   type CategoryTotal,
   type DashboardData,
   type TransactionDocument,
+  businessName,
 } from '@crafty/shared';
 import { SampleDataNotice, Welcome } from '../components/Welcome';
 import { PageBody, PageHeader } from '../components/PageHeader';
 import { ReadOnlyNotice } from '../components/ReadOnly';
 import { DocIndicator } from '../components/transactions';
 import { Alert, Card, CardHeader, Spinner } from '../components/ui';
-import { useActiveTaxYear, useCanEdit, useDashboard, useMtdQuarters } from '../lib/queries';
+import { useActiveTaxYear, useBusiness, useCanEdit, useDashboard, useMtdQuarters } from '../lib/queries';
 
 const CHART_IN = { id: 'chart-income', fill: 'url(#chart-income)', swatch: '#8559f4', glow: '#8559f480' };
 const CHART_OUT = { id: 'chart-expenses', fill: 'url(#chart-expenses)', swatch: '#6ea0f5', glow: '#6ea0f580' };
@@ -338,10 +339,25 @@ export function Dashboard() {
   const { taxYear, isLoading: yearLoading } = useActiveTaxYear();
   const { data, isLoading, error } = useDashboard(taxYear?.id);
   const canEdit = useCanEdit();
+  const { data: businessData } = useBusiness();
+  const business = businessData?.details;
+  const logoUrl = businessData?.logo?.url;
 
   return (
     <>
-      <PageHeader title="Dashboard" />
+      <PageHeader
+        title={business ? businessName(business) : 'Dashboard'}
+        subtitlePrefix={business ? 'Dashboard' : undefined}
+        leading={
+          logoUrl && (
+            // A light tile, since many logos are made for white paper and vanish on the dark theme.
+            // Square logos make a square tile; wide ones widen it, up to a limit.
+            <div className="flex h-14 min-w-14 shrink-0 items-center justify-center rounded-xl bg-white p-1.5 shadow-sm">
+              <img src={logoUrl} alt="" className="h-full max-w-28 object-contain sm:max-w-40" />
+            </div>
+          )
+        }
+      />
       <PageBody>
         {yearLoading || (taxYear && isLoading) ? (
           <Spinner />

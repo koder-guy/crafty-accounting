@@ -1,8 +1,8 @@
-import { useEffect, useRef, type ReactNode } from 'react';
-import { displayTaxYear } from '@crafty/shared';
-import { useActiveTaxYear } from '../lib/queries';
-import { NotificationBell } from './NotificationBell';
-import { UserMenu } from './UserMenu';
+import { useEffect, useRef, type ReactNode } from "react";
+import { displayTaxYear } from "@crafty/shared";
+import { useActiveTaxYear } from "../lib/queries";
+import { NotificationBell } from "./NotificationBell";
+import { UserMenu } from "./UserMenu";
 
 /**
  * The page title, with any section tabs below it (`tabs`). On desktop it stays pinned to the top of
@@ -13,9 +13,15 @@ export function PageHeader({
   subtitle,
   actions,
   tabs,
+  leading,
+  subtitlePrefix,
 }: {
   title: string;
   subtitle?: ReactNode;
+  /** Shown before the title, such as the business's logo on the dashboard. */
+  leading?: ReactNode;
+  /** Put before the default subtitle (the tax year being viewed), such as the page's name when the title is something else. */
+  subtitlePrefix?: string;
   actions?: ReactNode;
   tabs?: ReactNode;
 }) {
@@ -25,21 +31,33 @@ export function PageHeader({
     <div ref={ref} className="z-20 bg-page lg:sticky lg:top-0 print:static">
       <header className="flex flex-col gap-4 border-b border-line px-4 py-5 sm:flex-row sm:items-center sm:px-8 lg:py-[18px]">
         {/* On narrow screens the title keeps some room and the page buttons wrap instead. */}
-        <div className="min-w-0 sm:min-w-64 sm:flex-1">
-          <h1 className="text-2xl font-bold tracking-tight text-white">{title}</h1>
-          <p className="mt-1 text-sm text-muted">
-            {subtitle ??
-              (taxYear ? (
-                <>
-                  Viewing data for UK tax year{' '}
-                  <span className="font-semibold text-accent-soft">{displayTaxYear(taxYear.label)}</span>
-                </>
-              ) : (
-                'No tax year selected'
-              ))}
-          </p>
+        <div className="flex min-w-0 items-center gap-4 sm:min-w-64 sm:flex-1">
+          {leading}
+          <div className="min-w-0">
+            <h1 className="truncate text-2xl font-bold tracking-tight text-white">
+              {title}
+            </h1>
+            <p className="mt-1 text-sm text-muted">
+              {subtitlePrefix && `${subtitlePrefix} · `}
+              {subtitle ??
+                (taxYear ? (
+                  <>
+                    Viewing data for UK tax year{" "}
+                    <span className="font-semibold text-accent-soft">
+                      {displayTaxYear(taxYear.label)}
+                    </span>
+                  </>
+                ) : (
+                  "No tax year selected"
+                ))}
+            </p>
+          </div>
         </div>
-        {actions && <div className="flex flex-wrap items-center gap-2 sm:justify-end print:hidden">{actions}</div>}
+        {actions && (
+          <div className="flex flex-wrap items-center gap-2 sm:justify-end print:hidden">
+            {actions}
+          </div>
+        )}
         {/* The bell and account menu stay top right; page buttons wrap on their own. Phones have it in the top bar instead. */}
         <div className="hidden shrink-0 items-center gap-2 lg:flex print:hidden">
           {actions && <span className="mx-1 h-6 w-px bg-line" aria-hidden />}
@@ -62,11 +80,13 @@ function usePinnedHeight() {
     const el = ref.current;
     if (!el) return;
     const root = document.documentElement;
-    const observer = new ResizeObserver(() => root.style.setProperty('--page-header-h', `${el.offsetHeight}px`));
+    const observer = new ResizeObserver(() =>
+      root.style.setProperty("--page-header-h", `${el.offsetHeight}px`),
+    );
     observer.observe(el);
     return () => {
       observer.disconnect();
-      root.style.removeProperty('--page-header-h');
+      root.style.removeProperty("--page-header-h");
     };
   }, []);
   return ref;
