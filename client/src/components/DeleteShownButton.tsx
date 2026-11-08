@@ -14,7 +14,7 @@ interface Row {
 
 /**
  * Deletes every transaction the table shows: all of them, or with a filter in use only those
- * matching it (across every page). Asks first, and the person types "delete" to confirm.
+ * matching it (across every page). Asks first, and the person types "DELETE" to confirm.
  * Greyed out, like Export, while the table shows none.
  */
 export function DeleteShownButton({
@@ -60,7 +60,7 @@ export function DeleteShownButton({
         open={open && !empty}
         title={filtered ? `Delete the ${count} shown?` : `Delete all ${count}?`}
         confirmLabel={rows.length === 1 ? 'Delete 1 transaction' : `Delete ${rows.length} transactions`}
-        requireText="delete"
+        requireText="DELETE"
         onClose={() => setOpen(false)}
         onConfirm={() => remove.mutateAsync(rows.map((r) => r.id))}
       >
