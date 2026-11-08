@@ -11,8 +11,8 @@ const SECTIONS = [
   { to: '/settings/ai', label: 'AI Document Scanning', icon: Sparkles },
   { to: '/settings/square', label: 'Square Integration', icon: SquareLogo },
   { to: '/settings/categories', label: 'Custom Categories', icon: Tags },
-  { to: '/settings/backup', label: 'Backup and Restore', icon: DatabaseBackup },
   { to: '/settings/https', label: 'HTTPS Certificate', icon: LockKeyhole },
+  { to: '/settings/backup', label: 'Backup and Restore', icon: DatabaseBackup },
   { to: '/settings/updates', label: 'Updates', icon: CircleArrowUp },
 ];
 
