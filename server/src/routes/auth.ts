@@ -4,6 +4,7 @@ import { loginSchema, type MeResponse, type Role } from '@crafty/shared';
 import type { AppContext } from '../context';
 import { HttpError, parseWith } from '../http';
 import { authenticate, getUser } from '../users';
+import { businessIsSetUp } from '../businessDetails';
 
 declare global {
   // eslint-disable-next-line @typescript-eslint/no-namespace
@@ -73,6 +74,30 @@ export const readOnlyGuard: RequestHandler = (req, _res, next) => {
   if (!reading && READ_ONLY_ALLOWED.some((a) => a.method === req.method && a.path.test(req.path))) return next();
   next(new HttpError(403, 'Your account is read-only. Ask an editor to make this change.'));
 };
+
+/** Changes allowed before the business is set up: setting it up (or bringing it in), and looking after the people who sign in. */
+const BEFORE_SETUP_ALLOWED = [
+  { method: 'PUT', path: /^\/business$/ },
+  { method: 'POST', path: /^\/sample-data$/ },
+  { method: 'POST', path: /^\/restore$/ },
+  { method: 'POST', path: /^\/backup\/auto\/files\/[^/]+\/restore$/ },
+  { method: '*', path: /^\/users(\/|$)/ },
+  { method: 'PUT', path: /^\/tax-years\/active$/ },
+  { method: 'POST', path: /^\/notifications\/(\d+\/read|read-all)$/ },
+];
+
+/**
+ * Until the business details are saved, nothing else can be changed: the app shows
+ * the setup screen instead. Reading is still allowed. Mounted on /api after readOnlyGuard.
+ */
+export function businessSetupGuard(ctx: AppContext): RequestHandler {
+  return (req, _res, next) => {
+    if (req.method === 'GET' || req.method === 'HEAD') return next();
+    if (BEFORE_SETUP_ALLOWED.some((a) => (a.method === '*' || a.method === req.method) && a.path.test(req.path))) return next();
+    if (businessIsSetUp(ctx.db)) return next();
+    next(new HttpError(403, 'Set up your business details first, in Settings → Business Details.'));
+  };
+}
 
 export function authRouter(ctx: AppContext): Router {
   const router = Router();

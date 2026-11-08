@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import { Link } from 'react-router';
 import { Layers, Sparkles, Wallet } from 'lucide-react';
 import { APP_NAME } from '@crafty/shared';
-import { useCanEdit, useCategories, useLoadSampleData, useSampleData } from '../lib/queries';
+import { useBusiness, useCanEdit, useCategories, useLoadSampleData, useSampleData } from '../lib/queries';
 import { Alert, Button, ButtonLink, Card, DismissibleAlert } from './ui';
 
 function Option({ icon, title, children, action }: { icon: ReactNode; title: string; children: ReactNode; action: ReactNode }) {
@@ -23,6 +23,8 @@ export function Welcome() {
   const { data: sample } = useSampleData();
   const { data: categories } = useCategories();
   const customCount = categories?.filter((c) => c.isCustom).length ?? 0;
+  const { data: business } = useBusiness();
+  const ownBusiness = !!business?.details && !business.isSample;
 
   if (!canEdit) {
     return (
@@ -66,12 +68,18 @@ export function Welcome() {
             </Button>
           }
         >
-          Fill the app with two tax years of made-up craft fair sales, purchases, documents and custom categories, so you can try
+          Fill the app with five tax years of a made-up craft business’s sales, purchases, documents and custom categories, so you can try
           everything out. Clear it afterwards from{' '}
           <Link to="/settings/backup" className="text-accent-soft hover:underline">
             Settings → Backup and Restore
           </Link>
           .
+          {ownBusiness && (
+            <span className="mt-2 block text-out-soft">
+              Your business details and logo will be replaced by a made-up business. Clearing the sample data clears it too, so you’d
+              enter yours again.
+            </span>
+          )}
           {customCount > 0 && (
             <span className="mt-2 block text-out-soft">
               Your {customCount === 1 ? 'custom category' : `${customCount} custom categories`} will be deleted and replaced by the

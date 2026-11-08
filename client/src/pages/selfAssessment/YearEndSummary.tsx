@@ -1,7 +1,9 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { CalendarCheck, CircleAlert, FileText, Printer, Scale } from 'lucide-react';
+import { Link } from 'react-router';
+import { Briefcase, CalendarCheck, CircleAlert, FileText, Printer, Scale } from 'lucide-react';
 import {
   APP_NAME,
+  businessName,
   displayTaxYear,
   formatDisplayDate,
   formatGBP,
@@ -12,12 +14,13 @@ import {
   type Sa103sBox,
   type YearEndSummaryResponse,
 } from '@crafty/shared';
+import { PrintBusinessHeader } from '../../components/BusinessHeader';
 import { DateInput } from '../../components/DateInput';
 import { MileageCheckAlert } from '../../components/MileageCheckAlert';
 import { NoTaxYear } from '../../components/NoTaxYear';
 import { SectionHeading } from '../../components/SectionLayout';
 import { Alert, Button, Card, CardHeader, Field, Spinner } from '../../components/ui';
-import { useActiveTaxYear, useCanEdit, useCategories, useTaxYearMutations, useYearEndSummary } from '../../lib/queries';
+import { useActiveTaxYear, useBusiness, useCanEdit, useCategories, useTaxYearMutations, useYearEndSummary } from '../../lib/queries';
 import { printPage } from '../../lib/liveUpdates';
 
 const whole = (pence: number) => formatGBP(pence).replace(/\.00$/, '');
@@ -56,6 +59,42 @@ function Fact({ label, children }: { label: string; children: ReactNode }) {
       <div className="eyebrow">{label}</div>
       <div className="mt-1.5 text-sm text-ink">{children}</div>
     </div>
+  );
+}
+
+/** What the return asks about the business before the figures, from Settings → Business Details. */
+function BusinessCard({ data }: { data: YearEndSummaryResponse }) {
+  const { data: business } = useBusiness();
+  const details = business?.details;
+  if (!details) return null;
+  const { startDate, endDate } = data.taxYear;
+  const startedThisYear = details.startDate && details.startDate >= startDate && details.startDate <= endDate;
+  const stoppedThisYear = details.endDate && details.endDate >= startDate && details.endDate <= endDate;
+  return (
+    <Card className="print:break-inside-avoid">
+      <CardHeader
+        icon={<Briefcase className="size-5 text-accent-soft" />}
+        title="Your business"
+        action={
+          <Link to="/settings/business" className="text-sm text-accent-soft hover:underline print:hidden">
+            Change in Settings
+          </Link>
+        }
+      />
+      <div className="grid gap-5 px-5 pb-6 sm:grid-cols-2 sm:px-6 xl:grid-cols-4">
+        <Fact label="Name">
+          {businessName(details)}
+          {details.tradingName && <span className="block text-muted">{details.ownerName}</span>}
+        </Fact>
+        <Fact label="Description of business">{details.description}</Fact>
+        <Fact label="Postcode of business address">{details.postcode}</Fact>
+        <Fact label="Unique Taxpayer Reference">
+          {details.utr ? <span className="tabular">{details.utr}</span> : <span className="text-muted">Not recorded</span>}
+        </Fact>
+        {startedThisYear && <Fact label="Business started">{formatDisplayDate(details.startDate!)}</Fact>}
+        {stoppedThisYear && <Fact label="Business stopped (final date of trading)">{formatDisplayDate(details.endDate!)}</Fact>}
+      </div>
+    </Card>
   );
 }
 
@@ -255,6 +294,7 @@ export function YearEndSummary() {
           <Alert>{error?.message ?? 'Could not load the year-end summary'}</Alert>
         ) : (
           <>
+            <PrintBusinessHeader />
             <p className="hidden text-sm print:block">
               {APP_NAME} · printed {formatDisplayDate(today)}
             </p>
@@ -271,6 +311,8 @@ export function YearEndSummary() {
                 </span>
               </Fact>
             </Card>
+
+            <BusinessCard data={data} />
 
             <FiledCard data={data} />
 

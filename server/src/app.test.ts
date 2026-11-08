@@ -25,6 +25,7 @@ import { checkDiskSpace, raiseNotification, syncUpdateNotification } from './not
 import { sameInvoice } from './scans';
 import { buildStatement } from './square';
 import { clearData, generateSampleData } from './sampleData';
+import { saveBusiness } from './businessDetails';
 
 const NAME = 'Admin';
 const PASSWORD = 'test-password';
@@ -37,9 +38,28 @@ let categories: Category[];
 
 const cat = (code: string) => categories.find((c) => c.hmrcCode === code)!.id;
 
+const BUSINESS = { ownerName: 'Jo Maker', tradingName: 'Jo Makes', description: 'Handmade cards', postcode: 'OX1 1AA' };
+const BUSINESS_DETAILS = {
+  ...BUSINESS,
+  addressLine1: null,
+  addressLine2: null,
+  town: null,
+  county: null,
+  email: null,
+  phone: null,
+  website: null,
+  startDate: null,
+  endDate: null,
+  utr: null,
+};
+
+/** Most tests are about the books, so the business is set up first, as the app would insist. */
+const setUpBusiness = (db: Db) => saveBusiness(db, BUSINESS_DETAILS, { by: 'Test', updatedAt: new Date().toISOString() });
+
 beforeEach(async () => {
   dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'crafty-test-'));
   ctx = createContext(loadConfig({ DATA_DIR: dataDir, ADMIN_PASSWORD: PASSWORD, CLIENT_DIST: path.join(dataDir, 'none') }));
+  setUpBusiness(ctx.db);
   agent = request.agent(createApp(ctx));
   await agent.post('/api/auth/login').send({ name: NAME, password: PASSWORD }).expect(200);
   categories = (await agent.get('/api/categories').expect(200)).body;
@@ -3064,6 +3084,131 @@ describe('comparing tax years', () => {
   });
 });
 
+describe('business details', () => {
+  const PNG = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.from('test logo')]);
+  const JPEG = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.from('test logo')]);
+  const save = (body: Record<string, unknown>, logo?: Buffer) => {
+    const req = agent.put('/api/business');
+    return logo ? req.field('data', JSON.stringify(body)).attach('logo', logo, 'logo.png') : req.send(body);
+  };
+  const clearBusiness = () => ctx.db.prepare('DELETE FROM business_details').run();
+
+  it('must be set up before anything else changes, though the books can still be read', async () => {
+    clearBusiness();
+    expect((await agent.get('/api/business').expect(200)).body).toEqual({ details: null, logo: null, isSample: false, updatedAt: null, updatedBy: null });
+    expect((await agent.post('/api/tax-years').send({ startYear: 2025 }).expect(403)).body.error).toMatch(/business details first/);
+    await agent.post('/api/categories').send({ name: 'Beads', mapsToCategoryId: cat('costOfGoods') }).expect(403);
+    await agent.get('/api/tax-years').expect(200);
+    // People can still be looked after.
+    await addPerson('Helper');
+
+    const { body } = await save({
+      details: { ...BUSINESS, postcode: 'ox10  8ba', utr: '12345 67890', website: 'jomakes.co.uk', startDate: '2024-09-01' },
+    }).expect(200);
+    expect(body.details).toMatchObject({ ownerName: 'Jo Maker', postcode: 'OX10 8BA', utr: '1234567890', town: null, startDate: '2024-09-01' });
+    expect(body).toMatchObject({ isSample: false, updatedBy: NAME, logo: null });
+    await createYear();
+  });
+
+  it('checks what it is given', async () => {
+    const problem = async (details: Record<string, unknown>) => (await save({ details: { ...BUSINESS, ...details } }).expect(400)).body.error;
+    expect(await problem({ ownerName: ' ' })).toMatch(/full name/);
+    expect(await problem({ description: '' })).toMatch(/what the business does/);
+    expect(await problem({ postcode: '' })).toMatch(/postcode/);
+    expect(await problem({ postcode: '12345' })).toMatch(/UK postcode/);
+    expect(await problem({ utr: '123' })).toMatch(/10 digits/);
+    expect(await problem({ email: 'jo@' })).toMatch(/email/);
+    expect(await problem({ startDate: '2025-05-01', endDate: '2025-04-01' })).toMatch(/stop before it started/);
+    expect(await problem({ startDate: '2025-02-30' })).toMatch(/valid date/);
+  });
+
+  it('refuses a change made over someone else’s, and changes from viewers', async () => {
+    const { updatedAt } = (await agent.get('/api/business')).body;
+    await save({ details: BUSINESS, expectedUpdatedAt: updatedAt }).expect(200);
+    expect((await save({ details: BUSINESS, expectedUpdatedAt: updatedAt }).expect(409)).body.error).toMatch(/changed the business details/);
+    const viewer = await addPerson('Accountant', 'read-only-password', 'viewer');
+    expect((await viewer.get('/api/business').expect(200)).body.details.ownerName).toBe('Jo Maker');
+    await viewer.put('/api/business').send({ details: BUSINESS }).expect(403);
+  });
+
+  it('keeps a PNG or JPEG logo, replaces and removes it, and refuses anything else', async () => {
+    const { body } = await save({ details: BUSINESS }, PNG).expect(200);
+    expect(body.logo).toMatchObject({ type: 'image/png', bytes: PNG.length });
+    const logo = await agent.get(body.logo.url).expect(200);
+    expect(logo.headers['content-type']).toBe('image/png');
+    expect(logo.headers['cache-control']).toMatch(/immutable/);
+    expect(Buffer.from(logo.body)).toEqual(PNG);
+
+    // Saving without a logo keeps it; a new one replaces it.
+    expect((await save({ details: BUSINESS }).expect(200)).body.logo.type).toBe('image/png');
+    const replaced = (await save({ details: BUSINESS }, JPEG).expect(200)).body;
+    expect(replaced.logo.type).toBe('image/jpeg');
+    expect(replaced.logo.url).not.toBe(body.logo.url);
+
+    expect((await save({ details: BUSINESS }, Buffer.from('<svg></svg>')).expect(400)).body.error).toMatch(/PNG or JPEG/);
+    await save({ details: BUSINESS }, Buffer.concat([PNG, Buffer.alloc(600 * 1024)])).expect(413);
+    expect((await agent.get('/api/business')).body.logo.type).toBe('image/jpeg');
+
+    expect((await save({ details: BUSINESS, removeLogo: true }).expect(200)).body.logo).toBeNull();
+    await agent.get('/api/business/logo').expect(404);
+  });
+
+  it('goes in backups, and a reset keeps it', async () => {
+    await save({ details: { ...BUSINESS, utr: '1234567890' } }, PNG).expect(200);
+    const dump = (await agent.get('/api/backup.sql').expect(200)).text;
+    expect(dump).toMatch(/INSERT INTO "business_details"/);
+
+    await save({ details: { ...BUSINESS, ownerName: 'Someone Else' }, removeLogo: true }).expect(200);
+    await agent.post('/api/restore').attach('file', Buffer.from(dump), 'backup.sql').expect(200);
+    const restored = (await agent.get('/api/business')).body;
+    expect(restored.details).toMatchObject({ ownerName: 'Jo Maker', utr: '1234567890' });
+    expect(Buffer.from((await agent.get('/api/business/logo').expect(200)).body)).toEqual(PNG);
+
+    await agent.post('/api/reset').send({ confirm: 'RESET' }).expect(200);
+    expect((await agent.get('/api/business')).body.details.ownerName).toBe('Jo Maker');
+    await agent.get('/api/business/logo').expect(200);
+    await createYear();
+  });
+
+  it('is replaced by the sample business, which a reset clears unless it was edited', async () => {
+    await save({ details: BUSINESS }, PNG).expect(200);
+    await agent.post('/api/sample-data').expect(201);
+    const sample = (await agent.get('/api/business')).body;
+    expect(sample).toMatchObject({ isSample: true, details: { tradingName: 'Hedgerow Crafts' }, logo: { type: 'image/png' } });
+    expect(Buffer.from((await agent.get('/api/business/logo').expect(200)).body)).not.toEqual(PNG);
+
+    await agent.post('/api/reset').send({ confirm: 'RESET' }).expect(200);
+    expect((await agent.get('/api/business')).body.details).toBeNull();
+
+    // Loaded from the setup screen, then made their own: a reset keeps it.
+    await agent.post('/api/sample-data').expect(201);
+    const edited = (await save({ details: { ...sample.details, ownerName: 'Jo Maker' } }).expect(200)).body;
+    expect(edited).toMatchObject({ isSample: false, logo: { type: 'image/png' } });
+    await agent.post('/api/reset').send({ confirm: 'RESET' }).expect(200);
+    expect((await agent.get('/api/business')).body.details.ownerName).toBe('Jo Maker');
+  });
+
+  it('can be restored from a backup before being set up, though a backup without one leaves the app asking', async () => {
+    const dump = (await agent.get('/api/backup.sql').expect(200)).text;
+    clearBusiness();
+    await agent.post('/api/restore').attach('file', Buffer.from(dump), 'backup.sql').expect(200);
+    expect((await agent.get('/api/business')).body.details.ownerName).toBe('Jo Maker');
+
+    const old = new Database(':memory:');
+    old.exec('CREATE TABLE schema_migrations (version INTEGER PRIMARY KEY, applied_at TEXT)');
+    for (const migration of MIGRATIONS.filter((m) => m.version <= 24)) {
+      old.exec(migration.sql);
+      old.prepare('INSERT INTO schema_migrations (version) VALUES (?)').run(migration.version);
+    }
+    seedCategories(old);
+    const oldDump = dumpSql(old);
+    old.close();
+    await agent.post('/api/restore').attach('file', Buffer.from(oldDump), 'backup.sql').expect(200);
+    expect((await agent.get('/api/business')).body.details).toBeNull();
+    await agent.post('/api/tax-years').send({ startYear: 2025 }).expect(403);
+  });
+});
+
 describe('sample data', () => {
   const uploads = () => path.join(dataDir, 'uploads');
 
@@ -3159,6 +3304,10 @@ describe('sample data', () => {
     expect((await agent.get('/api/sample-data')).body).toEqual({ loaded: false, canLoad: true });
     await agent.post('/api/sample-data').expect(201);
     await agent.post('/api/reset').send({ confirm: 'RESET' }).expect(200);
+    // The sample business went with the sample data, so the app asks for real details first.
+    expect((await agent.get('/api/business')).body.details).toBeNull();
+    await agent.post('/api/tax-years').send({ startYear: 2025 }).expect(403);
+    setUpBusiness(ctx.db);
     await createYear();
     expect((await agent.get('/api/sample-data')).body).toEqual({ loaded: false, canLoad: false });
   });
@@ -3976,6 +4125,8 @@ describe('scanning documents in bulk', () => {
     old.close();
     expect(dump).not.toMatch(/sha256/);
     await agent.post('/api/restore').attach('file', Buffer.from(dump), 'backup.sql').expect(200);
+    // A backup from before business details has none, so they're set up again before changing anything.
+    setUpBusiness(ctx.db);
     fs.writeFileSync(path.join(ctx.paths.uploadsDir, 'scan-0000000000000001.pdf'), '%PDF old');
     await scan('%PDF old', 'new.pdf').expect(201);
     await ctx.scans.idle();
@@ -3995,6 +4146,8 @@ describe('scanning documents in bulk', () => {
     old.close();
     expect(dump).not.toMatch(/scans/);
     await agent.post('/api/restore').attach('file', Buffer.from(dump), 'backup.sql').expect(200);
+    // A backup from before business details has none, so they're set up again before changing anything.
+    setUpBusiness(ctx.db);
     expect((await agent.get('/api/scans').expect(200)).body.scans).toEqual([]);
     await scan('%PDF new').expect(201);
     await ctx.scans.idle();
@@ -4383,6 +4536,8 @@ describe('Square', () => {
     expect(dump).toMatch(/schema_version: 23/);
 
     await agent.post('/api/restore').attach('file', Buffer.from(dump), 'backup.sql').expect(200);
+    // A backup from before business details has none, so they're set up again before changing anything.
+    setUpBusiness(ctx.db);
     expect((await agent.get('/api/square')).body).toMatchObject({ configured: true });
     await agent.post('/api/square/import').send({ taxYearId: 1, payoutIds: ['po_1'] }).expect(200);
     expect((await agent.get('/api/incomes?taxYearId=1').expect(200)).body).toHaveLength(2);

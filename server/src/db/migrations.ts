@@ -419,6 +419,35 @@ CREATE UNIQUE INDEX idx_incomes_square_payout ON incomes (square_payout_id) WHER
 CREATE UNIQUE INDEX idx_expenses_square_payout ON expenses (square_payout_id) WHERE square_payout_id IS NOT NULL;
 `,
   },
+  // Business details (Settings → Business Details), one row, with the logo as a PNG or JPEG.
+  // Books data, so in backups; a reset keeps it unless it's the sample data's made-up business.
+  {
+    version: 25,
+    sql: `
+CREATE TABLE business_details (
+  id INTEGER PRIMARY KEY CHECK (id = 1),
+  owner_name TEXT NOT NULL,
+  trading_name TEXT,
+  description TEXT NOT NULL,
+  address_line1 TEXT,
+  address_line2 TEXT,
+  town TEXT,
+  county TEXT,
+  postcode TEXT NOT NULL,
+  email TEXT,
+  phone TEXT,
+  website TEXT,
+  start_date TEXT,
+  end_date TEXT,
+  utr TEXT,
+  logo BLOB,
+  logo_type TEXT CHECK (logo_type IN ('image/png', 'image/jpeg')),
+  is_sample INTEGER NOT NULL DEFAULT 0,
+  updated_at TEXT NOT NULL,
+  updated_by TEXT NOT NULL
+);
+`,
+  },
 ];
 
 export const CURRENT_SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;

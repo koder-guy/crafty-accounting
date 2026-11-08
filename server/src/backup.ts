@@ -168,7 +168,7 @@ export function restoreBackup(ctx: AppContext, sql: string, uploadsFrom?: string
 }
 
 /**
- * Empties the books: every tax year (and with it all transactions, line items
+ * Empties the books (keeping the business details, unless they're the sample business): every tax year (and with it all transactions, line items
  * and MTD submissions), custom categories (unless `keepCustomCategories`), settings
  * and documents. The standard MTD categories and the people who can sign in stay. As a safety net the old database is kept as
  * crafty.pre-reset.db and the old documents as uploads.pre-reset/ (each reset
@@ -187,6 +187,8 @@ export function resetToEmpty(ctx: AppContext, { keepCustomCategories = false }: 
     db.prepare('DELETE FROM scans').run();
     // Kept custom categories keep their ids, names and mappings; nothing refers to them once the years are gone.
     if (!keepCustomCategories) db.prepare('DELETE FROM categories WHERE is_custom = 1').run();
+    // Your own business details stay; the sample data's made-up business goes with it, so the app asks for yours.
+    db.prepare('DELETE FROM business_details WHERE is_sample = 1').run();
     // Keep the automatic backup settings and sign-ins; they're about the install, not the books.
     db.prepare("DELETE FROM settings WHERE key NOT LIKE 'auto\\_backup\\_%' ESCAPE '\\'").run();
     db.prepare('UPDATE users SET active_tax_year_id = NULL').run();

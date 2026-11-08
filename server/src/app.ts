@@ -4,7 +4,8 @@ import express from 'express';
 import cookieSession from 'cookie-session';
 import type { AppContext } from './context';
 import { errorHandler, HttpError } from './http';
-import { authRouter, passwordChangeGuard, readOnlyGuard, requireAuth } from './routes/auth';
+import { authRouter, businessSetupGuard, passwordChangeGuard, readOnlyGuard, requireAuth } from './routes/auth';
+import { businessRouter } from './routes/business';
 import { backupRouter } from './routes/backup';
 import { categoriesRouter } from './routes/categories';
 import { claudeRouter } from './routes/claude';
@@ -43,8 +44,9 @@ export function createApp(ctx: AppContext) {
     if (req.secure) res.setHeader('Strict-Transport-Security', 'max-age=15552000');
     // Remove any uploaded temp file the handler didn't consume (e.g. on a validation error).
     res.on('finish', () => {
-      if (req.file) fs.rm(req.file.path, { force: true }, () => {});
-      if (Array.isArray(req.files)) for (const f of req.files) fs.rm(f.path, { force: true }, () => {});
+      // Files kept in memory (the logo) have no path.
+      if (req.file?.path) fs.rm(req.file.path, { force: true }, () => {});
+      if (Array.isArray(req.files)) for (const f of req.files) if (f.path) fs.rm(f.path, { force: true }, () => {});
     });
     next();
   });
@@ -71,6 +73,7 @@ export function createApp(ctx: AppContext) {
   app.use('/api', requireAuth(ctx));
   app.use('/api', passwordChangeGuard);
   app.use('/api', readOnlyGuard);
+  app.use('/api', businessSetupGuard(ctx));
 
   app.get('/api/events', (req, res) => {
     ctx.liveUpdates.subscribe(res, clientId(req.query.client));
@@ -88,6 +91,7 @@ export function createApp(ctx: AppContext) {
     next();
   });
 
+  app.use('/api/business', businessRouter(ctx));
   app.use('/api/users', usersRouter(ctx));
   app.use('/api/tax-years', taxYearsRouter(ctx));
   app.use('/api/categories', categoriesRouter(ctx));

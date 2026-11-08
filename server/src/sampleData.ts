@@ -4,6 +4,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import {
+  type BusinessDetails,
   mtdQuarters,
   taxMonths,
   taxYearFromStartYear,
@@ -11,6 +12,8 @@ import {
   todayIso,
 } from '@crafty/shared';
 import { setSetting, type Db } from './db';
+import { saveBusiness } from './businessDetails';
+import { sampleLogoPng } from './sampleLogo';
 
 export interface SampleDataResult {
   taxYears: number;
@@ -248,6 +251,26 @@ export function clearData(db: Db, uploadsDir: string): void {
   for (const name of fs.readdirSync(uploadsDir)) fs.rmSync(path.join(uploadsDir, name), { force: true });
 }
 
+/** The sample data's business: a jewellery maker selling at Oxfordshire craft fairs, started the year before its first tax year. */
+export function sampleBusiness(currentStart: number): BusinessDetails {
+  return {
+    ownerName: 'Alex Morgan',
+    tradingName: 'Hedgerow Crafts',
+    description: 'Handmade jewellery and homeware sold at craft fairs',
+    addressLine1: '14 Willow Close',
+    addressLine2: null,
+    town: 'Wallingford',
+    county: 'Oxfordshire',
+    postcode: 'OX10 9ZZ',
+    email: 'hello@hedgerowcrafts.example',
+    phone: '01491 000000',
+    website: 'hedgerowcrafts.example',
+    startDate: `${currentStart - SAMPLE_PAST_YEARS - 1}-09-01`,
+    endDate: null,
+    utr: '1234567890',
+  };
+}
+
 export function generateSampleData(db: Db, uploadsDir: string, today = todayIso()): SampleDataResult {
   if (hasData(db)) throw new Error('The database already has data. Use --reset to replace it.');
   const rnd = random(20260406);
@@ -343,6 +366,13 @@ export function generateSampleData(db: Db, uploadsDir: string, today = todayIso(
   let currentYearId = 0;
 
   db.transaction(() => {
+    // The made-up business replaces any details saved before; a reset clears it again.
+    saveBusiness(db, sampleBusiness(currentStart), {
+      by: SAMPLE_DATA_BY,
+      logo: { data: sampleLogoPng(), type: 'image/png' },
+      isSample: true,
+      updatedAt: new Date().toISOString(),
+    });
     // Custom categories left from earlier (a reset can keep them) give way to the sample ones, so
     // names never clash. With no tax years, no transaction uses them.
     db.prepare('DELETE FROM categories WHERE is_custom = 1').run();

@@ -4,6 +4,7 @@ Self-hosted bookkeeping for UK sole traders on the cash basis. Keep your income 
 
 ## Features
 
+- **Business details**: your name, trading name, what the business does, address, contact details, start date and UTR, plus a logo (an image or PDF, trimmed and shrunk to fit), in **Settings → Business Details**. A new install asks for them before anything else, or you can restore a backup or load the sample data instead. They appear on the Year-end summary and at the top of printed reports, go in backups, and are kept when you start again with an empty database.
 - **Tax years** run 6 April to 5 April. Each is set to go to HMRC by a **Self Assessment return** or by **Making Tax Digital**, and the menu shows only that section. A year with quarterly updates stays MTD.
 - **Income and expenses**: income with a category and payment method (cash, card or bank transfer); purchases split into line items, each with a category and optionally marked disallowable, with the transaction total added up from them. Attach up to 10 documents (PDFs or images) to each, or take a photo with the device's camera (a computer's camera needs [HTTPS](#https); a phone's works either way). Photos are saved as JPEGs of 2 MB or less, and you can rename any new document before saving. **Duplicate** starts a new entry from an existing one, for things that repeat.
 - **Reading invoices with Claude** (optional): add an Anthropic API key in **Settings → Claude Integration** and choose a model, and **Scan documents** on the Expenses page takes PDFs and photos of invoices and receipts, one or many at once. Claude reads them in the background, filling in the date, payee, numbers, payment method and categorised lines, and you check each one and save it as an expense, or skip or discard it. The invoice is attached, named by date, payee, invoice number and amount. Each invoice read is sent to Anthropic, which bills the key per use (a penny or two an invoice). The key is shown only partly, and stays out of backups.
@@ -150,7 +151,7 @@ Settings go in a `.env` file next to the app (the installers write one). Only in
 Also in **Settings → Backup and Restore**:
 - **Saved backups**: download any of the latest ten, or restore one in place after you type `RESTORE`. It replaces the database and every document; later backups stay in the folder.
 - **Restore from a backup file**: a `.zip` replaces the database and every document; an older `.sql` backup replaces the database and leaves documents alone.
-- **Start again with an empty database** deletes the books after you type `RESET`, optionally keeping your custom categories; the old database and documents are kept until the next reset.
+- **Start again with an empty database** deletes the books after you type `RESET`, keeping your business details and optionally your custom categories; the old database and documents are kept until the next reset.
 
 A restore is checked in a separate database before anything is replaced, and older backups are upgraded automatically. Backups don't include the people who can sign in, so a restore keeps them as they are.
 

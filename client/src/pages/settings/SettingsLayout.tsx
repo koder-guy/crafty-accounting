@@ -1,9 +1,10 @@
-import { CircleArrowUp, DatabaseBackup, Landmark, Layers, Sparkles, Tags, Users } from 'lucide-react';
+import { Briefcase, CircleArrowUp, DatabaseBackup, Landmark, Layers, Sparkles, Tags, Users } from 'lucide-react';
 import { SectionHeading, SectionLayout } from '../../components/SectionLayout';
 import { SquareLogo } from '../../components/SquareLogo';
 import { useCanEdit, useHmrc } from '../../lib/queries';
 
 const SECTIONS = [
+  { to: '/settings/business', label: 'Business Details', icon: Briefcase },
   { to: '/settings/users', label: 'Users', icon: Users },
   { to: '/settings/tax-years', label: 'Tax Years', icon: Layers },
   { to: '/settings/hmrc', label: 'HMRC', icon: Landmark },
@@ -21,7 +22,7 @@ export function SettingsLayout() {
   return (
     <SectionLayout
       title="Settings"
-      subtitle="Manage users, tax years, categories, the Claude and Square integrations, backups, updates and other app settings."
+      subtitle="Manage your business details, users, tax years, categories, the Claude and Square integrations, backups, updates and other app settings."
       sections={SECTIONS.filter((s) => (s.to !== '/settings/backup' || canEdit) && (s.to !== '/settings/hmrc' || hmrc?.configured))}
       ready={!!hmrc}
     />

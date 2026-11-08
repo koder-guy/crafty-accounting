@@ -4,8 +4,9 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { createBrowserRouter, Navigate, Route, RouterProvider, Routes } from 'react-router';
 import './index.css';
 import { setUnauthorizedHandler } from './lib/api';
-import { useMe } from './lib/queries';
+import { useBusiness, useMe } from './lib/queries';
 import { ChooseNewPassword } from './pages/ChooseNewPassword';
+import { SetUpBusiness } from './pages/SetUpBusiness';
 import { Layout } from './components/Layout';
 import { EditorOnly } from './components/ReadOnly';
 import { Spinner } from './components/ui';
@@ -31,6 +32,7 @@ import { TaxEstimate } from './pages/reports/TaxEstimate';
 import { SelfAssessmentLayout } from './pages/selfAssessment/SelfAssessmentLayout';
 import { YearEndSummary } from './pages/selfAssessment/YearEndSummary';
 import { SettingsLayout } from './pages/settings/SettingsLayout';
+import { BusinessSettings } from './pages/settings/BusinessSettings';
 import { TaxYearsSettings } from './pages/settings/TaxYearsSettings';
 import { CustomCategories } from './pages/settings/CustomCategories';
 import { BackupSettings } from './pages/settings/BackupSettings';
@@ -54,6 +56,14 @@ function App() {
   if (isLoading) return <Spinner />;
   if (!data?.authenticated) return <Login />;
   if (data.mustChangePassword) return <ChooseNewPassword />;
+  return <BusinessGate />;
+}
+
+/** Until the business details are saved, the setup screen stands in for the app. */
+function BusinessGate() {
+  const { data: business } = useBusiness();
+  if (!business) return <Spinner />;
+  if (!business.details) return <SetUpBusiness business={business} />;
 
   return (
     <Routes>
@@ -126,6 +136,7 @@ function App() {
         </Route>
         <Route path="year-end" element={<Navigate to="/self-assessment/year-end" replace />} />
         <Route path="settings" element={<SettingsLayout />}>
+          <Route path="business" element={<BusinessSettings />} />
           <Route path="tax-years" element={<TaxYearsSettings />} />
           <Route path="categories" element={<CustomCategories />} />
           <Route path="users" element={<Users />} />

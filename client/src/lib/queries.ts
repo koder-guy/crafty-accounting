@@ -49,6 +49,7 @@ import type {
   UpdateStatus,
 } from '@crafty/shared';
 import { APP_VERSION, MTD_FIRST_SEND_YEAR, startYearFromLabel } from '@crafty/shared';
+import type { BusinessResponse, BusinessSaveInput } from '@crafty/shared';
 import { api, toQuery } from './api';
 
 // ---- Auth ----
@@ -100,6 +101,25 @@ export function useLogout() {
       clearDataQueries(qc);
       qc.setQueryData(['me'], { authenticated: false });
     },
+  });
+}
+
+// ---- Business details ----
+
+export const useBusiness = () => useQuery({ queryKey: ['business'], queryFn: () => api.get<BusinessResponse>('/business') });
+
+/** Saves the details, with a new logo (prepared by prepareLogo) when one was chosen. */
+export function useSaveBusiness() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ logo, ...body }: BusinessSaveInput & { logo?: File | null }) => {
+      if (!logo) return api.put<BusinessResponse>('/business', body);
+      const form = new FormData();
+      form.append('data', JSON.stringify(body));
+      form.append('logo', logo, logo.name);
+      return api.put<BusinessResponse>('/business', form);
+    },
+    onSuccess: (data) => qc.setQueryData(['business'], data),
   });
 }
 

@@ -111,7 +111,7 @@ export function BackupSettings() {
           <div className="space-y-4 px-5 pb-6 sm:px-6">
             <p className="text-sm text-muted">
               Deletes all tax years, income and expense transactions, attached documents, custom categories and MTD submission
-              records. You can choose to keep your custom categories. The standard MTD categories and your sign-in password stay. A copy of the old data is kept on the server as{' '}
+              records. You can choose to keep your custom categories. Your business details and logo, the standard MTD categories and your sign-in password stay (the sample data’s made-up business doesn’t). A copy of the old data is kept on the server as{' '}
               <code>crafty.pre-reset.db</code> and <code>uploads.pre-reset</code> until the next reset. Saved backups in the backup folder
               stay as they are.
             </p>
@@ -158,7 +158,7 @@ export function BackupSettings() {
       >
         <p>
           All tax years, transactions, documents{keepCustomCategories ? '' : ', custom categories'} and MTD submission records will
-          be deleted, leaving an empty database.
+          be deleted, leaving an empty database. Your business details stay, unless they’re the sample data’s.
         </p>
         <label className="flex items-center gap-3 text-ink">
           <input
