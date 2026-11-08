@@ -299,19 +299,6 @@ export function YearEndSummary() {
               {APP_NAME} · printed {formatDisplayDate(today)}
             </p>
 
-            <Card className="grid gap-5 p-5 sm:grid-cols-2 sm:p-6 xl:grid-cols-4 print:break-inside-avoid">
-              <Fact label="Tax year">
-                {displayTaxYear(data.taxYear.label)} ({formatDisplayDate(data.taxYear.startDate)} to {formatDisplayDate(data.taxYear.endDate)})
-              </Fact>
-              <Fact label="Accounting method">Cash basis</Fact>
-              <Fact label="Online filing and payment deadline">{formatDisplayDate(data.filingDeadline)}</Fact>
-              <Fact label={data.summary.netLossPence > 0 ? 'Net loss' : 'Net profit'}>
-                <span className="tabular text-base font-semibold text-accent-soft">
-                  {formatGBP(data.summary.netLossPence || data.summary.netProfitPence)}
-                </span>
-              </Fact>
-            </Card>
-
             <BusinessCard data={data} />
 
             <FiledCard data={data} />
