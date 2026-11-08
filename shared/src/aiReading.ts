@@ -35,7 +35,7 @@ export const AI_PROVIDER_INFO = {
     keyPlaceholder: 'sk-ant-…',
     console: { name: 'Anthropic Console', url: 'https://console.anthropic.com/settings/keys' },
     billing: 'Anthropic bills it per use, separately from a Claude subscription.',
-    privacy: 'Anthropic doesn\'t use what the API is sent to train its models.',
+    privacy: 'Anthropic does not use submitted data to train its AI models.',
   },
   gemini: {
     name: 'Gemini',
@@ -47,8 +47,8 @@ export const AI_PROVIDER_INFO = {
     billing: 'Google bills it per use once billing is set up for its project; without billing it\'s on the free tier, with low limits.',
     /** Shown as a warning under the option. */
     warning:
-      'On the free tier, Google allows only a few requests a minute and a limited number a day, so a pile of documents is read much more slowly than with Claude, and some may need retrying.',
-    privacy: 'On Google\'s free tier, what\'s sent may be used to improve Google\'s products. Set up billing for the key\'s project so invoices aren\'t.',
+      'Document scanning on the free tier will be significantly slower than the paid tier.',
+    privacy: 'On Google\'s free tier data submitted may be used to train its AI models, but not on the paid tier.',
   },
 } as const;
 
