@@ -715,19 +715,33 @@ export function NotesIndicator({ notes, muted = false }: { notes: string | null;
 
 /** A transaction's notes under its expanded row, boxed like the tables above them. Nothing without notes. */
 export function NotesPanel({ notes }: { notes: string | null }) {
-  return <TextPanel label="Notes" text={notes} />;
+  if (!notes?.trim()) return null;
+  return (
+    <section aria-label="Notes" className="rounded-lg border border-line bg-page/40 text-sm">
+      <div className="border-b border-line px-4 py-2 text-xs font-medium tracking-wide text-faint uppercase">
+        <DetailHeading>Notes</DetailHeading>
+      </div>
+      <p className="px-4 py-2 break-words whitespace-pre-wrap text-ink">{notes.trim()}</p>
+    </section>
+  );
 }
 
-/** A labelled piece of text under an expanded row, boxed like the tables around it. Nothing without text. */
-export function TextPanel({ label, text }: { label: string; text: string | null }) {
-  if (!text?.trim()) return null;
+/**
+ * One labelled value on a single line under an expanded row, boxed like the tables around it: the label,
+ * then the value 20px after it, as the header strip of the expenses' invoice number box. Nothing without a value.
+ */
+export function ValueStrip({ label, value }: { label: string; value: string | null }) {
+  if (!value?.trim()) return null;
   return (
-    <section aria-label={label} className="rounded-lg border border-line bg-page/40 text-sm">
-      <div className="border-b border-line px-4 py-2 text-xs font-medium tracking-wide text-faint uppercase">
+    // leading-4 keeps the strip the height of the tables' header rows, whatever the value's size.
+    <dl aria-label={label} className="flex gap-x-5 rounded-lg border border-line bg-page/40 px-4 py-2 text-sm leading-4">
+      <dt className="text-xs font-medium tracking-wide whitespace-nowrap text-faint uppercase">
         <DetailHeading>{label}</DetailHeading>
-      </div>
-      <p className="px-4 py-2 break-words whitespace-pre-wrap text-ink">{text.trim()}</p>
-    </section>
+      </dt>
+      <dd className="min-w-0 truncate text-ink" title={value.trim()}>
+        <DetailHeading>{value.trim()}</DetailHeading>
+      </dd>
+    </dl>
   );
 }
 

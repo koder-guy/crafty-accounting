@@ -16,7 +16,7 @@ import {
   DocumentsTable,
   NotesIndicator,
   NotesPanel,
-  TextPanel,
+  ValueStrip,
   ExportMenu,
   FilterBar,
   FilterToggle,
@@ -210,8 +210,8 @@ export function IncomeList() {
                               <td />
                               <td colSpan={canEdit ? 6 : 5} className="px-4 py-4">
                                 <div className="space-y-3">
+                                  <ValueStrip label="Reference" value={row.reference} />
                                   <DocumentsTable documents={row.documents} />
-                                  <TextPanel label="Reference" text={row.reference} />
                                   <NotesPanel notes={row.notes} />
                                 </div>
                               </td>
