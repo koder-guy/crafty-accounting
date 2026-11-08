@@ -23,6 +23,7 @@ import { HttpError } from './http';
 import { changeSummaries, newestTag, startUpdateChecker } from './updates';
 import { checkDiskSpace, raiseNotification, syncUpdateNotification } from './notifications';
 import { sameInvoice } from './scans';
+import { buildStatement } from './square';
 import { clearData, generateSampleData } from './sampleData';
 
 const NAME = 'Admin';
@@ -4007,6 +4008,7 @@ describe('Square', () => {
   let payouts: { id: string; status: string; amount: number; arrival_date: string; entries: Entry[] }[];
   let calls: string[];
   let payoutsQuery: URLSearchParams;
+  let paymentsReadable: boolean;
 
   const charge = (gross: number, fee: number, at = '2025-11-01T11:00:00Z'): Entry => ({ type: 'CHARGE', effective_at: at, gross, fee });
   const refund = (gross: number, fee: number, at = '2025-11-01T15:00:00Z'): Entry => ({ type: 'REFUND', effective_at: at, gross: -gross, fee: -fee });
@@ -4022,6 +4024,7 @@ describe('Square', () => {
 
   beforeEach(() => {
     calls = [];
+    paymentsReadable = true;
     payouts = [
       payout('po_1', '2025-11-03', [charge(5000, 88), charge(5000, 87)]),
       payout('po_2', '2025-11-10', [charge(3000, 53, '2025-11-08T10:00:00Z'), refund(1000, 18, '2025-11-08T12:00:00Z')]),
@@ -4036,6 +4039,12 @@ describe('Square', () => {
       const path = url.pathname;
       if (path === '/v2/merchants/me') return json({ merchant: { id: 'M1', business_name: 'Hedgerow Crafts', currency: 'GBP' } });
       if (path === '/v2/locations') return json({ locations: [{ id: 'L1' }] });
+      if (path === '/v2/payments') {
+        if (!paymentsReadable) return json({ errors: [{ code: 'INSUFFICIENT_SCOPES', detail: 'PAYMENTS_READ' }] }, 403);
+        // Every payment, as each entry's own, with a receipt number of its own.
+        const all = payouts.flatMap((p) => p.entries.map((_, i) => `pay_${p.id}_${i}`));
+        return json({ payments: all.map((id) => ({ id, receipt_number: `R${id.slice(-3)}`, receipt_url: `https://squareup.com/receipt/preview/${id}`, card_details: { card: { card_brand: 'VISA', last_4: '4242' } } })) });
+      }
       if (path === '/v2/payouts') {
         payoutsQuery = url.searchParams;
         expect(url.searchParams.get('location_id')).toBe('L1');
@@ -4054,6 +4063,8 @@ describe('Square', () => {
           gross_amount_money: gbp(e.gross),
           fee_amount_money: gbp(e.fee),
           net_amount_money: gbp(e.gross - e.fee),
+          ...(e.type === 'CHARGE' ? { type_charge_details: { payment_id: `pay_${p.id}_${i}` } } : {}),
+          ...(e.type === 'REFUND' ? { type_refund_details: { payment_id: `pay_${p.id}_${i}` } } : {}),
         })),
       });
     }) as typeof fetch;
@@ -4202,6 +4213,64 @@ describe('Square', () => {
     const again = await agent.post('/api/square/import').send({ taxYearId: yearId, payoutIds: ['po_1'] }).expect(200);
     expect(again.body).toMatchObject({ imported: 0, alreadyImported: 1 });
     expect((await agent.get(`/api/incomes?taxYearId=${yearId}`).expect(200)).body).toHaveLength(2);
+  });
+
+  it('attaches a statement of each payout to its income and fee expense', async () => {
+    const yearId = await createYear(2025);
+    await connect();
+    await agent.post('/api/square/import').send({ taxYearId: yearId, payoutIds: ['po_1'] }).expect(200);
+    expect(calls).toContain('connect.squareup.com/v2/payments');
+    const [income] = (await agent.get(`/api/incomes?taxYearId=${yearId}`).expect(200)).body;
+    const [expense] = (await agent.get(`/api/expenses?taxYearId=${yearId}`).expect(200)).body;
+    expect(income.documents.map((d: { filename: string }) => d.filename)).toEqual(['2025-11-01_Square_payout_po_1.pdf']);
+    expect(expense.documents.map((d: { filename: string }) => d.filename)).toEqual(['2025-11-01_Square_payout_po_1_fees.pdf']);
+    const pdf = await agent.get('/api/documents/2025-11-01_Square_payout_po_1.pdf').buffer(true).expect(200);
+    expect(pdf.headers['content-type']).toBe('application/pdf');
+    expect(Buffer.from(pdf.body).subarray(0, 5).toString()).toBe('%PDF-');
+
+    // A clash with a document already stored gets another name.
+    payouts.push(payout('po_3', '2025-11-17', [charge(2000, 35, '2025-11-15T10:00:00Z')]));
+    const stored = path.join(dataDir, 'uploads', '2025-11-15_Square_payout_po_3.pdf');
+    fs.writeFileSync(stored, 'x');
+    await agent.post('/api/square/import').send({ taxYearId: yearId, payoutIds: ['po_3'] }).expect(200);
+    const third = (await agent.get(`/api/incomes?taxYearId=${yearId}`).expect(200)).body.find((i: { reference: string }) => i.reference === 'po_3');
+    expect(third.documents[0].filename).toBe('2025-11-15_Square_payout_po_3-2.pdf');
+    expect(fs.readFileSync(stored, 'utf8')).toBe('x');
+  });
+
+  it('still imports, without receipt numbers, when the token can’t read payments', async () => {
+    const yearId = await createYear(2025);
+    await connect();
+    paymentsReadable = false;
+    await agent.post('/api/square/import').send({ taxYearId: yearId, payoutIds: ['po_2'] }).expect(200);
+    const [income] = (await agent.get(`/api/incomes?taxYearId=${yearId}`).expect(200)).body;
+    expect(income.documents).toHaveLength(1);
+  });
+
+  it('lists every entry on the statement, with receipts and a payout fee taken from the payout', () => {
+    const entry = (type: string, at: string, gross: number, fee: number, paymentId?: string) => ({
+      id: `e_${at}`,
+      type,
+      effective_at: at,
+      gross_amount_money: gbp(gross),
+      fee_amount_money: gbp(fee),
+      net_amount_money: gbp(gross - fee),
+      ...(paymentId ? { type_charge_details: { payment_id: paymentId } } : {}),
+    });
+    const entries = [entry('CHARGE', '2025-07-05T14:30:00Z', 2000, 35, 'pay_b'), entry('CHARGE', '2025-07-05T09:05:00Z', 1000, 18, 'pay_a')];
+    const statement = buildStatement(
+      { id: 'po_9', status: 'PAID', amount_money: gbp(2947 - 50), arrival_date: '2025-07-07', payout_fee: [{ amount_money: gbp(50) }] },
+      entries,
+      new Map([['pay_a', { receiptNumber: 'Ab12', receiptUrl: 'https://squareup.com/receipt/preview/pay_a', card: 'Visa •••• 4242' }]]),
+      'Hedgerow Crafts',
+      '2025-07-08',
+    );
+    expect(statement).toMatchObject({ salesPence: 3000, incomePence: 3000, feesPence: 103, netPence: 2897, receiptsRead: true });
+    expect(statement.rows).toEqual([
+      { when: '05/07/2025 10:05', type: 'Sale', payment: expect.objectContaining({ receiptNumber: 'Ab12' }), grossPence: 1000, feePence: 18, netPence: 982 },
+      { when: '05/07/2025 15:30', type: 'Sale', payment: null, grossPence: 2000, feePence: 35, netPence: 1965 },
+      { when: '', type: 'Payout fee', payment: null, grossPence: 0, feePence: 50, netPence: -50 },
+    ]);
   });
 
   it('knows a payout brought back from a JSON export by its reference', async () => {

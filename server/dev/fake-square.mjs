@@ -33,6 +33,18 @@ http
     const path = url.pathname;
     if (path === '/v2/merchants/me') return send(200, { merchant: { id: 'M_FAKE', business_name: 'Hedgerow Crafts (fake Square)', currency: 'GBP', country: 'GB' } });
     if (path === '/v2/locations') return send(200, { locations: [{ id: 'L_FAKE', name: 'Market stall' }] });
+    if (path === '/v2/payments') {
+      const payments = PAYOUTS.flatMap((p) =>
+        p.entries.map((e, i) => ({
+          id: `pay_${p.id}_${i}`,
+          created_at: e.at,
+          receipt_number: `F${p.id.slice(-1)}${i}x`,
+          receipt_url: `https://squareup.com/receipt/preview/pay_${p.id}_${i}`,
+          card_details: { card: { card_brand: i % 2 ? 'MASTERCARD' : 'VISA', last_4: String(4242 + i) } },
+        })),
+      );
+      return send(200, { payments });
+    }
     if (path === '/v2/payouts') {
       const begin = url.searchParams.get('begin_time') ?? '';
       return send(200, { payouts: PAYOUTS.filter((p) => `${p.arrival_date}T00:00:00Z` >= begin).reverse().map(asPayout) });
@@ -50,6 +62,8 @@ http
         gross_amount_money: gbp(e.gross),
         fee_amount_money: gbp(e.fee),
         net_amount_money: gbp(e.gross - e.fee),
+        ...(e.type === 'CHARGE' ? { type_charge_details: { payment_id: `pay_${p.id}_${i}` } } : {}),
+        ...(e.type === 'REFUND' ? { type_refund_details: { payment_id: `pay_${p.id}_${i}` } } : {}),
       })),
     });
   })

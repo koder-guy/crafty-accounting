@@ -36,6 +36,13 @@
       "autoPort": false
     },
     {
+      "name": "api-check-square-alt",
+      "runtimeExecutable": "/bin/sh",
+      "runtimeArgs": ["-c", "cd server && PATH=/opt/homebrew/opt/node@22/bin:$PATH PORT=3103 DATA_DIR=$(mktemp -d) ADMIN_NAME=Admin ADMIN_PASSWORD=check-password SESSION_SECRET=check-secret SQUARE_API_URL=http://localhost:3199 npx tsx src/index.ts"],
+      "port": 3103,
+      "autoPort": false
+    },
+    {
       "name": "fake-square",
       "runtimeExecutable": "/bin/sh",
       "runtimeArgs": ["-c", "PATH=/opt/homebrew/opt/node@22/bin:$PATH node server/dev/fake-square.mjs"],

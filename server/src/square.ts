@@ -25,9 +25,13 @@ import {
   type TaxYear,
 } from '@crafty/shared';
 import type { AppContext } from './context';
+import crypto from 'node:crypto';
+import fs from 'node:fs';
 import type { Db } from './db';
+import { documentPath, ensureSpaceFor, removeDocumentFile } from './documents';
 import { HttpError } from './http';
-import { insertExpense, insertIncome, listCategories, listTaxYears } from './repo';
+import { insertExpense, insertIncome, isDocumentNameInUse, listCategories, listTaxYears } from './repo';
+import { entryTypeName, londonDateTime, payoutStatementPdf, type PayoutStatement, type StatementPayment } from './squareStatement';
 
 const API_BASE: Record<SquareEnvironment, string> = {
   production: 'https://connect.squareup.com',
@@ -163,6 +167,15 @@ export interface SquarePayoutEntry {
   gross_amount_money?: Money;
   fee_amount_money?: Money;
   net_amount_money?: Money;
+  type_charge_details?: { payment_id?: string };
+  type_refund_details?: { payment_id?: string };
+}
+
+interface SquarePaymentData {
+  id: string;
+  receipt_number?: string;
+  receipt_url?: string;
+  card_details?: { card?: { card_brand?: string; last_4?: string } };
 }
 
 async function callSquare<T>(ctx: AppContext, token: string, environment: SquareEnvironment, path: string, query: Record<string, string | undefined> = {}): Promise<T> {
@@ -264,6 +277,123 @@ async function inBatches<T, R>(items: T[], work: (item: T) => Promise<R>): Promi
   const results: R[] = [];
   for (let i = 0; i < items.length; i += CONCURRENCY) results.push(...(await Promise.all(items.slice(i, i + CONCURRENCY).map(work))));
   return results;
+}
+
+// ---- Payout statements ----
+
+/** Payments looked up one by one when the listing missed them (refunds of older sales), at most. */
+const MAX_SINGLE_PAYMENTS = 20;
+
+const paymentIdOf = (e: SquarePayoutEntry) => e.type_charge_details?.payment_id ?? e.type_refund_details?.payment_id;
+
+const CARD_BRANDS: Record<string, string> = { VISA: 'Visa', MASTERCARD: 'Mastercard', AMERICAN_EXPRESS: 'Amex', MAESTRO: 'Maestro', DISCOVER: 'Discover' };
+
+function statementPayment(p: SquarePaymentData): StatementPayment {
+  const card = p.card_details?.card;
+  const brand = card?.card_brand ? (CARD_BRANDS[card.card_brand] ?? entryTypeName(card.card_brand)) : null;
+  const last4 = card?.last_4 ? `•••• ${card.last_4}` : null;
+  return {
+    receiptNumber: p.receipt_number ?? null,
+    receiptUrl: p.receipt_url ?? null,
+    card: brand || last4 ? [brand, last4].filter(Boolean).join(' ') : null,
+  };
+}
+
+/**
+ * The payments behind a payout's sales and refunds, for their receipt numbers: listed for the
+ * days of its entries, then any missed (a refund of an older sale) one by one. Only for the
+ * statement, so a token that can't read payments just leaves them out (null).
+ */
+async function fetchPayments(
+  ctx: AppContext,
+  token: string,
+  environment: SquareEnvironment,
+  payout: SquarePayoutData,
+  entries: SquarePayoutEntry[],
+): Promise<Map<string, StatementPayment> | null> {
+  const wanted = new Set(entries.map(paymentIdOf).filter((id): id is string => !!id));
+  const found = new Map<string, StatementPayment>();
+  if (wanted.size === 0) return found;
+  const times = entries
+    .map((e) => e.effective_at)
+    .filter((t): t is string => !!t)
+    .sort();
+  try {
+    if (times.length) {
+      let cursor: string | undefined;
+      do {
+        const page = await callSquare<{ payments?: SquarePaymentData[]; cursor?: string }>(ctx, token, environment, '/v2/payments', {
+          begin_time: new Date(Date.parse(times[0]) - 86_400_000).toISOString(),
+          end_time: new Date(Date.parse(times.at(-1)!) + 86_400_000).toISOString(),
+          location_id: payout.location_id,
+          limit: '100',
+          cursor,
+        });
+        for (const p of page.payments ?? []) if (wanted.has(p.id)) found.set(p.id, statementPayment(p));
+        cursor = page.cursor || undefined;
+      } while (cursor);
+    }
+    const missing = [...wanted].filter((id) => !found.has(id)).slice(0, MAX_SINGLE_PAYMENTS);
+    await inBatches(missing, async (id) => {
+      const reply = await callSquare<{ payment?: SquarePaymentData }>(ctx, token, environment, `/v2/payments/${encodeURIComponent(id)}`).catch(() => null);
+      if (reply?.payment) found.set(id, statementPayment(reply.payment));
+    });
+    return found;
+  } catch {
+    return null;
+  }
+}
+
+/** A payout's statement: its entries oldest first, plus the fee taken from the payout itself when it isn't an entry. */
+export function buildStatement(
+  payout: SquarePayoutData,
+  entries: SquarePayoutEntry[],
+  payments: Map<string, StatementPayment> | null,
+  merchantName: string | null,
+  madeOn: string,
+): PayoutStatement {
+  const figures = payoutFigures(payout, entries);
+  const rows = [...entries]
+    .sort((a, b) => (a.effective_at ?? '').localeCompare(b.effective_at ?? ''))
+    .map((e) => {
+      const net = amountOf(e.net_amount_money);
+      const fee = amountOf(e.fee_amount_money);
+      const id = paymentIdOf(e);
+      return {
+        when: e.effective_at ? londonDateTime(e.effective_at) : '',
+        type: entryTypeName(e.type),
+        payment: id ? (payments?.get(id) ?? null) : null,
+        grossPence: e.gross_amount_money ? amountOf(e.gross_amount_money) : net + fee,
+        feePence: fee,
+        netPence: net,
+      };
+    });
+  const difference = figures.netPence - rows.reduce((acc, r) => acc + r.netPence, 0);
+  if (difference !== 0) rows.push({ when: '', type: 'Payout fee', payment: null, grossPence: 0, feePence: -difference, netPence: difference });
+  return {
+    merchantName,
+    payoutId: payout.id,
+    arrivalDate: payout.arrival_date!,
+    netPence: figures.netPence,
+    salesPence: figures.incomePence + figures.refundsPence,
+    refundsPence: figures.refundsPence,
+    incomePence: figures.incomePence,
+    feesPence: figures.feesPence,
+    rows,
+    receiptsRead: rows.some((r) => r.payment?.receiptNumber),
+    madeOn,
+  };
+}
+
+/** The statement's names on the income and on the fee expense (each document has a name of its own), clear of any taken. */
+function statementNames(ctx: AppContext, date: string, payoutId: string): { income: string; fees: string } {
+  const base = `${date}_Square_payout_${payoutId.replace(/[^A-Za-z0-9_-]/g, '')}`;
+  const free = (name: string) => !isDocumentNameInUse(ctx.db, name) && !fs.existsSync(documentPath(ctx, name));
+  for (let n = 1; ; n++) {
+    const suffix = n === 1 ? '' : `-${n}`;
+    const names = { income: `${base}${suffix}.pdf`, fees: `${base}_fees${suffix}.pdf` };
+    if (free(names.income) && free(names.fees)) return names;
+  }
 }
 
 // ---- Working out a payout ----
@@ -480,7 +610,8 @@ export async function importSquarePayouts(ctx: AppContext, taxYearId: number, pa
     if (!payout || (payout.status !== 'SENT' && payout.status !== 'PAID') || !payout.arrival_date) {
       throw new HttpError(422, `Nothing was imported. Square payout ${id} hasn’t been paid into the bank.`);
     }
-    return describe(ctx, payout, await fetchEntries(ctx, token, environment, id), taxYears);
+    const entries = await fetchEntries(ctx, token, environment, id);
+    return { ...describe(ctx, payout, entries, taxYears), payout, entries };
   });
   const elsewhere = described.find((p) => !belongsTo(p, year));
   if (elsewhere) {
@@ -494,58 +625,89 @@ export async function importSquarePayouts(ctx: AppContext, taxYearId: number, pa
     throw new HttpError(422, `Nothing was imported. The payout of ${formatGBP(refused.netPence)} on ${formatDisplayDate(refused.arrivalDate)} can’t be imported: ${refused.problem}`);
   }
 
+  // A statement of each payout, attached to its income and its fee expense.
+  const today = new Date().toISOString().slice(0, 10);
+  const statements = new Map(
+    await inBatches(described, async (p) => {
+      const payments = await fetchPayments(ctx, token, environment, p.payout, p.entries);
+      const pdf = await payoutStatementPdf(buildStatement(p.payout, p.entries, payments, settings.merchantName, today));
+      return [p.id, Buffer.from(pdf)] as const;
+    }),
+  );
+  ensureSpaceFor(
+    ctx,
+    described.reduce((sum, p) => sum + statements.get(p.id)!.length * (p.feesPence > 0 ? 2 : 1), 0),
+  );
+  const placed: string[] = [];
+  const attach = (name: string, owner: 'income_id' | 'expense_id', ownerId: number, pdf: Buffer) => {
+    fs.writeFileSync(documentPath(ctx, name), pdf, { flag: 'wx' });
+    placed.push(name);
+    const sha256 = crypto.createHash('sha256').update(pdf).digest('hex');
+    ctx.db.prepare(`INSERT INTO documents (filename, ${owner}, sha256) VALUES (?, ?, ?)`).run(name, ownerId, sha256);
+  };
+
   const result: SquareImportResult = { imported: 0, alreadyImported: alreadyBefore.size, incomePence: 0, feesPence: 0, years: [] };
-  ctx.db.transaction(() => {
-    // Checked again inside the write, in case another browser imported one meanwhile.
-    const already = importedPayouts(ctx.db, described.map((p) => p.id));
-    for (const p of described) {
-      if (already.has(p.id)) {
-        result.alreadyImported++;
-        continue;
-      }
-      const date = p.saleDate!;
-      const taxYearId = p.taxYearId!;
-      const incomeId = insertIncome(
-        ctx.db,
-        {
-          taxYearId,
-          date,
-          description: SQUARE_INCOME_DESCRIPTION,
-          source: SQUARE_PAYEE,
-          reference: p.id,
-          paymentMethod: 'bank_transfer',
-          amountPence: p.incomePence,
-          categoryId: settings.incomeCategory.id,
-          notes: incomeNotes(p),
-        },
-        by,
-      );
-      ctx.db.prepare('UPDATE incomes SET square_payout_id = ? WHERE id = ?').run(p.id, incomeId);
-      if (p.feesPence > 0) {
-        const expenseId = insertExpense(
+  try {
+    ctx.db.transaction(() => {
+      // Checked again inside the write, in case another browser imported one meanwhile.
+      const already = importedPayouts(ctx.db, described.map((p) => p.id));
+      for (const p of described) {
+        if (already.has(p.id)) {
+          result.alreadyImported++;
+          continue;
+        }
+        const date = p.saleDate!;
+        const taxYearId = p.taxYearId!;
+        const incomeId = insertIncome(
           ctx.db,
           {
             taxYearId,
             date,
-            payee: SQUARE_PAYEE,
-            invoiceNumber: null,
-            orderNumber: p.id,
+            description: SQUARE_INCOME_DESCRIPTION,
+            source: SQUARE_PAYEE,
+            reference: p.id,
             paymentMethod: 'bank_transfer',
-            notes: `Taken from the Square payout paid into the bank on ${formatDisplayDate(p.arrivalDate)}.`,
-            lineItems: [{ description: SQUARE_FEES_DESCRIPTION, amountPence: p.feesPence, categoryId: settings.feeCategory.id, disallowable: false }],
+            amountPence: p.incomePence,
+            categoryId: settings.incomeCategory.id,
+            notes: incomeNotes(p),
           },
           by,
         );
-        ctx.db.prepare('UPDATE expenses SET square_payout_id = ? WHERE id = ?').run(p.id, expenseId);
+        ctx.db.prepare('UPDATE incomes SET square_payout_id = ? WHERE id = ?').run(p.id, incomeId);
+        const names = statementNames(ctx, date, p.id);
+        const pdf = statements.get(p.id)!;
+        attach(names.income, 'income_id', incomeId, pdf);
+        if (p.feesPence > 0) {
+          const expenseId = insertExpense(
+            ctx.db,
+            {
+              taxYearId,
+              date,
+              payee: SQUARE_PAYEE,
+              invoiceNumber: null,
+              orderNumber: p.id,
+              paymentMethod: 'bank_transfer',
+              notes: `Taken from the Square payout paid into the bank on ${formatDisplayDate(p.arrivalDate)}.`,
+              lineItems: [{ description: SQUARE_FEES_DESCRIPTION, amountPence: p.feesPence, categoryId: settings.feeCategory.id, disallowable: false }],
+            },
+            by,
+          );
+          ctx.db.prepare('UPDATE expenses SET square_payout_id = ? WHERE id = ?').run(p.id, expenseId);
+          attach(names.fees, 'expense_id', expenseId, pdf);
+        }
+        result.imported++;
+        result.incomePence += p.incomePence;
+        result.feesPence += p.feesPence;
+        const year = result.years.find((y) => y.taxYearId === taxYearId);
+        if (!year) result.years.push({ taxYearId, label: p.taxYearLabel!, firstDate: date });
+        else if (date < year.firstDate) year.firstDate = date;
       }
-      result.imported++;
-      result.incomePence += p.incomePence;
-      result.feesPence += p.feesPence;
-      const year = result.years.find((y) => y.taxYearId === taxYearId);
-      if (!year) result.years.push({ taxYearId, label: p.taxYearLabel!, firstDate: date });
-      else if (date < year.firstDate) year.firstDate = date;
-    }
-  })();
+    })();
+    placed.length = 0;
+  } finally {
+    // Only still set if the write failed.
+    for (const name of placed) removeDocumentFile(ctx, name);
+  }
   result.years.sort((a, b) => a.label.localeCompare(b.label));
   return result;
 }
