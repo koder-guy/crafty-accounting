@@ -50,7 +50,6 @@ function ProviderCard({ status, canEdit }: { status: AiStatus; canEdit: boolean 
                 <span className="flex flex-wrap items-center gap-2">
                   <span className="text-sm font-medium text-ink">{info.name}</span>
                   <span className="text-sm text-muted">by {info.company}</span>
-                  {status.providers[p].configured && <Badge tone="ok">Key saved</Badge>}
                 </span>
                 <span className="block text-sm text-muted">{info.privacy}</span>
                 {'warning' in info && (
@@ -60,6 +59,11 @@ function ProviderCard({ status, canEdit }: { status: AiStatus; canEdit: boolean 
                   </span>
                 )}
               </span>
+              {status.providers[p].configured && (
+                <span className="shrink-0">
+                  <Badge tone="ok">API key saved</Badge>
+                </span>
+              )}
             </label>
           );
         })}
