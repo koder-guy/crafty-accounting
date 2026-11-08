@@ -26,7 +26,8 @@ COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/server/package.json ./server/
 COPY --from=build /app/server/dist ./server/dist
 COPY --from=build /app/client/dist ./client/dist
-RUN mkdir -p /data /backups && chown node:node /data /backups
+# /tls: an uploaded HTTPS certificate, shared with the Caddy container.
+RUN mkdir -p /data /backups /tls && chown node:node /data /backups /tls
 USER node
 VOLUME ["/data"]
 EXPOSE 3000

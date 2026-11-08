@@ -120,6 +120,8 @@ The authority lasts 10 years. The Linux quick install keeps it in `/home/crafty/
 
 **Public domain (`TLS_ISSUER=you@example.com`).** Point your domain at your home IP, forward ports 80 and 443 to the server, and set `SITE_ADDRESS` to the domain. Caddy then gets a Let's Encrypt certificate, with nothing to install on devices. Use strong passwords if the app can be reached from the internet.
 
+**Your own certificate (Settings → HTTPS Certificate).** Upload a `.pfx` or `.p12` file holding a certificate and its private key, such as one from your organisation or a certificate authority, with its password. The app checks it, keeps it (not in backups) and Caddy serves it instead of the one `TLS_ISSUER` gives. The Linux quick install restarts Caddy straight away; on Docker, run `docker compose restart caddy` in the install's folder. The bell warns 30 days before it expires. Its names should match `SITE_ADDRESS`, or browsers warn. If browsers can't open the app with it, add `TLS_CUSTOM=off` to `.env` and restart as above to go back to Caddy's own certificate, then remove or replace it.
+
 If ports 80 and 443 are taken, change `HTTP_PORT` and `HTTPS_PORT`; the address then needs the port, such as `https://crafty.local:8443`.
 
 ## Configuration
@@ -135,6 +137,7 @@ Settings go in a `.env` file next to the app (the installers write one). Only in
 | `SITE_ADDRESS` | `localhost` | HTTPS: address(es) you browse to, comma separated |
 | `SITE_IP` | `localhost` | HTTPS: the IP address in `SITE_ADDRESS` that browsers use, if any |
 | `TLS_ISSUER` | `internal` | HTTPS: `internal`, or your email address for Let's Encrypt |
+| `TLS_CUSTOM` | on | HTTPS: `off` ignores a certificate uploaded in Settings → HTTPS Certificate |
 | `HTTP_PORT` / `HTTPS_PORT` | `80` / `443` | HTTPS: ports Caddy listens on |
 | `MAX_UPLOAD_MB` | `20` | Largest document you can attach |
 | `COOKIE_SECURE` / `TRUST_PROXY` | `false` (`true` in both installs) | HTTPS-only cookie; trust the proxy's forwarded headers |

@@ -21,6 +21,7 @@ import { useOfHomeRouter } from './routes/useOfHome';
 import { reportsRouter } from './routes/reports';
 import { sampleDataRouter } from './routes/sampleData';
 import { taxYearsRouter } from './routes/taxYears';
+import { tlsRouter } from './routes/tls';
 import { expensesRouter, incomesRouter } from './routes/transactions';
 import { updatesRouter } from './routes/updates';
 import { usersRouter } from './routes/users';
@@ -103,6 +104,7 @@ export function createApp(ctx: AppContext) {
   app.use('/api/scans', scansRouter(ctx));
   app.use('/api/claude', claudeRouter(ctx));
   app.use('/api/square', squareRouter(ctx));
+  app.use('/api/tls', tlsRouter(ctx));
   app.use('/api/dashboard', dashboardRouter(ctx));
   app.use('/api/mtd', mtdRouter(ctx));
   app.use('/api/hmrc', hmrcRouter(ctx));

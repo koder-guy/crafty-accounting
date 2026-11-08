@@ -3,10 +3,11 @@
 // while the condition lasts and removed when it ends; each person marks it read for themselves.
 // Like the people, they belong to the install: left out of backups, kept through restore and reset.
 import crypto from 'node:crypto';
-import { APP_NAME, APP_VERSION, diskSize, lowSpaceThreshold, type AppNotification, type DiskSpace, type NotificationKind, type Role, type UpdateStatus } from '@crafty/shared';
+import { APP_NAME, APP_VERSION, CERTIFICATE_WARN_DAYS, daysUntil, diskSize, lowSpaceThreshold, type AppNotification, type DiskSpace, type NotificationKind, type Role, type UpdateStatus } from '@crafty/shared';
 import { diskSpace, listAutoBackups, sameDisk } from './autoBackup';
 import type { AppContext } from './context';
 import type { Db } from './db';
+import { savedCertificate } from './tlsCertificate';
 import { compareVersions, parseVersion } from './updates';
 
 /** Who sees a notification: everyone, or only those who can act on it. */
@@ -183,6 +184,39 @@ export function checkDiskSpace(ctx: AppContext, readSpace: ReadSpace = diskSpace
   resolveNotifications(ctx, ended);
 }
 
+// ---- HTTPS certificate ----
+
+const CERTIFICATE_KEY = 'certificate-expiry:';
+
+/**
+ * Warns when the uploaded HTTPS certificate is within 30 days of expiring, again (unread once
+ * more) at 7 days and once it has expired; gone when it's replaced, removed or switched off.
+ */
+export function checkCertificateExpiry(ctx: AppContext, now = new Date()): void {
+  const cert = ctx.config.tls.disabled ? null : savedCertificate(ctx);
+  let key: string | null = null;
+  if (cert) {
+    const days = daysUntil(cert.validTo, now);
+    const stage = days < 0 ? 'expired' : CERTIFICATE_WARN_DAYS.filter((d) => days < d).at(-1);
+    if (stage !== undefined) {
+      key = `${CERTIFICATE_KEY}${cert.fingerprint}:${stage}`;
+      const date = new Date(cert.validTo).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Europe/London' });
+      raiseNotification(ctx, {
+        key,
+        kind: 'certificate-expiry',
+        title: days < 0 ? 'The HTTPS certificate has expired' : 'The HTTPS certificate expires soon',
+        message:
+          days < 0
+            ? `It expired on ${date}, so browsers warn before opening the app. Upload a renewed one in Settings → HTTPS Certificate.`
+            : `It expires on ${date}${days === 0 ? ' (today)' : days === 1 ? ' (tomorrow)' : `, in ${days} days`}. Upload a renewed one in Settings → HTTPS Certificate before then, or browsers will warn before opening the app.`,
+        link: '/settings/https',
+        audience: 'editors',
+      });
+    }
+  }
+  resolveNotifications(ctx, openKeys(ctx.db, CERTIFICATE_KEY).filter((k) => k !== key));
+}
+
 const DISK_CHECK_EVERY_MS = 5 * 60 * 1000;
 
 /** Checks the disks shortly after starting and every few minutes, and clears update notifications already installed. */
@@ -193,6 +227,11 @@ export function startNotificationChecks(ctx: AppContext): () => void {
       checkDiskSpace(ctx);
     } catch (err) {
       console.error('Checking disk space failed:', (err as Error).message);
+    }
+    try {
+      checkCertificateExpiry(ctx);
+    } catch (err) {
+      console.error('Checking the HTTPS certificate failed:', (err as Error).message);
     }
   };
   const first = setTimeout(tick, 5_000);

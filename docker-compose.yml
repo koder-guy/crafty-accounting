@@ -18,6 +18,8 @@ services:
       TRUST_PROXY: "true"
       # Settings -> Updates shows the command to run instead of updating itself.
       CRAFTY_INSTALL: docker
+      # Settings -> HTTPS Certificate writes an uploaded certificate here, for Caddy.
+      CRAFTY_TLS_DIR: /tls
     # Not published on the host: only Caddy talks to the app.
     expose:
       - "3000"
@@ -25,6 +27,7 @@ services:
       - crafty-data:/data
       # Automatic backups go to a folder on the host, ideally another disk or a NAS share.
       - ${BACKUP_HOST_DIR:-./backups}:/backups
+      - crafty-tls:/tls
 
   caddy:
     image: caddy:2.11-alpine
@@ -36,6 +39,17 @@ services:
       SITE_ADDRESS: ${SITE_ADDRESS:-localhost}
       SITE_IP: ${SITE_IP:-localhost}
       TLS_ISSUER: ${TLS_ISSUER:-internal}
+      TLS_CUSTOM: ${TLS_CUSTOM:-}
+    # A certificate uploaded in Settings -> HTTPS Certificate is used, unless TLS_CUSTOM=off
+    # (see the Caddyfile). It's read on starting: docker compose restart caddy after a change.
+    command:
+      - sh
+      - -c
+      - |
+        if [ "$$(echo "$$TLS_CUSTOM" | tr A-Z a-z)" != off ] && [ -s /tls/cert.pem ] && [ -s /tls/key.pem ]; then
+          export TLS_ISSUER="/tls/cert.pem /tls/key.pem" CRAFTY_CA_HIDDEN=-not-in-use
+        fi
+        exec caddy run --config /etc/caddy/Caddyfile --adapter caddyfile
     ports:
       - "${HTTP_PORT:-80}:80"
       - "${HTTPS_PORT:-443}:443"
@@ -45,8 +59,10 @@ services:
       # Certificates (including the private certificate authority) live here.
       - caddy-data:/data
       - caddy-config:/config
+      - crafty-tls:/tls:ro
 
 volumes:
   crafty-data:
+  crafty-tls:
   caddy-data:
   caddy-config:

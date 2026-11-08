@@ -160,9 +160,12 @@ EOF
   curl -fsSk "https://localhost:$HTTPS_PORT/api/health" >/dev/null 2>&1 \
     || fail "the app didn't answer on https://localhost:$HTTPS_PORT. See: cd $DIR && docker compose logs"
 
-  # Caddy's private certificate authority, for devices to trust.
-  local CERT=""
-  if [ "$(env_value TLS_ISSUER)" = internal ] \
+  # Caddy's private certificate authority, for devices to trust, unless a certificate of
+  # your own is in use (uploaded in Settings → HTTPS Certificate).
+  local CERT="" CUSTOM_CERT=""
+  if [ "$(env_value TLS_CUSTOM | tr 'A-Z' 'a-z')" != off ] && compose exec -T caddy test -s /tls/cert.pem >/dev/null 2>&1; then
+    CUSTOM_CERT=1
+  elif [ "$(env_value TLS_ISSUER)" = internal ] \
     && compose cp caddy:/data/caddy/pki/authorities/local/root.crt "$DIR/crafty-root.crt" >/dev/null 2>&1; then
     CERT="$DIR/crafty-root.crt"
   fi
@@ -186,6 +189,11 @@ EOF
     echo "You'll be asked to choose your own password straight away."
   else
     echo "Sign in with your existing username and password."
+  fi
+  if [ -n "$CUSTOM_CERT" ]; then
+    echo
+    echo "HTTPS uses the certificate uploaded in Settings → HTTPS Certificate. If browsers"
+    echo "can't open the app with it, add TLS_CUSTOM=off to $DIR/.env and run this again."
   fi
   if [ -n "$CERT" ]; then
     echo

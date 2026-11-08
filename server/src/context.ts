@@ -7,6 +7,7 @@ import type { DiskSpace } from '@crafty/shared';
 import { diskSpace } from './autoBackup';
 import { anthropicApi, type ClaudeApi } from './invoiceReader';
 import { ScanReader } from './scans';
+import { restartCaddyService, type CaddyRestarter } from './tlsCertificate';
 import { Updates } from './updates';
 import { ensureFirstUser } from './users';
 
@@ -31,6 +32,8 @@ export interface AppContext {
   scans: ScanReader;
   /** Free and total space on the disk holding a folder; tests replace it. */
   diskSpace: (dir: string) => DiskSpace | null;
+  /** Restarts Caddy to serve a new HTTPS certificate (quick install only); tests replace it. */
+  restartCaddy: CaddyRestarter;
 }
 
 export function createContext(config: Config): AppContext {
@@ -50,5 +53,6 @@ export function createContext(config: Config): AppContext {
   ctx.claude = anthropicApi;
   ctx.scans = new ScanReader(ctx);
   ctx.diskSpace = diskSpace;
+  ctx.restartCaddy = restartCaddyService;
   return ctx;
 }

@@ -14,6 +14,7 @@ export * from './claude';
 export * from './square';
 export * from './diskSpace';
 export * from './businessDetails';
+export * from './tlsCertificate';
 export * from './types';
 
 export const APP_NAME = 'Crafty Accounting';

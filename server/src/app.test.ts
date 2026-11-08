@@ -26,6 +26,9 @@ import { sameInvoice } from './scans';
 import { buildStatement } from './square';
 import { clearData, generateSampleData } from './sampleData';
 import { saveBusiness } from './businessDetails';
+import forge from 'node-forge';
+import { checkCertificateExpiry } from './notifications';
+import { siteHost } from './tlsCertificate';
 
 const NAME = 'Admin';
 const PASSWORD = 'test-password';
@@ -4541,5 +4544,198 @@ describe('Square', () => {
     expect((await agent.get('/api/square')).body).toMatchObject({ configured: true });
     await agent.post('/api/square/import').send({ taxYearId: 1, payoutIds: ['po_1'] }).expect(200);
     expect((await agent.get('/api/incomes?taxYearId=1').expect(200)).body).toHaveLength(2);
+  });
+});
+
+describe('HTTPS certificate', () => {
+  const DAY = 86_400_000;
+  let tlsDir: string;
+  /** Caddy restarts asked for in this test; each test has its own, as a restart comes after the answer. */
+  let restartCalls: number[];
+  const restarts = () => restartCalls.length;
+
+  /** An RSA key pair, made by Node (forge's own is slow) and handed to forge. */
+  const keyPair = () => {
+    const { privateKey } = crypto.generateKeyPairSync('rsa', { modulusLength: 2048 });
+    const key = forge.pki.privateKeyFromPem(privateKey.export({ type: 'pkcs1', format: 'pem' }).toString()) as forge.pki.rsa.PrivateKey;
+    return { privateKey: key, publicKey: forge.pki.setRsaPublicKey(key.n, key.e) };
+  };
+
+  let serial = 1;
+  function certificate(opts: { cn: string; names?: { dns?: string; ip?: string }[]; issuer?: { cert: forge.pki.Certificate; key: forge.pki.rsa.PrivateKey }; ca?: boolean; from?: number; to?: number }) {
+    const keys = keyPair();
+    const cert = forge.pki.createCertificate();
+    cert.publicKey = keys.publicKey;
+    cert.serialNumber = String(10 + serial++);
+    cert.validity.notBefore = new Date(Date.now() + (opts.from ?? -DAY));
+    cert.validity.notAfter = new Date(Date.now() + (opts.to ?? 90 * DAY));
+    cert.setSubject([{ name: 'commonName', value: opts.cn }]);
+    cert.setIssuer(opts.issuer ? opts.issuer.cert.subject.attributes : [{ name: 'commonName', value: opts.cn }]);
+    const extensions: object[] = [{ name: 'basicConstraints', cA: !!opts.ca }];
+    if (opts.names) extensions.push({ name: 'subjectAltName', altNames: opts.names.map((n) => (n.dns ? { type: 2, value: n.dns } : { type: 7, ip: n.ip })) });
+    cert.setExtensions(extensions);
+    cert.sign(opts.issuer?.key ?? keys.privateKey, forge.md.sha256.create());
+    return { cert, key: keys.privateKey };
+  }
+
+  const pfx = (key: forge.pki.rsa.PrivateKey | null, certs: forge.pki.Certificate[], password: string, algorithm: '3des' | 'aes256' = 'aes256') =>
+    Buffer.from(forge.asn1.toDer(forge.pkcs12.toPkcs12Asn1(key, certs, password, { algorithm })).getBytes(), 'binary');
+
+  const NAMES = [{ dns: 'crafty.local' }, { dns: 'localhost' }, { ip: '192.168.1.50' }];
+
+  beforeEach(() => {
+    tlsDir = path.join(dataDir, 'caddy-custom');
+    const calls: number[] = [];
+    restartCalls = calls;
+    ctx.config.tls = { dir: tlsDir, setup: 'restarts-itself', restartCommand: null, disabled: false, siteAddresses: ['localhost', 'crafty.local:8443', '192.168.1.50'] };
+    ctx.restartCaddy = async () => {
+      calls.push(Date.now());
+    };
+  });
+
+  const upload = (file: Buffer, password: string, as = agent, name = 'site.pfx') => as.put('/api/tls').field('password', password).attach('certificate', file, name);
+
+  it('saves a certificate from a .pfx file, writes it for Caddy, and restarts Caddy after answering', async () => {
+    const root = certificate({ cn: 'Test Root', ca: true, to: 3650 * DAY });
+    const intermediate = certificate({ cn: 'Test Intermediate', ca: true, issuer: root, to: 365 * DAY });
+    const leaf = certificate({ cn: 'crafty.local', names: NAMES, issuer: intermediate });
+    // Files can list the chain in any order.
+    const res = await upload(pfx(leaf.key, [root.cert, leaf.cert, intermediate.cert], 'secret'), 'secret').expect(200);
+    expect(res.body).toMatchObject({
+      setup: 'restarts-itself',
+      restarting: true,
+      certificate: { names: ['crafty.local', 'localhost', '192.168.1.50'], intermediates: 1, selfSigned: false, keyType: 'RSA 2048', uncovered: [], fileName: 'site.pfx', addedBy: NAME },
+    });
+    expect(res.body.certificate.issuer).toBe('CN=Test Intermediate');
+    expect(JSON.stringify(res.body)).not.toMatch(/PRIVATE KEY/);
+
+    const certPem = fs.readFileSync(path.join(tlsDir, 'cert.pem'), 'utf8');
+    const keyPem = fs.readFileSync(path.join(tlsDir, 'key.pem'), 'utf8');
+    // The certificate first, then the intermediate; the root (browsers have their own) left out.
+    const chain = certPem.match(/-----BEGIN CERTIFICATE-----[\s\S]+?-----END CERTIFICATE-----/g)!.map((p) => new crypto.X509Certificate(p));
+    expect(chain.map((c) => c.subject)).toEqual(['CN=crafty.local', 'CN=Test Intermediate']);
+    expect(chain[0].checkPrivateKey(crypto.createPrivateKey(keyPem))).toBe(true);
+    expect(fs.statSync(path.join(tlsDir, 'key.pem')).mode & 0o777).toBe(0o600);
+    await vi.waitFor(() => expect(restarts()).toBe(1));
+
+    expect((await agent.get('/api/tls').expect(200)).body.certificate.fingerprint).toBe(chain[0].fingerprint256);
+  });
+
+  it('opens files with older encryption, and ones without a password', async () => {
+    const leaf = certificate({ cn: 'crafty.local', names: NAMES });
+    await upload(pfx(leaf.key, [leaf.cert], 'secret', '3des'), 'secret').expect(200);
+    await upload(pfx(leaf.key, [leaf.cert], ''), '').expect(200);
+  });
+
+  it("refuses a wrong password, a file without a key, a key that isn't the certificate's, and certificates out of date", async () => {
+    const leaf = certificate({ cn: 'crafty.local', names: NAMES });
+    const other = certificate({ cn: 'other.local' });
+    expect((await upload(pfx(leaf.key, [leaf.cert], 'secret'), 'wrong').expect(400)).body.error).toMatch(/password doesn't open/);
+    expect((await upload(pfx(leaf.key, [leaf.cert], 'secret'), '').expect(400)).body.error).toMatch(/needs its password/);
+    expect((await upload(pfx(null, [leaf.cert], 'secret'), 'secret').expect(400)).body.error).toMatch(/no private key/);
+    expect((await upload(pfx(leaf.key, [other.cert], 'secret'), 'secret').expect(400)).body.error).toMatch(/None of the certificates/);
+    const expired = certificate({ cn: 'crafty.local', from: -90 * DAY, to: -DAY });
+    expect((await upload(pfx(expired.key, [expired.cert], 'x'), 'x').expect(400)).body.error).toMatch(/expired on/);
+    const future = certificate({ cn: 'crafty.local', from: 5 * DAY });
+    expect((await upload(pfx(future.key, [future.cert], 'x'), 'x').expect(400)).body.error).toMatch(/isn't valid until/);
+    expect((await upload(Buffer.from('not a certificate'), 'x').expect(400)).body.error).toMatch(/isn't a .pfx or .p12 file/);
+    await agent.put('/api/tls').field('password', 'x').expect(400);
+    expect(fs.existsSync(path.join(tlsDir, 'cert.pem'))).toBe(false);
+    expect(restarts()).toBe(0);
+  });
+
+  it('says which addresses in SITE_ADDRESS the certificate is not for', async () => {
+    const leaf = certificate({ cn: 'crafty.local', names: [{ dns: 'crafty.local' }] });
+    const res = await upload(pfx(leaf.key, [leaf.cert], 'x'), 'x').expect(200);
+    expect(res.body.certificate).toMatchObject({ uncovered: ['localhost', '192.168.1.50'], selfSigned: true });
+    expect(['https://crafty.local:8443', '[::1]:8443', '::1', 'Example.COM'].map(siteHost)).toEqual(['crafty.local', '::1', '::1', 'example.com']);
+  });
+
+  it('removes the certificate and its files, and restarts Caddy', async () => {
+    const leaf = certificate({ cn: 'crafty.local', names: NAMES });
+    await upload(pfx(leaf.key, [leaf.cert], 'x'), 'x').expect(200);
+    await vi.waitFor(() => expect(restarts()).toBe(1));
+    expect((await agent.delete('/api/tls').expect(200)).body).toMatchObject({ certificate: null, restarting: true });
+    expect(fs.readdirSync(tlsDir)).toEqual([]);
+    await vi.waitFor(() => expect(restarts()).toBe(2));
+  });
+
+  it("leaves restarting to the person on Docker, and isn't offered where there's no Caddy", async () => {
+    ctx.config.tls = { ...ctx.config.tls, setup: 'restart-command', restartCommand: 'cd /srv/crafty && docker compose restart caddy' };
+    const leaf = certificate({ cn: 'crafty.local', names: NAMES });
+    expect((await upload(pfx(leaf.key, [leaf.cert], 'x'), 'x').expect(200)).body).toMatchObject({ restarting: false, restartCommand: 'cd /srv/crafty && docker compose restart caddy' });
+    await new Promise((r) => setTimeout(r, 400));
+    expect(restarts()).toBe(0);
+
+    ctx.config.tls = { ...ctx.config.tls, dir: null, setup: 'unavailable', restartCommand: null };
+    expect((await agent.get('/api/tls').expect(200)).body.setup).toBe('unavailable');
+    await upload(pfx(leaf.key, [leaf.cert], 'x'), 'x').expect(409);
+    await agent.delete('/api/tls').expect(409);
+  });
+
+  it('works out where certificates go from the install', () => {
+    const base = { DATA_DIR: dataDir, SITE_ADDRESS: 'localhost, 192.168.1.50' };
+    expect(loadConfig(base).tls).toMatchObject({ dir: null, setup: 'unavailable', siteAddresses: ['localhost', '192.168.1.50'] });
+    expect(loadConfig({ ...base, CRAFTY_INSTALL: 'docker', CRAFTY_DIR: '/home/me/crafty-accounting', CRAFTY_TLS_DIR: '/tls', TLS_CUSTOM: 'off' }).tls).toEqual({
+      dir: '/tls',
+      setup: 'restart-command',
+      restartCommand: 'cd /home/me/crafty-accounting && docker compose restart caddy',
+      disabled: true,
+      siteAddresses: ['localhost', '192.168.1.50'],
+    });
+  });
+
+  it('lets viewers see the certificate but not change it', async () => {
+    const leaf = certificate({ cn: 'crafty.local', names: NAMES });
+    const viewer = await addPerson('Accountant', 'read-only-password', 'viewer');
+    await upload(pfx(leaf.key, [leaf.cert], 'x'), 'x', viewer).expect(403);
+    await upload(pfx(leaf.key, [leaf.cert], 'x'), 'x').expect(200);
+    await viewer.delete('/api/tls').expect(403);
+    expect((await viewer.get('/api/tls').expect(200)).body.certificate.names).toContain('crafty.local');
+  });
+
+  it('keeps the certificate out of backups and through a restore and a reset', async () => {
+    const leaf = certificate({ cn: 'crafty.local', names: NAMES });
+    await upload(pfx(leaf.key, [leaf.cert], 'x'), 'x').expect(200);
+    const dump = (await agent.get('/api/backup.sql').expect(200)).text;
+    expect(dump).not.toMatch(/INSERT INTO "tls_certificate"/);
+    expect(dump).not.toMatch(/PRIVATE KEY/);
+    await agent.post('/api/restore').attach('file', Buffer.from(dump), 'backup.sql').expect(200);
+    expect((await agent.get('/api/tls')).body.certificate).not.toBeNull();
+    await agent.post('/api/reset').send({ confirm: 'RESET' }).expect(200);
+    expect((await agent.get('/api/tls')).body.certificate).not.toBeNull();
+  });
+
+  it('upgrades a backup made before certificates, keeping the saved one', async () => {
+    const leaf = certificate({ cn: 'crafty.local', names: NAMES });
+    await upload(pfx(leaf.key, [leaf.cert], 'x'), 'x').expect(200);
+    const old = new Database(':memory:');
+    old.exec('CREATE TABLE schema_migrations (version INTEGER PRIMARY KEY, applied_at TEXT)');
+    for (const migration of MIGRATIONS.filter((m) => m.version <= 25)) {
+      old.exec(migration.sql);
+      old.prepare('INSERT INTO schema_migrations (version) VALUES (?)').run(migration.version);
+    }
+    seedCategories(old);
+    const dump = dumpSql(old);
+    old.close();
+    expect(dump).not.toMatch(/tls_certificate/);
+    await agent.post('/api/restore').attach('file', Buffer.from(dump), 'backup.sql').expect(200);
+    setUpBusiness(ctx.db);
+    expect((await agent.get('/api/tls')).body.certificate.names).toContain('crafty.local');
+  });
+
+  it('warns under the bell 30 days before expiry, again at 7 days and once expired, and clears when replaced', async () => {
+    const leaf = certificate({ cn: 'crafty.local', names: NAMES, to: 20 * DAY });
+    await upload(pfx(leaf.key, [leaf.cert], 'x'), 'x').expect(200);
+    const open = () => (ctx.db.prepare('SELECT key, title FROM notifications ORDER BY id').all() as { key: string; title: string }[]).filter((n) => n.key.startsWith('certificate-expiry:'));
+    expect(open()).toEqual([expect.objectContaining({ key: expect.stringMatching(/:30$/), title: 'The HTTPS certificate expires soon' })]);
+    checkCertificateExpiry(ctx, new Date(Date.now() + 15 * DAY));
+    expect(open()).toEqual([expect.objectContaining({ key: expect.stringMatching(/:7$/) })]);
+    checkCertificateExpiry(ctx, new Date(Date.now() + 25 * DAY));
+    expect(open()).toEqual([expect.objectContaining({ key: expect.stringMatching(/:expired$/), title: 'The HTTPS certificate has expired' })]);
+
+    const renewed = certificate({ cn: 'crafty.local', names: NAMES, to: 365 * DAY });
+    await upload(pfx(renewed.key, [renewed.cert], 'x'), 'x').expect(200);
+    expect(open()).toEqual([]);
   });
 });

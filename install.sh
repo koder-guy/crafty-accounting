@@ -161,9 +161,10 @@ root_main() {
   fi
   rm -rf "$dir/app.old"
 
-  # Caddy's private certificate authority, for devices to trust.
+  # Caddy's private certificate authority, for devices to trust (unless a certificate of
+  # your own is in use, uploaded in Settings → HTTPS Certificate).
   local cert="" ca="$dir/caddy/data/caddy/pki/authorities/local/root.crt"
-  if [ "$(sed -n 's/^TLS_ISSUER=//p' "$env_file" | tail -n 1)" = internal ] && [ -f "$ca" ]; then
+  if ! custom_cert_in_use "$dir" && [ "$(sed -n 's/^TLS_ISSUER=//p' "$env_file" | tail -n 1)" = internal ] && [ -f "$ca" ]; then
     cp "$ca" "$dir/crafty-root.crt" && chown "$user": "$dir/crafty-root.crt"
     cert="$dir/crafty-root.crt"
   fi
@@ -212,6 +213,13 @@ NoNewPrivileges=true
 [Install]
 WantedBy=multi-user.target
 EOF
+}
+
+# Whether Caddy in install folder $1 serves a certificate uploaded in Settings → HTTPS Certificate
+# (the app writes it to caddy/custom; TLS_CUSTOM=off in .env makes Caddy ignore it).
+custom_cert_in_use() {
+  [ "$(sed -n 's/^TLS_CUSTOM=//p' "$1/.env" | tail -n 1 | tr 'A-Z' 'a-z')" != off ] \
+    && [ -s "$1/caddy/custom/cert.pem" ] && [ -s "$1/caddy/custom/key.pem" ]
 }
 
 # The SHA-256 fingerprint of certificate $1, as AB:CD:… (what Keychain Access and openssl show).
@@ -286,6 +294,11 @@ summary() {
     echo "You'll be asked to choose your own password straight away."
   else
     echo "Sign in with your existing username and password."
+  fi
+  if custom_cert_in_use "$dir"; then
+    echo
+    echo "HTTPS uses the certificate uploaded in Settings → HTTPS Certificate. If browsers"
+    echo "can't open the app with it, add TLS_CUSTOM=off to $env_file and run $dir/crafty restart."
   fi
   if [ -n "$cert" ]; then
     echo
@@ -528,7 +541,7 @@ delete_env() {
 write_crafty_script() {
   cat > "$DIR/crafty.new" <<'EOF'
 #!/bin/sh
-# Crafty Accounting:  crafty status | log | restart | update
+# Crafty Accounting:  crafty status | log | restart | restart-caddy | update
 # The services crafty-accounting and crafty-caddy run "crafty app" and "crafty caddy".
 DIR="$(cd "$(dirname "$0")" && pwd)"
 ENV_FILE="$DIR/.env"
@@ -562,12 +575,14 @@ app_up() { curl -fsS "http://127.0.0.1:$PORT/api/health" >/dev/null 2>&1; }
 # Any answer at all over HTTPS means Caddy is serving (the certificate isn't checked).
 caddy_up() { [ "$(curl -sk -o /dev/null -w '%{http_code}' "https://localhost:$HTTPS_PORT/api/health" 2>/dev/null)" != 000 ]; }
 
+# Restarts the services named in $1 (both unless given), Caddy first.
 restart() {
+  services="${1:-$SERVICES}"
   if [ "$(id -u)" = 0 ]; then
-    systemctl restart $SERVICES || return 1
+    systemctl restart $services || return 1
   else
     # This account can't use systemctl, but the services start again by themselves when they stop.
-    for s in $SERVICES; do
+    for s in $services; do
       pid="$(main_pid "$s")"
       if [ -z "$pid" ] || [ "$pid" = 0 ]; then
         # Between two attempts at starting (after a crash, say), systemd is already on it.
@@ -584,7 +599,7 @@ restart() {
       fi
     done
   fi
-  if ! wait_for app_up 60; then
+  if [ "$services" != crafty-caddy ] && ! wait_for app_up 60; then
     echo "Crafty Accounting didn't start. The end of its log:" >&2
     journalctl -u crafty-accounting -n 20 --no-pager >&2 2>/dev/null
     return 1
@@ -619,7 +634,16 @@ case "${1:-}" in
     if [ "$HTTPS_PORT" != 443 ]; then
       site="$(printf '%s' "$site" | tr ',' '\n' | awk -v p="$HTTPS_PORT" 'NF { a = $1; if (a !~ /:[0-9]+$/) a = a ":" p; out = out (out ? ", " : "") a } END { print out }')"
     fi
-    export SITE_ADDRESS="$site" SITE_IP="$(setting SITE_IP)" TLS_ISSUER="$(setting TLS_ISSUER)"
+    tls_issuer="$(setting TLS_ISSUER)"
+    # A certificate of your own, uploaded in Settings → HTTPS Certificate, unless TLS_CUSTOM=off.
+    # The Caddyfile's "tls {$TLS_ISSUER}" then reads "tls <cert> <key>", and /crafty-root.crt
+    # points at a folder that isn't there, as the private authority isn't in use.
+    custom="$DIR/caddy/custom"
+    if [ "$(setting TLS_CUSTOM | tr 'A-Z' 'a-z')" != off ] && [ -s "$custom/cert.pem" ] && [ -s "$custom/key.pem" ]; then
+      tls_issuer="$custom/cert.pem $custom/key.pem"
+      export CRAFTY_CA_HIDDEN=-not-in-use
+    fi
+    export SITE_ADDRESS="$site" SITE_IP="$(setting SITE_IP)" TLS_ISSUER="$tls_issuer"
     export CADDY_HTTP_PORT="$(setting HTTP_PORT)" CRAFTY_OTHER_ADDRESSES="https://:$HTTPS_PORT" CRAFTY_UPSTREAM="127.0.0.1:$PORT"
     export CRAFTY_ENV_PLACE="at $ENV_FILE" CRAFTY_APPLY="$DIR/crafty restart"
     # Its certificates, including the private certificate authority, live here.
@@ -628,6 +652,8 @@ case "${1:-}" in
   status) status || exit 1 ;;
   log) exec journalctl -u crafty-accounting -u crafty-caddy -n 50 -f ;;
   restart) restart || exit 1 ;;
+  # Picks up a new HTTPS certificate (the app runs this after one is uploaded or removed).
+  restart-caddy) restart crafty-caddy || exit 1 ;;
   update)
     # A copy of the installer that came with the app, since the update replaces the app.
     # (Outside the account's folder when root runs it, so the account can still update later.)
@@ -636,7 +662,7 @@ case "${1:-}" in
     exec /bin/bash "$copy" ;;
   start | stop)
     echo "Crafty Accounting runs as a service. As root: systemctl $1 $SERVICES" >&2; exit 2 ;;
-  *) echo "Usage: $0 status | log | restart | update" >&2; exit 2 ;;
+  *) echo "Usage: $0 status | log | restart | restart-caddy | update" >&2; exit 2 ;;
 esac
 EOF
   chmod +x "$DIR/crafty.new"

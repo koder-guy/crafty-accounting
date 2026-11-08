@@ -4,11 +4,19 @@ import { startAutoBackupScheduler } from './autoBackup';
 import { loadConfig } from './config';
 import { createContext } from './context';
 import { startNotificationChecks } from './notifications';
+import { writeTlsFiles } from './tlsCertificate';
 import { startUpdateChecker } from './updates';
 
 const config = loadConfig();
 const ctx = createContext(config);
 const app = createApp(ctx);
+
+// Caddy reads the HTTPS certificate from files, kept in step with the database.
+try {
+  writeTlsFiles(ctx);
+} catch (err) {
+  console.error((err as Error).message);
+}
 
 const stopScheduler = startAutoBackupScheduler(ctx);
 const stopUpdateChecker = startUpdateChecker(ctx);

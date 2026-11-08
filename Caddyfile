@@ -6,6 +6,10 @@
 #                 certificate authority (home network), or your email address
 #                 to get a free Let's Encrypt certificate for a public domain.
 #   SITE_IP       the IP address in SITE_ADDRESS that browsers use, if any
+#   TLS_CUSTOM    "off" to ignore a certificate uploaded in Settings → HTTPS Certificate
+# With an uploaded certificate, what starts Caddy (crafty caddy, or the Docker command) sets
+# TLS_ISSUER to "<cert.pem> <key.pem>", so "tls" serves those files, and sets CRAFTY_CA_HIDDEN
+# so /crafty-root.crt (the private authority, not in use then) is missing.
 # Plain http:// requests are redirected to https:// automatically.
 #
 # The quick install also sets CADDY_HTTP_PORT (Caddy listens on it itself rather than
@@ -38,9 +42,9 @@
 	header -Server
 	# Caddy's private certificate authority, for devices to download and trust (see "HTTPS"
 	# in the README). Only the certificate: its key stays in the folder. Missing (404) when
-	# the certificate comes from Let's Encrypt.
+	# the certificate comes from Let's Encrypt or is your own.
 	handle /crafty-root.crt {
-		root * {$XDG_DATA_HOME:/data}/caddy/pki/authorities/local
+		root * {$XDG_DATA_HOME:/data}/caddy/pki/authorities/local{$CRAFTY_CA_HIDDEN}
 		rewrite * /root.crt
 		header Content-Type application/x-x509-ca-cert
 		header Content-Disposition "attachment; filename=crafty-root.crt"

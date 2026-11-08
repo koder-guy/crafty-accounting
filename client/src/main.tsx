@@ -39,6 +39,7 @@ import { BackupSettings } from './pages/settings/BackupSettings';
 import { Users } from './pages/settings/Users';
 import { HmrcSettings } from './pages/settings/HmrcSettings';
 import { ClaudeSettings } from './pages/settings/ClaudeSettings';
+import { TlsSettings } from './pages/settings/TlsSettings';
 import { SquareSettings } from './pages/settings/SquareSettings';
 import { UpdatesSettings } from './pages/settings/UpdatesSettings';
 import { NotFound } from './pages/NotFound';
@@ -143,6 +144,7 @@ function BusinessGate() {
           <Route path="people" element={<Navigate to="/settings/users" replace />} />
           <Route path="hmrc" element={<HmrcSettings />} />
           <Route path="claude" element={<ClaudeSettings />} />
+          <Route path="https" element={<TlsSettings />} />
           <Route path="square" element={<SquareSettings />} />
           <Route
             path="backup"

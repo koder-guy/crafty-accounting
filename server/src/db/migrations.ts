@@ -448,6 +448,22 @@ CREATE TABLE business_details (
 );
 `,
   },
+  // An HTTPS certificate of the owner's own (Settings → HTTPS Certificate), from a .pfx/.p12
+  // file: the certificate with its intermediates, and the private key, both as PEM. Like the
+  // Claude key it belongs to the install: left out of backups, kept through a restore or reset.
+  {
+    version: 26,
+    sql: `
+CREATE TABLE tls_certificate (
+  id INTEGER PRIMARY KEY CHECK (id = 1),
+  cert_pem TEXT NOT NULL,
+  key_pem TEXT NOT NULL,
+  file_name TEXT,
+  added_by TEXT NOT NULL,
+  added_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+);
+`,
+  },
 ];
 
 export const CURRENT_SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;

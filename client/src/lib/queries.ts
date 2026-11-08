@@ -27,6 +27,8 @@ import type {
   SquarePayoutList,
   SquareSettingsInput,
   SquareStatus,
+  TlsChangeResult,
+  TlsStatus,
   Scan,
   ScanList,
   MeResponse,
@@ -314,6 +316,30 @@ export function useClaudeMutations() {
   };
 }
 
+/** Settings → HTTPS Certificate: the uploaded certificate's details (never its key), and how this install applies one. */
+export const useTls = () => useQuery({ queryKey: ['tls'], queryFn: () => api.get<TlsStatus>('/tls') });
+
+export function useTlsMutations() {
+  const qc = useQueryClient();
+  const onSuccess = (result: TlsChangeResult) => {
+    qc.setQueryData(['tls'], result);
+    // The new certificate is served once Caddy has restarted; reloading then shows it in use.
+    if (result.restarting) void reloadWhenReady();
+  };
+  return {
+    upload: useMutation({
+      mutationFn: ({ file, password }: { file: File; password: string }) => {
+        const form = new FormData();
+        form.append('password', password);
+        form.append('certificate', file, file.name);
+        return api.put<TlsChangeResult>('/tls', form);
+      },
+      onSuccess,
+    }),
+    remove: useMutation({ mutationFn: () => api.delete<TlsChangeResult>('/tls'), onSuccess }),
+  };
+}
+
 /** Settings → Square Integration: whether a token is saved (shown only as a hint), and the categories imports go into. */
 export const useSquare = () => useQuery({ queryKey: ['square'], queryFn: () => api.get<SquareStatus>('/square') });
 
@@ -478,7 +504,7 @@ let reloading = false;
  * The server answering isn't enough: the HTTPS proxy in front may still be restarting,
  * and reloading then left a blank page.
  */
-async function reloadWhenReady() {
+export async function reloadWhenReady() {
   if (reloading) return;
   reloading = true;
   const loads = async (url: string) => (await fetch(url, { cache: 'no-store' })).ok;

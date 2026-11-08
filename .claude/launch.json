@@ -22,6 +22,13 @@
       "autoPort": false
     },
     {
+      "name": "api-check-tls",
+      "runtimeExecutable": "/bin/sh",
+      "runtimeArgs": ["-c", "cd server && D=$(mktemp -d) && PATH=/opt/homebrew/opt/node@22/bin:$PATH PORT=3102 DATA_DIR=$D ADMIN_NAME=Admin ADMIN_PASSWORD=check-password SESSION_SECRET=check-secret CRAFTY_TLS_DIR=$D/caddy-custom CRAFTY_TLS_RESTART='docker compose restart caddy' SITE_ADDRESS='localhost, crafty.local, 192.168.1.50' npx tsx src/index.ts"],
+      "port": 3102,
+      "autoPort": false
+    },
+    {
       "name": "api-check-hmrc",
       "runtimeExecutable": "/bin/sh",
       "runtimeArgs": ["-c", "cd server && PATH=/opt/homebrew/opt/node@22/bin:$PATH PORT=3102 DATA_DIR=$(mktemp -d) ADMIN_NAME=Admin ADMIN_PASSWORD=check-password SESSION_SECRET=check-secret HMRC_CLIENT_ID=check-client HMRC_CLIENT_SECRET=check-secret npx tsx src/index.ts"],

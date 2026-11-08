@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
-import type { HmrcEnvironment, InstallKind } from '@crafty/shared';
+import type { HmrcEnvironment, InstallKind, TlsSetup } from '@crafty/shared';
 
 export interface Config {
   dataDir: string;
@@ -35,6 +35,17 @@ export interface Config {
     /** The install's folder: install.sh's ~/crafty-accounting, or CRAFTY_DIR from install-docker.sh's .env. */
     installDir: string | null;
   };
+  /** Settings → HTTPS Certificate: where Caddy looks for an uploaded certificate, and how it picks one up. */
+  tls: {
+    /** The folder the app writes cert.pem and key.pem to; null when no Caddy reads them. */
+    dir: string | null;
+    setup: TlsSetup;
+    restartCommand: string | null;
+    /** TLS_CUSTOM=off: Caddy ignores the saved certificate (a way back if one locks people out). */
+    disabled: boolean;
+    /** SITE_ADDRESS, the addresses Caddy serves, to check the certificate covers them. */
+    siteAddresses: string[];
+  };
 }
 
 const truthy = (value: string | undefined) => value === 'true' || value === '1';
@@ -46,6 +57,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
 
   const clientDist = path.resolve(env.CLIENT_DIST ?? path.join(process.cwd(), 'client', 'dist'));
 
+  const updates = { autoCheck: !/^(false|0)$/i.test(env.UPDATE_CHECK?.trim() ?? ''), ...installKind(env) };
   return {
     dataDir,
     backupDir: path.resolve(env.BACKUP_DIR || path.join(dataDir, 'backups')),
@@ -65,8 +77,27 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
       redirectUri: env.HMRC_REDIRECT_URI?.trim() || null,
     },
     squareApiUrl: env.SQUARE_API_URL?.trim().replace(/\/$/, '') || null,
-    updates: { autoCheck: !/^(false|0)$/i.test(env.UPDATE_CHECK?.trim() ?? ''), ...installKind(env) },
+    updates,
+    tls: tlsConfig(env, updates),
   };
+}
+
+/**
+ * Where an uploaded certificate goes. The quick install's crafty script points Caddy at
+ * caddy/custom and restarts it when asked; Docker shares a volume (CRAFTY_TLS_DIR) with the
+ * Caddy container, which needs restarting by hand.
+ */
+function tlsConfig(env: NodeJS.ProcessEnv, updates: { install: InstallKind; installDir: string | null }): Config['tls'] {
+  const siteAddresses = (env.SITE_ADDRESS ?? '').split(',').map((a) => a.trim()).filter(Boolean);
+  const disabled = env.TLS_CUSTOM?.trim().toLowerCase() === 'off';
+  const fromEnv = env.CRAFTY_TLS_DIR?.trim() || null;
+  if (updates.install === 'native' && updates.installDir) {
+    return { dir: fromEnv ?? path.join(updates.installDir, 'caddy', 'custom'), setup: 'restarts-itself', restartCommand: null, disabled, siteAddresses };
+  }
+  if (!fromEnv) return { dir: null, setup: 'unavailable', restartCommand: null, disabled, siteAddresses };
+  const restartCommand =
+    updates.install === 'docker' ? `${updates.installDir ? `cd ${updates.installDir} && ` : ''}docker compose restart caddy` : env.CRAFTY_TLS_RESTART?.trim() || null;
+  return { dir: path.resolve(fromEnv), setup: 'restart-command', restartCommand, disabled, siteAddresses };
 }
 
 /**
