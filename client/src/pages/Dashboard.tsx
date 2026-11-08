@@ -23,7 +23,6 @@ import { ReadOnlyNotice } from '../components/ReadOnly';
 import { DocIndicator } from '../components/transactions';
 import { Alert, Card, CardHeader, Spinner } from '../components/ui';
 import { useActiveTaxYear, useBusiness, useCanEdit, useDashboard, useMtdQuarters } from '../lib/queries';
-import { useLogoBackdrop } from '../lib/logoBackdrop';
 
 const CHART_IN = { id: 'chart-income', fill: 'url(#chart-income)', swatch: '#8559f4', glow: '#8559f480' };
 const CHART_OUT = { id: 'chart-expenses', fill: 'url(#chart-expenses)', swatch: '#6ea0f5', glow: '#6ea0f580' };
@@ -342,32 +341,12 @@ export function Dashboard() {
   const canEdit = useCanEdit();
   const { data: businessData } = useBusiness();
   const business = businessData?.details;
-  const logoUrl = businessData?.logo?.url;
-  const logoBackdrop = useLogoBackdrop(logoUrl);
 
   return (
     <>
       <PageHeader
-        title={business ? businessName(business) : 'Dashboard'}
-        subtitlePrefix={business ? 'Dashboard' : undefined}
-        leading={
-          logoUrl && (
-            // A light tile for logos made for white paper, which would vanish on the dark theme; a logo with a
-            // transparent background that shows up on dark stands on its own (useLogoBackdrop). Hidden until
-            // that's known, so the tile doesn't flash. Square logos make a square tile; wide ones widen it, up to a limit.
-            <div
-              className={`flex h-14 min-w-14 shrink-0 items-center justify-center rounded-xl ${
-                logoBackdrop === 'none' ? '' : 'p-1.5'
-              } ${logoBackdrop === 'white' ? 'bg-white shadow-sm' : ''}`}
-            >
-              <img
-                src={logoUrl}
-                alt=""
-                className={`h-full max-w-28 object-contain sm:max-w-40 ${logoBackdrop ? '' : 'invisible'}`}
-              />
-            </div>
-          )
-        }
+        title="Dashboard"
+        subtitlePrefix={business && <span className="font-medium text-ink">{businessName(business)}</span>}
       />
       <PageBody>
         {yearLoading || (taxYear && isLoading) ? (

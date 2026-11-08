@@ -13,15 +13,12 @@ export function PageHeader({
   subtitle,
   actions,
   tabs,
-  leading,
   subtitlePrefix,
 }: {
   title: string;
   subtitle?: ReactNode;
-  /** Shown before the title, such as the business's logo on the dashboard. */
-  leading?: ReactNode;
-  /** Put before the default subtitle (the tax year being viewed), such as the page's name when the title is something else. */
-  subtitlePrefix?: string;
+  /** Put before the default subtitle (the tax year being viewed), such as the business's name on the dashboard. */
+  subtitlePrefix?: ReactNode;
   actions?: ReactNode;
   tabs?: ReactNode;
 }) {
@@ -32,13 +29,12 @@ export function PageHeader({
       <header className="flex flex-col gap-4 border-b border-line px-4 py-5 sm:flex-row sm:items-center sm:px-8 lg:py-[18px]">
         {/* On narrow screens the title keeps some room and the page buttons wrap instead. */}
         <div className="flex min-w-0 items-center gap-4 sm:min-w-64 sm:flex-1">
-          {leading}
           <div className="min-w-0">
             <h1 className="truncate text-2xl font-bold tracking-tight text-white">
               {title}
             </h1>
             <p className="mt-1 text-sm text-muted">
-              {subtitlePrefix && `${subtitlePrefix} · `}
+              {subtitlePrefix && <>{subtitlePrefix} · </>}
               {subtitle ??
                 (taxYear ? (
                   <>
