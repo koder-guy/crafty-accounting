@@ -4222,19 +4222,19 @@ describe('Square', () => {
     expect(calls).toContain('connect.squareup.com/v2/payments');
     const [income] = (await agent.get(`/api/incomes?taxYearId=${yearId}`).expect(200)).body;
     const [expense] = (await agent.get(`/api/expenses?taxYearId=${yearId}`).expect(200)).body;
-    expect(income.documents.map((d: { filename: string }) => d.filename)).toEqual(['2025-11-01_Square_payout_po_1.pdf']);
-    expect(expense.documents.map((d: { filename: string }) => d.filename)).toEqual(['2025-11-01_Square_payout_po_1_fees.pdf']);
-    const pdf = await agent.get('/api/documents/2025-11-01_Square_payout_po_1.pdf').buffer(true).expect(200);
+    expect(income.documents.map((d: { filename: string }) => d.filename)).toEqual(['2025-11-01_Square_payout_po_1_£100.00.pdf']);
+    expect(expense.documents.map((d: { filename: string }) => d.filename)).toEqual(['2025-11-01_Square_payout_po_1_fees_£1.75.pdf']);
+    const pdf = await agent.get(`/api/documents/${encodeURIComponent('2025-11-01_Square_payout_po_1_£100.00.pdf')}`).buffer(true).expect(200);
     expect(pdf.headers['content-type']).toBe('application/pdf');
     expect(Buffer.from(pdf.body).subarray(0, 5).toString()).toBe('%PDF-');
 
     // A clash with a document already stored gets another name.
     payouts.push(payout('po_3', '2025-11-17', [charge(2000, 35, '2025-11-15T10:00:00Z')]));
-    const stored = path.join(dataDir, 'uploads', '2025-11-15_Square_payout_po_3.pdf');
+    const stored = path.join(dataDir, 'uploads', '2025-11-15_Square_payout_po_3_£20.00.pdf');
     fs.writeFileSync(stored, 'x');
     await agent.post('/api/square/import').send({ taxYearId: yearId, payoutIds: ['po_3'] }).expect(200);
     const third = (await agent.get(`/api/incomes?taxYearId=${yearId}`).expect(200)).body.find((i: { reference: string }) => i.reference === 'po_3');
-    expect(third.documents[0].filename).toBe('2025-11-15_Square_payout_po_3-2.pdf');
+    expect(third.documents[0].filename).toBe('2025-11-15_Square_payout_po_3_£20.00-2.pdf');
     expect(fs.readFileSync(stored, 'utf8')).toBe('x');
   });
 

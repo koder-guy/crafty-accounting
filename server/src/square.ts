@@ -11,6 +11,7 @@ import {
   formatDisplayDate,
   formatGBP,
   isDateInTaxYear,
+  penceToPounds,
   SQUARE_FEES_DESCRIPTION,
   SQUARE_INCOME_DESCRIPTION,
   SQUARE_PAYEE,
@@ -385,13 +386,16 @@ export function buildStatement(
   };
 }
 
-/** The statement's names on the income and on the fee expense (each document has a name of its own), clear of any taken. */
-function statementNames(ctx: AppContext, date: string, payoutId: string): { income: string; fees: string } {
+/**
+ * The statement's names on the income and on the fee expense (each document has a name of its own),
+ * ending in that transaction's amount as Claude's names for invoices do, clear of any taken.
+ */
+function statementNames(ctx: AppContext, date: string, payoutId: string, incomePence: number, feesPence: number): { income: string; fees: string } {
   const base = `${date}_Square_payout_${payoutId.replace(/[^A-Za-z0-9_-]/g, '')}`;
   const free = (name: string) => !isDocumentNameInUse(ctx.db, name) && !fs.existsSync(documentPath(ctx, name));
   for (let n = 1; ; n++) {
     const suffix = n === 1 ? '' : `-${n}`;
-    const names = { income: `${base}${suffix}.pdf`, fees: `${base}_fees${suffix}.pdf` };
+    const names = { income: `${base}_£${penceToPounds(incomePence)}${suffix}.pdf`, fees: `${base}_fees_£${penceToPounds(feesPence)}${suffix}.pdf` };
     if (free(names.income) && free(names.fees)) return names;
   }
 }
@@ -674,7 +678,7 @@ export async function importSquarePayouts(ctx: AppContext, taxYearId: number, pa
           by,
         );
         ctx.db.prepare('UPDATE incomes SET square_payout_id = ? WHERE id = ?').run(p.id, incomeId);
-        const names = statementNames(ctx, date, p.id);
+        const names = statementNames(ctx, date, p.id, p.incomePence, p.feesPence);
         const pdf = statements.get(p.id)!;
         attach(names.income, 'income_id', incomeId, pdf);
         if (p.feesPence > 0) {
