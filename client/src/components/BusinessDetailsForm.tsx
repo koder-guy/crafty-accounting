@@ -45,11 +45,13 @@ function Section({ title, description, children }: { title: string; description?
 export function LogoPreview({ url, className = '' }: { url: string; className?: string }) {
   return (
     <div className={`grid grid-cols-2 gap-2 ${className}`}>
-      <div className="flex h-24 items-center justify-center rounded-lg border border-line bg-page p-3">
-        <img src={url} alt="Logo on a dark background" className="max-h-full max-w-full object-contain" />
+      {/* Block tiles with the image filling them (object-contain), not a flex item with max-height: 100%,
+          which Safari can ignore, showing the logo at full size over the form. */}
+      <div className="h-24 overflow-hidden rounded-lg border border-line bg-page p-3">
+        <img src={url} alt="Logo on a dark background" className="block h-full w-full object-contain" />
       </div>
-      <div className="flex h-24 items-center justify-center rounded-lg border border-line bg-white p-3">
-        <img src={url} alt="Logo on a white background" className="max-h-full max-w-full object-contain" />
+      <div className="h-24 overflow-hidden rounded-lg border border-line bg-white p-3">
+        <img src={url} alt="Logo on a white background" className="block h-full w-full object-contain" />
       </div>
     </div>
   );
