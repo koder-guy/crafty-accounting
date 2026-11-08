@@ -45,6 +45,9 @@ export const AI_PROVIDER_INFO = {
     keyPlaceholder: 'AIza…',
     console: { name: 'Google AI Studio', url: 'https://aistudio.google.com/apikey' },
     billing: 'Google bills it per use once billing is set up for its project; without billing it\'s on the free tier, with low limits.',
+    /** Shown as a warning under the option. */
+    warning:
+      'On the free tier, Google allows only a few requests a minute and a limited number a day, so a pile of documents is read much more slowly than with Claude, and some may need retrying.',
     privacy: 'On Google\'s free tier, what\'s sent may be used to improve Google\'s products. Set up billing for the key\'s project so invoices aren\'t.',
   },
 } as const;

@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef, useState, type FormEvent } from 'react';
-import { Cpu, FileText, KeyRound, Sparkles } from 'lucide-react';
+import { Cpu, FileText, KeyRound, Sparkles, TriangleAlert } from 'lucide-react';
 import {
   AI_PROVIDER_INFO,
   AI_PROVIDERS,
@@ -53,6 +53,12 @@ function ProviderCard({ status, canEdit }: { status: AiStatus; canEdit: boolean 
                   {status.providers[p].configured && <Badge tone="ok">Key saved</Badge>}
                 </span>
                 <span className="block text-sm text-muted">{info.privacy}</span>
+                {'warning' in info && (
+                  <span className="mt-1.5 flex items-start gap-1.5 text-sm text-warn">
+                    <TriangleAlert className="mt-0.5 size-4 shrink-0" aria-hidden />
+                    {info.warning}
+                  </span>
+                )}
               </span>
             </label>
           );
