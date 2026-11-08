@@ -1,6 +1,6 @@
 import { useEffect, useRef, type ReactNode } from "react";
-import { displayTaxYear } from "@crafty/shared";
-import { useActiveTaxYear } from "../lib/queries";
+import { businessName, displayTaxYear } from "@crafty/shared";
+import { useActiveTaxYear, useBusiness } from "../lib/queries";
 import { NotificationBell } from "./NotificationBell";
 import { UserMenu } from "./UserMenu";
 
@@ -13,16 +13,15 @@ export function PageHeader({
   subtitle,
   actions,
   tabs,
-  subtitlePrefix,
 }: {
   title: string;
+  /** Shown after the business's name; by default, the tax year being viewed. */
   subtitle?: ReactNode;
-  /** Put before the default subtitle (the tax year being viewed), such as the business's name on the dashboard. */
-  subtitlePrefix?: ReactNode;
   actions?: ReactNode;
   tabs?: ReactNode;
 }) {
   const { taxYear } = useActiveTaxYear();
+  const business = useBusiness().data?.details;
   const ref = usePinnedHeight();
   return (
     <div ref={ref} className="z-20 bg-page lg:sticky lg:top-0 print:static">
@@ -34,7 +33,12 @@ export function PageHeader({
               {title}
             </h1>
             <p className="mt-1 text-sm text-muted">
-              {subtitlePrefix && <>{subtitlePrefix} · </>}
+              {business && (
+                <>
+                  <span className="font-medium text-ink">{businessName(business)}</span>
+                  {" · "}
+                </>
+              )}
               {subtitle ??
                 (taxYear ? (
                   <>

@@ -15,14 +15,13 @@ import {
   type CategoryTotal,
   type DashboardData,
   type TransactionDocument,
-  businessName,
 } from '@crafty/shared';
 import { SampleDataNotice, Welcome } from '../components/Welcome';
 import { PageBody, PageHeader } from '../components/PageHeader';
 import { ReadOnlyNotice } from '../components/ReadOnly';
 import { DocIndicator } from '../components/transactions';
 import { Alert, Card, CardHeader, Spinner } from '../components/ui';
-import { useActiveTaxYear, useBusiness, useCanEdit, useDashboard, useMtdQuarters } from '../lib/queries';
+import { useActiveTaxYear, useCanEdit, useDashboard, useMtdQuarters } from '../lib/queries';
 
 const CHART_IN = { id: 'chart-income', fill: 'url(#chart-income)', swatch: '#8559f4', glow: '#8559f480' };
 const CHART_OUT = { id: 'chart-expenses', fill: 'url(#chart-expenses)', swatch: '#6ea0f5', glow: '#6ea0f580' };
@@ -339,15 +338,10 @@ export function Dashboard() {
   const { taxYear, isLoading: yearLoading } = useActiveTaxYear();
   const { data, isLoading, error } = useDashboard(taxYear?.id);
   const canEdit = useCanEdit();
-  const { data: businessData } = useBusiness();
-  const business = businessData?.details;
 
   return (
     <>
-      <PageHeader
-        title="Dashboard"
-        subtitlePrefix={business && <span className="font-medium text-ink">{businessName(business)}</span>}
-      />
+      <PageHeader title="Dashboard" />
       <PageBody>
         {yearLoading || (taxYear && isLoading) ? (
           <Spinner />
