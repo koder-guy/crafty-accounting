@@ -25,6 +25,8 @@
 #   CRAFTY_PORT            port the app listens on behind Caddy, on a new install (default 3000)
 #   CRAFTY_SITE_IP         the IP address you'll browse to, on a new install (default: asked when
 #                          this computer's network address and public address differ)
+#   CRAFTY_DOMAIN          a domain name to open the app at too, on a new install (default: asked;
+#                          it's added to the app's Addresses, in Settings → HTTPS Certificate)
 #   CRAFTY_BRANCH          branch or tag to install (default: the latest release)
 #   CRAFTY_TARBALL         URL of the app's source .tar.gz, instead of GitHub's for CRAFTY_BRANCH
 #   CRAFTY_REPO            GitHub repository to install from (default koder-guy/crafty-accounting)
@@ -133,6 +135,38 @@ choose_site_ip() {
   done
 }
 
+# Whether $1 is a domain name, such as books.example.co.uk or crafty.local.
+is_domain() {
+  printf '%s' "$1" | grep -Eq '^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]([a-z0-9-]{0,61}[a-z0-9])?$'
+}
+
+# On a new install, a domain name to open the app at too (CRAFTY_DOMAIN answers in advance):
+# the app adds it to its Addresses (Settings → HTTPS Certificate) when it first starts. Asked on
+# the terminal; empty when skipped, or when there's no terminal to ask on.
+ask_domain() {
+  local answer
+  if [ -n "${CRAFTY_DOMAIN:-}" ]; then
+    answer="$(printf '%s' "$CRAFTY_DOMAIN" | tr -d ' ' | tr 'A-Z' 'a-z' | sed -E 's#^https?://##;s#/.*$##;s/\.$//')"
+    if is_domain "$answer"; then printf '%s' "$answer"; else echo "Ignoring CRAFTY_DOMAIN: \"$CRAFTY_DOMAIN\" isn't a domain name." >&2; fi
+    return 0
+  fi
+  (: </dev/tty) 2>/dev/null || return 0
+  {
+    echo
+    printf '%sA domain name for the app (optional)%s\n' "$bold" "$reset"
+    echo "  Such as books.example.co.uk, if you'll point one at this computer in DNS or on your router."
+    echo "  Press Enter to skip. Addresses can be added or removed later in Settings → HTTPS Certificate."
+  } >/dev/tty
+  while :; do
+    printf 'Domain name: ' >/dev/tty
+    IFS= read -r answer </dev/tty || answer=""
+    answer="$(printf '%s' "$answer" | tr -d ' ' | tr 'A-Z' 'a-z' | sed -E 's#^https?://##;s#/.*$##;s/\.$//')"
+    [ -n "$answer" ] || return 0
+    if is_domain "$answer"; then printf '%s' "$answer"; return 0; fi
+    echo "That isn't a domain name, such as books.example.co.uk." >/dev/tty
+  done
+}
+
 # This script's own text, to hand to the crafty account.
 this_script() {
   if [ -n "${BASH_EXECUTION_STRING:-}" ]; then
@@ -181,6 +215,8 @@ root_main() {
   # The address to browse to, asked here as the account can't use this terminal.
   local site_ip="${CRAFTY_SITE_IP:-}"
   if [ "$new_install" = 1 ] && [ -z "$site_ip" ]; then site_ip="$(choose_site_ip "$(lan_ip)")"; fi
+  local domain=""
+  if [ "$new_install" = 1 ]; then domain="$(ask_domain)"; fi
 
   # The download, build and settings belong to the account, so it does that part itself.
   local script
@@ -192,7 +228,7 @@ root_main() {
     PATH=/usr/local/bin:/usr/bin:/bin LANG="${LANG:-C.UTF-8}" TERM="${TERM:-dumb}" \
     CRAFTY_PHASE=user CRAFTY_REPO="$REPO" CRAFTY_BRANCH="${CRAFTY_BRANCH:-}" CRAFTY_TARBALL="${CRAFTY_TARBALL:-}" \
     CRAFTY_HTTP_PORT="${CRAFTY_HTTP_PORT:-}" CRAFTY_HTTPS_PORT="${CRAFTY_HTTPS_PORT:-}" CRAFTY_PORT="${CRAFTY_PORT:-}" \
-    CRAFTY_SITE_IP="$site_ip" /bin/bash "$script"; then
+    CRAFTY_SITE_IP="$site_ip" CRAFTY_DOMAIN="$domain" /bin/bash "$script"; then
     rm -f "$script"
     fail "setting up as $user didn't finish (see above). Anything already running is unchanged."
   fi
@@ -224,7 +260,7 @@ root_main() {
     cp "$ca" "$dir/crafty-root.crt" && chown "$user": "$dir/crafty-root.crt"
     cert="$dir/crafty-root.crt"
   fi
-  summary "$user" "$dir" "$cert" "$new_install"
+  summary "$user" "$dir" "$cert" "$new_install" "$domain"
 }
 
 write_services() {
@@ -359,7 +395,7 @@ other_address() {
 }
 
 summary() {
-  local user="$1" dir="$2" cert="$3" new_install="$4" env_file="$2/.env" https_port suffix="" label="On this computer:     " addr
+  local user="$1" dir="$2" cert="$3" new_install="$4" added="${5:-}" env_file="$2/.env" https_port suffix="" label="On this computer:     " addr
   https_port="$(sed -n 's/^HTTPS_PORT=//p' "$env_file" | tail -n 1)"
   [ "${https_port:-443}" = 443 ] || suffix=":$https_port"
   printf '\n%s%sCrafty Accounting is running.%s\n\n' "$bold" "$green" "$reset"
@@ -367,6 +403,7 @@ summary() {
   local domain
   domain="$(domain_in_use "$dir")"
   [ -z "$domain" ] || echo "  With your domain:       https://$domain"
+  [ -z "$added" ] || echo "  At your domain name:    https://$added$suffix  (once DNS or your router points it here)"
   local site ip
   site="$(sed -n 's/^SITE_ADDRESS=//p' "$env_file" | tail -n 1)"
   # The local IP address is always served too (crafty caddy adds it).
@@ -611,6 +648,10 @@ EOF
     printf '\n# HTTPS: the addresses you browse to, and a private certificate for them (see "HTTPS"\n# in the README). If this computer'"'"'s IP address changes, update SITE_ADDRESS and SITE_IP.\n' >> "$ENV_FILE"
     set_env SITE_ADDRESS "localhost${ip:+, $ip}"
     set_env SITE_IP "${ip:-localhost}"
+    if [ -n "${CRAFTY_DOMAIN:-}" ]; then
+      printf '\n# Added to the app'"'"'s Addresses (Settings → HTTPS Certificate) when it first starts; change them there.\n' >> "$ENV_FILE"
+      set_env CRAFTY_ADDRESSES "$CRAFTY_DOMAIN"
+    fi
   fi
   # A domain with a Let's Encrypt certificate was set in .env up to 1.10.72 (TLS_ISSUER, then
   # TLS_MODE, DOMAIN and CLOUDFLARE_API_TOKEN); it's set up in the app now.

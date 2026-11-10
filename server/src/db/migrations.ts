@@ -539,6 +539,14 @@ CREATE TABLE tls_addresses (
 );
 `,
   },
+  // CRAFTY_ADDRESSES as last added to tls_addresses (the domain asked for by an installer), so it's
+  // added once: one removed in the app later stays removed.
+  {
+    version: 32,
+    sql: `
+ALTER TABLE tls_settings ADD COLUMN imported_addresses TEXT;
+`,
+  },
 ];
 
 export const CURRENT_SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;

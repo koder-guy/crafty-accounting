@@ -49,6 +49,8 @@ export interface Config {
     siteAddresses: string[];
     /** The quick install's local IP address (CRAFTY_LOCAL_IP), always served; in siteAddresses too. */
     localIp: string | null;
+    /** CRAFTY_ADDRESSES: names the installer asked for, added to the app's Addresses once (`importInstallerAddresses`). */
+    installerAddresses: string[];
     /** This server's address on the network (SITE_IP, else the first IP in SITE_ADDRESS), to point a domain at. */
     serverIp: string | null;
     /** The port a domain on Cloudflare is served on, when it isn't 443 (the quick install's HTTPS_PORT). */
@@ -112,7 +114,8 @@ function tlsConfig(env: NodeJS.ProcessEnv, updates: { install: InstallKind; inst
   const fromEnv = env.CRAFTY_TLS_DIR?.trim() || null;
   const ips = [env.SITE_IP?.trim() ?? '', ...siteAddresses.map(siteHost)].filter((a) => net.isIP(a) && !a.startsWith('127.') && a !== '::1');
   const httpsPort = Number(env.HTTPS_PORT) || 443;
-  const shared = { disabled, siteAddresses, localIp, serverIp: ips[0] ?? null, acmeCa: env.ACME_CA?.trim() || null };
+  const installerAddresses = (env.CRAFTY_ADDRESSES ?? '').split(',').map((a) => a.trim()).filter(Boolean);
+  const shared = { disabled, siteAddresses, localIp, installerAddresses, serverIp: ips[0] ?? null, acmeCa: env.ACME_CA?.trim() || null };
   // CRAFTY_CADDY_ADDRESS (host:port) says where Caddy answers, for installs other than these two.
   const caddyFromEnv = /^(.+):(\d+)$/.exec(env.CRAFTY_CADDY_ADDRESS?.trim() ?? '');
   const caddyAddress = caddyFromEnv ? { host: caddyFromEnv[1], port: Number(caddyFromEnv[2]) } : null;

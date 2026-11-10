@@ -20,6 +20,8 @@
 #   CRAFTY_HTTPS_PORT      HTTPS port (default 443, or 8443 if 443 is taken)
 #   CRAFTY_SITE_IP         the IP address you'll browse to, on a new install (default: asked when
 #                          this computer's network address and public address differ)
+#   CRAFTY_DOMAIN          a domain name to open the app at too, on a new install (default: asked;
+#                          it's added to the app's Addresses, in Settings → HTTPS Certificate)
 #   CRAFTY_BRANCH          branch or tag to install (default: the latest release)
 #   CRAFTY_TARBALL         URL of the app's source .tar.gz, instead of GitHub's for CRAFTY_BRANCH
 #   CRAFTY_PROJECT         Docker Compose project name (default crafty-accounting)
@@ -74,7 +76,7 @@ main() {
   cd "$DIR"
 
   # ---- Addresses ----
-  local HOST_NAME="" LAN_IP=""
+  local HOST_NAME="" LAN_IP="" DOMAIN_NAME=""
   if [ "$OS" = darwin ]; then
     HOST_NAME="$(scutil --get LocalHostName 2>/dev/null || true)"
     LAN_IP="$(ipconfig getifaddr en0 2>/dev/null || ipconfig getifaddr en1 2>/dev/null || true)"
@@ -97,6 +99,7 @@ main() {
       https_port=443; port_busy 443 && https_port=8443
     fi
     if [ -n "${CRAFTY_SITE_IP:-}" ]; then LAN_IP="$CRAFTY_SITE_IP"; else LAN_IP="$(choose_site_ip "$LAN_IP")"; fi
+    DOMAIN_NAME="$(ask_domain)"
     local site="localhost"
     [ -n "$HOST_NAME" ] && site="$site, $HOST_NAME.local"
     [ -n "$LAN_IP" ] && site="$site, $LAN_IP"
@@ -124,6 +127,9 @@ TZ=Europe/London
 CRAFTY_DIR=$DIR
 EOF
     )
+    if [ -n "$DOMAIN_NAME" ]; then
+      printf '\n# Added to the app'"'"'s Addresses (Settings -> HTTPS Certificate) when it first starts; change them there.\nCRAFTY_ADDRESSES=%s\n' "$DOMAIN_NAME" >> "$ENV_FILE"
+    fi
   else
     echo "Keeping the existing settings in $ENV_FILE."
     # Installs from before Settings -> Updates.
@@ -178,6 +184,14 @@ EOF
   done
   https_here "$HTTPS_PORT" "$names" /api/health -fsSk --max-time 5 >/dev/null \
     || fail "the app didn't answer over HTTPS on port $HTTPS_PORT. See: cd $DIR && docker compose logs"
+  # The app adds the domain to its Addresses as it starts, after Caddy has read their folder.
+  if [ -n "$DOMAIN_NAME" ]; then
+    compose restart caddy >/dev/null
+    for i in $(seq 1 30); do
+      https_here "$HTTPS_PORT" "$names" /api/health -fsSk --max-time 5 >/dev/null && break
+      sleep 1
+    done
+  fi
 
   # A domain on Cloudflare set up in Settings → HTTPS Certificate: the site block the app writes for Caddy.
   local DOMAIN
@@ -198,6 +212,7 @@ EOF
   printf '\n%s%sCrafty Accounting is running.%s\n\n' "$bold" "$green" "$reset"
   echo "Open it in a web browser:"
   [ -z "$DOMAIN" ] || echo "  With your domain:       https://$DOMAIN$port_suffix"
+  [ -z "$DOMAIN_NAME" ] || echo "  At your domain name:    https://$DOMAIN_NAME$port_suffix  (once DNS or your router points it here)"
   local addr label="On this computer:     "
   for addr in $(env_value SITE_ADDRESS | tr ',' ' '); do
     [ -z "$DOMAIN" ] || [ "${addr%%:*}" != "${DOMAIN%%:*}" ] || continue
@@ -340,6 +355,38 @@ public_ip() {
 # Whether $1 is an IPv4 address.
 is_ip() {
   printf '%s' "$1" | grep -Eq '^([0-9]{1,3}\.){3}[0-9]{1,3}$'
+}
+
+# Whether $1 is a domain name, such as books.example.co.uk or crafty.local.
+is_domain() {
+  printf '%s' "$1" | grep -Eq '^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]([a-z0-9-]{0,61}[a-z0-9])?$'
+}
+
+# On a new install, a domain name to open the app at too (CRAFTY_DOMAIN answers in advance):
+# the app adds it to its Addresses (Settings → HTTPS Certificate) when it first starts. Asked on
+# the terminal; empty when skipped, or when there's no terminal to ask on.
+ask_domain() {
+  local answer
+  if [ -n "${CRAFTY_DOMAIN:-}" ]; then
+    answer="$(printf '%s' "$CRAFTY_DOMAIN" | tr -d ' ' | tr 'A-Z' 'a-z' | sed -E 's#^https?://##;s#/.*$##;s/\.$//')"
+    if is_domain "$answer"; then printf '%s' "$answer"; else echo "Ignoring CRAFTY_DOMAIN: \"$CRAFTY_DOMAIN\" isn't a domain name." >&2; fi
+    return 0
+  fi
+  (: </dev/tty) 2>/dev/null || return 0
+  {
+    echo
+    printf '%sA domain name for the app (optional)%s\n' "$bold" "$reset"
+    echo "  Such as books.example.co.uk, if you'll point one at this computer in DNS or on your router."
+    echo "  Press Enter to skip. Addresses can be added or removed later in Settings → HTTPS Certificate."
+  } >/dev/tty
+  while :; do
+    printf 'Domain name: ' >/dev/tty
+    IFS= read -r answer </dev/tty || answer=""
+    answer="$(printf '%s' "$answer" | tr -d ' ' | tr 'A-Z' 'a-z' | sed -E 's#^https?://##;s#/.*$##;s/\.$//')"
+    [ -n "$answer" ] || return 0
+    if is_domain "$answer"; then printf '%s' "$answer"; return 0; fi
+    echo "That isn't a domain name, such as books.example.co.uk." >/dev/tty
+  done
 }
 
 # The address browsers will use for this computer, given its address on its own network ($1).

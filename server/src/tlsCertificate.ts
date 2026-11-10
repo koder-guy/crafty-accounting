@@ -10,7 +10,7 @@ import path from 'node:path';
 import tls from 'node:tls';
 import { spawn } from 'node:child_process';
 import forge from 'node-forge';
-import { isDomainName, type TlsAddress, type TlsCertificateInfo, type TlsMethod, type TlsStatus } from '@crafty/shared';
+import { isDomainName, MAX_TLS_ADDRESSES, type TlsAddress, type TlsCertificateInfo, type TlsMethod, type TlsStatus } from '@crafty/shared';
 import type { AppContext } from './context';
 import type { Db } from './db';
 import { HttpError } from './http';
@@ -228,6 +228,46 @@ export const savedAddresses = (db: Db): TlsAddress[] =>
   (db.prepare('SELECT name, added_by, added_at FROM tls_addresses ORDER BY name').all() as { name: string; added_by: string; added_at: string }[]).map(
     (row) => ({ name: row.name, addedBy: row.added_by, addedAt: row.added_at }),
   );
+
+/** "https://Books.Example.co.uk/" → "books.example.co.uk", as addresses are kept. */
+export const cleanAddress = (entry: string) =>
+  entry
+    .trim()
+    .toLowerCase()
+    .replace(/^https?:\/\//, '')
+    .replace(/\/.*$/, '')
+    .replace(/\.$/, '');
+
+/** Who added the names from CRAFTY_ADDRESSES, as the app lists them. */
+export const INSTALLER = 'Installer';
+
+/**
+ * Adds the names an installer asked for (CRAFTY_ADDRESSES) to the app's addresses, once: when the
+ * setting differs from what was last added, so one removed in the app stays removed. Names that
+ * aren't domain names, or that SITE_ADDRESS has, are left out. Returns whether any were added, as
+ * Caddy then needs restarting to serve them.
+ */
+export function importInstallerAddresses(ctx: AppContext): boolean {
+  const wanted = ctx.config.tls.installerAddresses.join(', ');
+  const row = ctx.db.prepare('SELECT imported_addresses FROM tls_settings WHERE id = 1').get() as { imported_addresses: string | null } | undefined;
+  if (!wanted || row?.imported_addresses === wanted) return false;
+  const install = new Set(ctx.config.tls.siteAddresses.map(siteHost));
+  const saved = new Set(savedAddresses(ctx.db).map((a) => a.name));
+  const names = [...new Set(ctx.config.tls.installerAddresses.map(cleanAddress))].filter((name) => {
+    if (isDomainName(name)) return !install.has(name) && !saved.has(name);
+    console.error(`CRAFTY_ADDRESSES: "${name}" isn't a domain name, so it isn't added.`);
+    return false;
+  });
+  const room = Math.max(0, MAX_TLS_ADDRESSES - saved.size);
+  const insert = ctx.db.prepare('INSERT INTO tls_addresses (name, added_by) VALUES (?, ?)');
+  ctx.db.transaction(() => {
+    for (const name of names.slice(0, room)) insert.run(name, INSTALLER);
+    ctx.db
+      .prepare(`INSERT INTO tls_settings (id, method, imported_addresses) VALUES (1, 'internal', ?) ON CONFLICT (id) DO UPDATE SET imported_addresses = excluded.imported_addresses`)
+      .run(wanted);
+  })();
+  return Math.min(names.length, room) > 0;
+}
 
 /** Replaces the addresses added in the app, keeping who added each one that stays. */
 export function setAddresses(db: Db, names: string[], by: string): void {

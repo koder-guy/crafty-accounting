@@ -4,16 +4,23 @@ import { startAutoBackupScheduler } from './autoBackup';
 import { loadConfig } from './config';
 import { createContext } from './context';
 import { startNotificationChecks } from './notifications';
-import { writeTlsFiles } from './tlsCertificate';
+import { importInstallerAddresses, writeTlsFiles } from './tlsCertificate';
 import { startUpdateChecker } from './updates';
 
 const config = loadConfig();
 const ctx = createContext(config);
 const app = createApp(ctx);
 
-// Caddy reads the HTTPS certificate from files, kept in step with the database.
+// Caddy reads the HTTPS certificate from files, kept in step with the database. A domain an
+// installer asked for (CRAFTY_ADDRESSES) is added to the app's addresses first, on the first start;
+// Caddy is already running then, so on the quick install the app restarts it to serve the name
+// (the Docker installer restarts it itself).
 try {
+  const added = importInstallerAddresses(ctx);
   writeTlsFiles(ctx);
+  if (added && config.tls.setup === 'restarts-itself') {
+    ctx.restartCaddy(ctx).catch((err: Error) => console.error(`Restarting Caddy for the installer's address failed: ${err.message}`));
+  }
 } catch (err) {
   console.error((err as Error).message);
 }

@@ -30,7 +30,7 @@ import { clearData, generateSampleData } from './sampleData';
 import { saveBusiness } from './businessDetails';
 import forge from 'node-forge';
 import { checkCertificateExpiry } from './notifications';
-import { siteHost, writeTlsFiles } from './tlsCertificate';
+import { importInstallerAddresses, siteHost, writeTlsFiles } from './tlsCertificate';
 
 const NAME = 'Admin';
 const PASSWORD = 'test-password';
@@ -4792,6 +4792,7 @@ describe('HTTPS certificate', () => {
       disabled: false,
       siteAddresses: ['localhost', 'crafty.local:8443', '192.168.1.50'],
       localIp: null,
+      installerAddresses: [],
       serverIp: '192.168.1.50',
       domainPort: null,
       caddyAddress: null,
@@ -4931,6 +4932,7 @@ describe('HTTPS certificate', () => {
       disabled: true,
       siteAddresses: ['localhost', '192.168.1.50'],
       localIp: null,
+      installerAddresses: [],
       serverIp: '192.168.1.50',
       domainPort: null,
       caddyAddress: { host: 'caddy', port: 443 },
@@ -5202,6 +5204,27 @@ describe('HTTPS certificate', () => {
       expect((await agent.get('/api/tls').expect(200)).body.extraAddresses.map((a: { name: string }) => a.name)).toEqual(['books.example.co.uk', 'crafty.test']);
       await put([]).expect(200);
       expect(fs.existsSync(own())).toBe(false);
+    });
+
+    it('adds the domain an installer asked for to the addresses once, on starting', async () => {
+      const names = async () => (await agent.get('/api/tls').expect(200)).body.extraAddresses.map((a: { name: string; addedBy: string }) => `${a.name} ${a.addedBy}`);
+      expect(importInstallerAddresses(ctx)).toBe(false);
+      // Not one SITE_ADDRESS has, nor one that isn't a domain name.
+      ctx.config.tls = { ...ctx.config.tls, installerAddresses: ['https://Books.Example.co.uk/', 'crafty.local', '10.0.0.1'] };
+      const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
+      expect(importInstallerAddresses(ctx)).toBe(true);
+      expect(errors).toHaveBeenCalledWith(expect.stringContaining('10.0.0.1'));
+      errors.mockRestore();
+      expect(await names()).toEqual(['books.example.co.uk Installer']);
+      expect(importInstallerAddresses(ctx)).toBe(false);
+
+      // Removed in the app, it stays removed through later starts; a different setting adds again.
+      await agent.put('/api/tls/addresses').send({ addresses: [] }).expect(200);
+      expect(importInstallerAddresses(ctx)).toBe(false);
+      expect(await names()).toEqual([]);
+      ctx.config.tls = { ...ctx.config.tls, installerAddresses: ['shop.example.co.uk'] };
+      expect(importInstallerAddresses(ctx)).toBe(true);
+      expect(await names()).toEqual(['shop.example.co.uk Installer']);
     });
 
     it('works out the method in use from what was saved before methods could be chosen', () => {

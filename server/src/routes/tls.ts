@@ -9,7 +9,7 @@ import { isDomainName, MAX_PFX_BYTES, MAX_TLS_ADDRESSES, TLS_METHODS, type TlsCh
 import type { AppContext } from '../context';
 import { HttpError, parseWith } from '../http';
 import { checkCertificateExpiry } from '../notifications';
-import { changeTls, readPfx, setAddresses, siteHost, removeCertificate, restartCaddyAfter, saveCertificate, savedCertificatePem, setTlsMethod, tlsMethod, tlsStatus } from '../tlsCertificate';
+import { changeTls, cleanAddress, readPfx, setAddresses, siteHost, removeCertificate, restartCaddyAfter, saveCertificate, savedCertificatePem, setTlsMethod, tlsMethod, tlsStatus } from '../tlsCertificate';
 import { checkDomain, probeDomain, removeDomain, savedDomainRow, storeDomain } from '../tlsDomain';
 
 const methodSchema = z.object({ method: z.enum(TLS_METHODS) });
@@ -38,7 +38,7 @@ export function tlsRouter(ctx: AppContext): Router {
     const install = new Set(ctx.config.tls.siteAddresses.map(siteHost));
     const names: string[] = [];
     for (const entry of parseWith(addressesSchema, req.body).addresses) {
-      const name = entry.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/.*$/, '').replace(/\.$/, '');
+      const name = cleanAddress(entry);
       if (!name || names.includes(name)) continue;
       if (!isDomainName(name)) {
         throw new HttpError(400, `"${entry}" isn't a name the app can be served at, such as books.example.co.uk or crafty.local. IP addresses go in SITE_ADDRESS.`);

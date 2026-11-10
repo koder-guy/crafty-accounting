@@ -45,6 +45,8 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/koder-guy/crafty-account
 
 If the server's address on its own network differs from its public one (a cloud server usually has a private `10.x` address), it asks which you'll browse to. To answer in advance, put `CRAFTY_SITE_IP=203.0.113.10` (your address) before `bash`. To change it later, edit `SITE_ADDRESS` and `SITE_IP` in `/home/crafty/crafty-accounting/.env` and run `/home/crafty/crafty-accounting/crafty restart`.
 
+It also asks for an optional domain name to open the app at, such as `books.example.co.uk` (press Enter to skip; `CRAFTY_DOMAIN=books.example.co.uk` before `bash` answers in advance). The app adds it to its addresses in **Settings → HTTPS Certificate** when it first starts, where more can be added or removed later. Point the name at the server in your DNS or on your router.
+
 It needs Linux with systemd (Debian, Ubuntu, Fedora and most others) on Intel/AMD or ARM. On a Mac, on Alpine, or without systemd, use [Docker](#quick-install-with-docker).
 
 **Signing in for the first time:** use the username `Admin` and the password `admin`. You'll be asked to choose your own password before anything else; change your username and add other users in **Settings → Users**.
@@ -71,7 +73,7 @@ For a Mac, or any Linux. Needs Docker: on a Mac, [Docker Desktop](https://www.do
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/koder-guy/crafty-accounting/main/install-docker.sh)"
 ```
 
-[`install-docker.sh`](install-docker.sh) sets everything up in `~/crafty-accounting`, starts the containers and prints the `https://` addresses to open. Like the Linux install, it asks which address you'll browse to when the computer's network and public addresses differ (`CRAFTY_SITE_IP` answers in advance). Sign in as `Admin` / `admin` and choose your own password. It uses ports 80 and 443, or 8080 and 8443 if those are taken (choose with `CRAFTY_HTTP_PORT` and `CRAFTY_HTTPS_PORT`). It saves Caddy's certificate as `crafty-root.crt` and prints the command to trust it on a Mac; for other devices see [HTTPS](#https). To update, run `~/crafty-accounting/install-docker.sh` again.
+[`install-docker.sh`](install-docker.sh) sets everything up in `~/crafty-accounting`, starts the containers and prints the `https://` addresses to open. Like the Linux install, it asks which address you'll browse to when the computer's network and public addresses differ (`CRAFTY_SITE_IP` answers in advance), and for an optional domain name to open the app at, which the app adds to its addresses in **Settings → HTTPS Certificate** (`CRAFTY_DOMAIN` answers in advance). Sign in as `Admin` / `admin` and choose your own password. It uses ports 80 and 443, or 8080 and 8443 if those are taken (choose with `CRAFTY_HTTP_PORT` and `CRAFTY_HTTPS_PORT`). It saves Caddy's certificate as `crafty-root.crt` and prints the command to trust it on a Mac; for other devices see [HTTPS](#https). To update, run `~/crafty-accounting/install-docker.sh` again.
 
 ## Run with Docker Compose by hand
 
@@ -143,6 +145,7 @@ Settings go in a `.env` file next to the app (the installers write one). Only in
 | `PORT` | `3000` | Port the app listens on (behind Caddy with HTTPS) |
 | `HOST` | all addresses | Address the app listens on; the Linux quick install sets `127.0.0.1`, so only Caddy reaches it |
 | `SITE_ADDRESS` | `localhost` | HTTPS: address(es) you browse to, comma separated. The server's own IP address on its network is always served too: the Linux quick install finds it each time it starts, and the Docker installer adds it here |
+| `CRAFTY_ADDRESSES` | none | Domain names the installer asked for, comma separated: the app adds them to its addresses in **Settings → HTTPS Certificate** once, when it next starts; change them there |
 | `SITE_IP` | `localhost` | HTTPS: the IP address in `SITE_ADDRESS` that browsers use, if any; when it isn't an IP address, the server's own IP address is used |
 | `ACME_CA` | Let's Encrypt | HTTPS: another ACME certificate authority for a domain on Cloudflare, such as Let's Encrypt's staging one |
 | `TLS_CUSTOM` | on | HTTPS: `off` ignores a certificate uploaded in Settings → HTTPS Certificate |

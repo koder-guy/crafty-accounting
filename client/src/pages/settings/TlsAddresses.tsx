@@ -64,9 +64,11 @@ export function TlsAddresses({ status, canEdit }: { status: TlsStatus; canEdit: 
     return "From the install's settings (SITE_ADDRESS in .env)";
   };
   const noteForAdded = (added: string) => {
-    if (added === cloudflare) return "Added here · on Let's Encrypt, with Cloudflare";
-    if (status.ownCertificateAddresses.includes(added)) return status.method === 'internal' ? 'Added here' : "Added here · with the app's own certificate";
-    return 'Added here · your uploaded certificate covers it';
+    // INSTALLER on the server: a domain asked for when the app was installed.
+    const by = status.extraAddresses.find((a) => a.name === added)?.addedBy === 'Installer' ? 'Added when installing' : 'Added here';
+    if (added === cloudflare) return `${by} · on Let's Encrypt, with Cloudflare`;
+    if (status.ownCertificateAddresses.includes(added)) return status.method === 'internal' ? by : `${by} · with the app's own certificate`;
+    return `${by} · your uploaded certificate covers it`;
   };
 
   return (
