@@ -115,11 +115,9 @@ choose_site_ip() {
   fi
   {
     echo
-    printf '%sWhich address will you open Crafty Accounting at?%s\n' "$bold" "$reset"
-    echo "  1) $lan   this computer's address on its own network, for a computer at home or"
-    echo "     in an office, used from other devices on the same network"
-    echo "  2) $public   its public address on the internet, for a cloud server, or one at"
-    echo "     home with ports 80 and 443 forwarded to it"
+    printf '%sWhich address will you use to connect to the app?%s\n' "$bold" "$reset"
+    echo "  1) $lan  - the LAN address"
+    echo "  2) $public  - the WAN address"
     echo "  Or type another IPv4 address. (It can be changed later: SITE_ADDRESS and SITE_IP in .env.)"
   } >/dev/tty
   while :; do
