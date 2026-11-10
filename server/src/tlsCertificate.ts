@@ -161,6 +161,9 @@ const splitPem = (pem: string) => pem.match(/-----BEGIN CERTIFICATE-----[\s\S]+?
 const savedRow = (db: Db) =>
   db.prepare('SELECT cert_pem, key_pem, file_name, added_by, added_at FROM tls_certificate WHERE id = 1').get() as Row | undefined;
 
+/** The uploaded certificate with its intermediates, as PEM (never the key), for downloading. */
+export const savedCertificatePem = (db: Db): string | null => savedRow(db)?.cert_pem ?? null;
+
 export function savedCertificate(ctx: AppContext): TlsCertificateInfo | null {
   const row = savedRow(ctx.db);
   if (!row) return null;

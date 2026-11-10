@@ -8,7 +8,7 @@ import { MAX_PFX_BYTES, type TlsChangeResult } from '@crafty/shared';
 import type { AppContext } from '../context';
 import { HttpError, parseWith } from '../http';
 import { checkCertificateExpiry } from '../notifications';
-import { readPfx, removeCertificate, restartCaddyAfter, saveCertificate, tlsStatus, writeTlsFiles } from '../tlsCertificate';
+import { readPfx, removeCertificate, restartCaddyAfter, saveCertificate, savedCertificatePem, tlsStatus, writeTlsFiles } from '../tlsCertificate';
 import { probeDomain, removeDomain, restoreDomain, saveDomain, savedDomainRow } from '../tlsDomain';
 
 const domainSchema = z.object({
@@ -44,6 +44,16 @@ export function tlsRouter(ctx: AppContext): Router {
     checkCertificateExpiry(ctx);
     const result: TlsChangeResult = { ...tlsStatus(ctx), restarting: !ctx.config.tls.disabled && restartCaddyAfter(ctx, res) };
     res.json(result);
+  });
+
+  // The uploaded certificate and its intermediates (what Caddy sends every browser anyway), to
+  // install on devices when it's self-signed. Caddy's own authority is at /crafty-root.crt.
+  router.get('/certificate.crt', (_req, res) => {
+    const pem = savedCertificatePem(ctx.db);
+    if (!pem) throw new HttpError(404, 'No certificate has been uploaded.');
+    res.setHeader('Content-Type', 'application/x-x509-ca-cert');
+    res.setHeader('Content-Disposition', 'attachment; filename="crafty-certificate.crt"');
+    res.send(pem);
   });
 
   router.get('/domain/certificate', async (_req, res) => {

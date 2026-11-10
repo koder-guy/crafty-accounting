@@ -6,6 +6,7 @@ import { Alert, Badge, Button, Card, CardHeader, Field, Spinner } from '../../co
 import { useCanEdit, useTls, useTlsMutations } from '../../lib/queries';
 import { SettingsHeading } from './SettingsLayout';
 import { TlsDomainCard } from './TlsDomainCard';
+import { TlsDownloadCard } from './TlsDownloadCard';
 
 const date = (iso: string) => formatDisplayDate(iso.slice(0, 10));
 
@@ -274,6 +275,7 @@ export function TlsSettings() {
         <>
           <TlsDomainCard status={status} canEdit={canEdit} />
           <CertificateCard status={status} canEdit={canEdit} />
+          <TlsDownloadCard status={status} />
         </>
       )}
     </div>

@@ -4951,6 +4951,20 @@ describe('HTTPS certificate', () => {
     expect(open()).toEqual([]);
   });
 
+  it('downloads the uploaded certificate with its intermediates, never the key', async () => {
+    await agent.get('/api/tls/certificate.crt').expect(404);
+    const root = certificate({ cn: 'Test Root', ca: true, to: 3650 * DAY });
+    const leaf = certificate({ cn: 'crafty.local', names: NAMES, issuer: root });
+    await upload(pfx(leaf.key, [leaf.cert, root.cert], 'x'), 'x').expect(200);
+    const viewer = await addPerson('Accountant', 'read-only-password', 'viewer');
+    const res = await viewer.get('/api/tls/certificate.crt').expect(200);
+    expect(res.headers['content-type']).toMatch(/application\/x-x509-ca-cert/);
+    expect(res.headers['content-disposition']).toContain('crafty-certificate.crt');
+    const text = res.text ?? res.body.toString();
+    expect(new crypto.X509Certificate(text).fingerprint256).toBe(new crypto.X509Certificate(forge.pki.certificateToPem(leaf.cert)).fingerprint256);
+    expect(text).not.toMatch(/PRIVATE KEY/);
+  });
+
   describe('domain on Cloudflare', () => {
     const TOKEN = 'cf_Abcdefghijklmnopqrstuvwxyz0123456789AB';
     let calls: { method: string; path: string }[];
