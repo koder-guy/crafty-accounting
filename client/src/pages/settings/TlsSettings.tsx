@@ -5,6 +5,7 @@ import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { Alert, Badge, Button, Card, CardHeader, Field, Spinner } from '../../components/ui';
 import { useCanEdit, useTls, useTlsMutations } from '../../lib/queries';
 import { SettingsHeading } from './SettingsLayout';
+import { TlsAddresses } from './TlsAddresses';
 import { TlsDomainCard } from './TlsDomainCard';
 import { TlsSummaryCard } from './TlsSummaryCard';
 import { METHOD_INFO } from './tlsMethods';
@@ -285,10 +286,10 @@ function InternalCard({ status, canEdit }: { status: TlsStatus; canEdit: boolean
       <CardHeader icon={<Server className="size-5 text-accent-soft" />} title="The app's own certificate" action={inUse ? <Badge tone="ok">In use</Badge> : undefined} />
       <div className="space-y-5 px-5 pb-6 sm:px-6">
         <p className="text-sm text-muted">
-          Nothing to set up: the app makes its own certificate authority when it first starts, and signs a certificate for each address in{' '}
-          <code className="font-mono text-ink">SITE_ADDRESS</code> with it. Browsers warn until a device trusts the authority, which you can download at the top of this
-          page.
+          The app makes its own certificate authority when it first starts, and signs a certificate for each address below with it. Browsers warn until a device
+          trusts the authority, which you can download at the top of this page.
         </p>
+        <TlsAddresses status={status} canEdit={canEdit} />
         {applied && <Applying status={status} restarting={applied.restarting} />}
         {setMethod.error && <Alert>{setMethod.error.message}</Alert>}
         {!inUse && canEdit && (

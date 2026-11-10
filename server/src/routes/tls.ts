@@ -5,14 +5,15 @@
 import { Router } from 'express';
 import multer from 'multer';
 import { z } from 'zod';
-import { MAX_PFX_BYTES, TLS_METHODS, type TlsChangeResult } from '@crafty/shared';
+import { isDomainName, MAX_PFX_BYTES, MAX_TLS_ADDRESSES, TLS_METHODS, type TlsChangeResult } from '@crafty/shared';
 import type { AppContext } from '../context';
 import { HttpError, parseWith } from '../http';
 import { checkCertificateExpiry } from '../notifications';
-import { changeTls, readPfx, removeCertificate, restartCaddyAfter, saveCertificate, savedCertificatePem, setTlsMethod, tlsMethod, tlsStatus } from '../tlsCertificate';
+import { changeTls, readPfx, setAddresses, siteHost, removeCertificate, restartCaddyAfter, saveCertificate, savedCertificatePem, setTlsMethod, tlsMethod, tlsStatus } from '../tlsCertificate';
 import { checkDomain, probeDomain, removeDomain, savedDomainRow, storeDomain } from '../tlsDomain';
 
 const methodSchema = z.object({ method: z.enum(TLS_METHODS) });
+const addressesSchema = z.object({ addresses: z.array(z.string().max(253)).max(MAX_TLS_ADDRESSES) });
 
 const domainSchema = z.object({
   domain: z.string().max(253),
@@ -31,6 +32,25 @@ export function tlsRouter(ctx: AppContext): Router {
   });
 
   // Switches to a method whose settings are saved (Caddy's own needs none).
+  // The addresses added in the app, beside SITE_ADDRESS: the whole list, replacing the one saved.
+  router.put('/addresses', (req, res) => {
+    if (!ctx.config.tls.dir) throw unavailable();
+    const install = new Set(ctx.config.tls.siteAddresses.map(siteHost));
+    const names: string[] = [];
+    for (const entry of parseWith(addressesSchema, req.body).addresses) {
+      const name = entry.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/.*$/, '').replace(/\.$/, '');
+      if (!name || names.includes(name)) continue;
+      if (!isDomainName(name)) {
+        throw new HttpError(400, `"${entry}" isn't a name the app can be served at, such as books.example.co.uk or crafty.local. IP addresses go in SITE_ADDRESS.`);
+      }
+      if (install.has(name)) throw new HttpError(400, `${name} is served already, from the install's settings.`);
+      names.push(name);
+    }
+    changeTls(ctx, () => setAddresses(ctx.db, names, req.user!.name));
+    const result: TlsChangeResult = { ...tlsStatus(ctx), restarting: restartCaddyAfter(ctx, res) };
+    res.json(result);
+  });
+
   router.put('/method', (req, res) => {
     if (!ctx.config.tls.dir) throw unavailable();
     const { method } = parseWith(methodSchema, req.body);

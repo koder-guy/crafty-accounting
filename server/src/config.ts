@@ -47,6 +47,8 @@ export interface Config {
     disabled: boolean;
     /** SITE_ADDRESS, the addresses Caddy serves, to check the certificate covers them. */
     siteAddresses: string[];
+    /** The quick install's local IP address (CRAFTY_LOCAL_IP), always served; in siteAddresses too. */
+    localIp: string | null;
     /** This server's address on the network (SITE_IP, else the first IP in SITE_ADDRESS), to point a domain at. */
     serverIp: string | null;
     /** The port a domain on Cloudflare is served on, when it isn't 443 (the quick install's HTTPS_PORT). */
@@ -103,13 +105,14 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
 function tlsConfig(env: NodeJS.ProcessEnv, updates: { install: InstallKind; installDir: string | null }): Config['tls'] {
   const siteAddresses = (env.SITE_ADDRESS ?? '').split(',').map((a) => a.trim()).filter(Boolean);
   // The quick install always serves the server's local IP address too (crafty caddy adds it).
-  const localIp = env.CRAFTY_LOCAL_IP?.trim();
-  if (localIp && net.isIPv4(localIp) && !siteAddresses.some((a) => siteHost(a) === localIp)) siteAddresses.push(localIp);
+  const found = env.CRAFTY_LOCAL_IP?.trim();
+  const localIp = found && net.isIPv4(found) ? found : null;
+  if (localIp && !siteAddresses.some((a) => siteHost(a) === localIp)) siteAddresses.push(localIp);
   const disabled = env.TLS_CUSTOM?.trim().toLowerCase() === 'off';
   const fromEnv = env.CRAFTY_TLS_DIR?.trim() || null;
   const ips = [env.SITE_IP?.trim() ?? '', ...siteAddresses.map(siteHost)].filter((a) => net.isIP(a) && !a.startsWith('127.') && a !== '::1');
   const httpsPort = Number(env.HTTPS_PORT) || 443;
-  const shared = { disabled, siteAddresses, serverIp: ips[0] ?? null, acmeCa: env.ACME_CA?.trim() || null };
+  const shared = { disabled, siteAddresses, localIp, serverIp: ips[0] ?? null, acmeCa: env.ACME_CA?.trim() || null };
   // CRAFTY_CADDY_ADDRESS (host:port) says where Caddy answers, for installs other than these two.
   const caddyFromEnv = /^(.+):(\d+)$/.exec(env.CRAFTY_CADDY_ADDRESS?.trim() ?? '');
   const caddyAddress = caddyFromEnv ? { host: caddyFromEnv[1], port: Number(caddyFromEnv[2]) } : null;

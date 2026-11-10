@@ -10,7 +10,7 @@ import path from 'node:path';
 import tls from 'node:tls';
 import { spawn } from 'node:child_process';
 import forge from 'node-forge';
-import { isDomainName, type TlsCertificateInfo, type TlsMethod, type TlsStatus } from '@crafty/shared';
+import { isDomainName, type TlsAddress, type TlsCertificateInfo, type TlsMethod, type TlsStatus } from '@crafty/shared';
 import type { AppContext } from './context';
 import type { Db } from './db';
 import { HttpError } from './http';
@@ -20,6 +20,8 @@ export const CERT_FILE = 'cert.pem';
 export const KEY_FILE = 'key.pem';
 /** The site block for names on the uploaded certificate that aren't in SITE_ADDRESS. */
 export const CUSTOM_FILE = 'custom.caddy';
+/** The site block for addresses added in the app that the method in use doesn't cover. */
+export const ADDRESSES_FILE = 'addresses.caddy';
 
 export interface TlsPem {
   /** The certificate, then its intermediates. */
@@ -204,11 +206,60 @@ export function setTlsMethod(db: Db, method: TlsMethod): void {
 }
 
 export function tlsStatus(ctx: AppContext): TlsStatus {
-  const { setup, restartCommand, disabled, serverIp } = ctx.config.tls;
-  return { method: tlsMethod(ctx.db), addresses: servedAddresses(ctx), setup, restartCommand, disabled, certificate: savedCertificate(ctx), domain: savedDomain(ctx), serverIp };
+  const { setup, restartCommand, disabled, serverIp, siteAddresses, localIp } = ctx.config.tls;
+  return {
+    method: tlsMethod(ctx.db),
+    addresses: servedAddresses(ctx),
+    installAddresses: siteAddresses,
+    localIp,
+    extraAddresses: savedAddresses(ctx.db),
+    ownCertificateAddresses: addressBlocks(ctx).own,
+    setup,
+    restartCommand,
+    disabled,
+    certificate: savedCertificate(ctx),
+    domain: savedDomain(ctx),
+    serverIp,
+  };
 }
 
-const TLS_TABLES = ['tls_certificate', 'tls_domain', 'tls_settings'] as const;
+/** Addresses added in the app, beside SITE_ADDRESS. */
+export const savedAddresses = (db: Db): TlsAddress[] =>
+  (db.prepare('SELECT name, added_by, added_at FROM tls_addresses ORDER BY name').all() as { name: string; added_by: string; added_at: string }[]).map(
+    (row) => ({ name: row.name, addedBy: row.added_by, addedAt: row.added_at }),
+  );
+
+/** Replaces the addresses added in the app, keeping who added each one that stays. */
+export function setAddresses(db: Db, names: string[], by: string): void {
+  const before = new Set(savedAddresses(db).map((a) => a.name));
+  db.prepare(`DELETE FROM tls_addresses WHERE name NOT IN (SELECT value FROM json_each(?))`).run(JSON.stringify(names));
+  const insert = db.prepare('INSERT INTO tls_addresses (name, added_by) VALUES (?, ?)');
+  for (const name of names) if (!before.has(name)) insert.run(name, by);
+}
+
+/**
+ * Which certificate serves each name beyond SITE_ADDRESS, as their own site blocks (Caddy refuses
+ * a name in two): `custom`, the uploaded certificate in use, for its own names and any added
+ * address it covers (a wildcard on it, say); `own`, the app's own certificate, for the other
+ * added addresses, but not a domain on Cloudflare in use, which has its block already.
+ */
+export function addressBlocks(ctx: AppContext): { custom: string[]; own: string[] } {
+  const method = tlsMethod(ctx.db);
+  const inSiteAddress = new Set(servedAddresses(ctx).map(siteHost));
+  const extra = savedAddresses(ctx.db)
+    .map((a) => a.name)
+    .filter((name) => !inSiteAddress.has(name));
+  let custom: string[] = [];
+  const row = method === 'custom' && !ctx.config.tls.disabled ? savedRow(ctx.db) : undefined;
+  if (row) {
+    const leaf = new crypto.X509Certificate(splitPem(row.cert_pem)[0]!);
+    custom = [...new Set([...describeCertificate(row.cert_pem, servedAddresses(ctx)).added, ...extra.filter((name) => leaf.checkHost(name))])];
+  }
+  const domain = method === 'cloudflare' ? savedDomainRow(ctx.db)?.domain : undefined;
+  return { custom, own: extra.filter((name) => name !== domain && !custom.includes(name)) };
+}
+
+const TLS_TABLES = ['tls_certificate', 'tls_domain', 'tls_settings', 'tls_addresses'] as const;
 
 /**
  * Makes a change to the HTTPS settings and writes Caddy's files to match. If they can't be
@@ -270,12 +321,13 @@ export function writeTlsFiles(ctx: AppContext): void {
   const row = method === 'custom' ? savedRow(ctx.db) : undefined;
   const domain = method === 'cloudflare' ? savedDomainRow(ctx.db) : undefined;
   // TLS_CUSTOM=off: Caddy ignores the certificate, so it serves no more names with it either.
-  const added = row && !ctx.config.tls.disabled ? describeCertificate(row.cert_pem, servedAddresses(ctx)).added : [];
+  const blocks = addressBlocks(ctx);
   const files: [string, string | null][] = [
     [CERT_FILE, row?.cert_pem ?? null],
     [KEY_FILE, row?.key_pem ?? null],
     [DOMAIN_FILE, domain ? domainCaddyfile(ctx, domain) : null],
-    [CUSTOM_FILE, added.length ? customCaddyfile(ctx, dir, added) : null],
+    [CUSTOM_FILE, blocks.custom.length ? customCaddyfile(ctx, dir, blocks.custom) : null],
+    [ADDRESSES_FILE, blocks.own.length ? addressesCaddyfile(ctx, blocks.own) : null],
   ];
   try {
     if (files.some(([, content]) => content !== null)) fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
@@ -305,6 +357,25 @@ export function customCaddyfile(ctx: AppContext, dir: string, names: string[]): 
     "# the uploaded certificate's names that aren't in SITE_ADDRESS.",
     `${names.map((name) => (port ? `${name}:${port}` : name)).join(', ')} {`,
     `\ttls ${path.join(dir, CERT_FILE)} ${path.join(dir, KEY_FILE)}`,
+    '\timport app',
+    '}',
+    '',
+  ].join('\n');
+}
+
+/** The site block for addresses added in the app that the method in use doesn't cover: the app's own certificate. */
+export function addressesCaddyfile(ctx: AppContext, names: string[]): string {
+  const port = ctx.config.tls.domainPort;
+  return [
+    '# Written by Crafty Accounting from Settings → HTTPS Certificate, and again each time it starts:',
+    "# addresses added there, served with the app's own certificate.",
+    `${names.map((name) => (port ? `${name}:${port}` : name)).join(', ')} {`,
+    '\ttls {',
+    '\t\tissuer internal',
+    // A plain "tls internal" here was merged with an uploaded certificate's catch-all, which then
+    // served it for these names too. Settings of its own (Caddy's defaults) keep it apart.
+    '\t\tprotocols tls1.2 tls1.3',
+    '\t}',
     '\timport app',
     '}',
     '',

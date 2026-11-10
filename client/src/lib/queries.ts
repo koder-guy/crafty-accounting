@@ -347,6 +347,11 @@ export function useTlsMutations() {
       onSuccess,
     }),
     remove: useMutation({ mutationFn: () => api.delete<TlsChangeResult>('/tls'), onSuccess }),
+    /** Replaces the addresses added beside SITE_ADDRESS. The page's own address keeps its certificate, so no reload. */
+    setAddresses: useMutation({
+      mutationFn: (addresses: string[]) => api.put<TlsChangeResult>('/tls/addresses', { addresses }),
+      onSuccess: (result) => qc.setQueryData(['tls'], result),
+    }),
     /** Switches to another method whose settings are saved. */
     setMethod: useMutation({
       mutationFn: (method: TlsMethod) => api.put<TlsChangeResult>('/tls/method', { method }),

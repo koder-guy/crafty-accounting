@@ -63,13 +63,15 @@ function TrustSteps() {
 const list = (items: string[]) => (items.length < 2 ? (items[0] ?? '') : `${items.slice(0, -1).join(', ')} and ${items.at(-1)}`);
 
 /** Where SITE_ADDRESS is served, for the sentences below. */
-function Addresses({ status, other }: { status: TlsStatus; other?: boolean }) {
-  if (status.addresses.length === 0) return <>{other ? 'any other address' : 'this server'}</>;
+function Addresses({ status, other, own }: { status: TlsStatus; other?: boolean; own?: boolean }) {
+  // `own`: with the app's own certificate, which also serves addresses added in the app that the method doesn't cover.
+  const addresses = own ? [...status.addresses, ...status.ownCertificateAddresses] : status.addresses;
+  if (addresses.length === 0) return <>{other ? 'any other address' : 'this server'}</>;
   return (
     <>
       {other ? 'the other address' : 'the address'}
-      {status.addresses.length === 1 ? ' ' : 'es '}
-      <span className="text-ink">{list(status.addresses)}</span>
+      {addresses.length === 1 ? ' ' : 'es '}
+      <span className="text-ink">{list(addresses)}</span>
     </>
   );
 }
@@ -126,7 +128,7 @@ export function TlsSummaryCard({ status }: { status: TlsStatus }) {
           <CaddyRootDownload
             intro={
               <>
-                The app serves <Addresses status={status} /> with a certificate from its own private certificate authority. Download the authority and install it on each
+                The app serves <Addresses status={status} own /> with a certificate from its own private certificate authority. Download the authority and install it on each
                 device once, and browsers stop warning about this app.
               </>
             }
@@ -143,7 +145,7 @@ export function TlsSummaryCard({ status }: { status: TlsStatus }) {
             <CaddyRootDownload
               intro={
                 <>
-                  The app's own certificate authority covers <Addresses status={status} other />
+                  The app's own certificate authority covers <Addresses status={status} other own />
                   {domainCert?.state === 'fallback' ? ", and stands in for the domain until Let's Encrypt issues its certificate" : ''}. Devices that open the
                   app there need to trust it once.
                 </>
@@ -163,6 +165,11 @@ export function TlsSummaryCard({ status }: { status: TlsStatus }) {
               )}{' '}
               with the certificate you uploaded, valid to {date(cert.validTo)}
               {days < 0 ? <span className="text-out-soft"> (expired)</span> : days < 30 ? <span className="text-warn"> ({days} days left)</span> : ''}.{' '}
+              {status.ownCertificateAddresses.length > 0 && (
+                <>
+                  It serves <span className="text-ink">{list(status.ownCertificateAddresses)}</span>, added here but not on the certificate, with its own.{' '}
+                </>
+              )}
               {cert.selfSigned
                 ? "It's self-signed, so each device has to trust it once: download it, then install it."
                 : 'It comes from a certificate authority, so devices that trust that authority need nothing more; download it to keep a copy.'}

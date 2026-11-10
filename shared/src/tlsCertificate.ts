@@ -63,11 +63,28 @@ export interface TlsDomainInfo {
 export const TLS_METHODS = ['internal', 'cloudflare', 'custom'] as const;
 export type TlsMethod = (typeof TLS_METHODS)[number];
 
+/** Most addresses that can be added in Settings → HTTPS Certificate, beside SITE_ADDRESS. */
+export const MAX_TLS_ADDRESSES = 20;
+
+/** An address added in the app, served with the app's own certificate unless the method in use covers it. */
+export interface TlsAddress {
+  name: string;
+  addedBy: string;
+  addedAt: string;
+}
+
 export interface TlsStatus {
   /** The method in use: one whose settings are saved, else `internal`. */
   method: TlsMethod;
   /** The addresses in SITE_ADDRESS that Caddy serves, without a domain on Cloudflare in use (which has its own block). */
   addresses: string[];
+  /** SITE_ADDRESS as the install sets it, with the local IP address the quick install adds (`localIp`). */
+  installAddresses: string[];
+  localIp: string | null;
+  /** Addresses added in the app. */
+  extraAddresses: TlsAddress[];
+  /** Those of them served with the app's own certificate just now: not covered by the method in use. */
+  ownCertificateAddresses: string[];
   setup: TlsSetup;
   /** For `restart-command`: what to run where the install lives. */
   restartCommand: string | null;

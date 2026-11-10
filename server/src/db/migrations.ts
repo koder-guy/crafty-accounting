@@ -527,6 +527,18 @@ INSERT INTO tls_settings (id, method) SELECT 1, CASE
   ELSE 'internal' END;
 `,
   },
+  // Addresses added in Settings → HTTPS Certificate beside SITE_ADDRESS in .env, served with the
+  // app's own certificate unless the method in use covers them. Install-level like tls_settings.
+  {
+    version: 31,
+    sql: `
+CREATE TABLE tls_addresses (
+  name TEXT PRIMARY KEY,
+  added_by TEXT NOT NULL,
+  added_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+);
+`,
+  },
 ];
 
 export const CURRENT_SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;

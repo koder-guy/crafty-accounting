@@ -4791,6 +4791,7 @@ describe('HTTPS certificate', () => {
       restartCommand: null,
       disabled: false,
       siteAddresses: ['localhost', 'crafty.local:8443', '192.168.1.50'],
+      localIp: null,
       serverIp: '192.168.1.50',
       domainPort: null,
       caddyAddress: null,
@@ -4929,6 +4930,7 @@ describe('HTTPS certificate', () => {
       restartCommand: 'cd /home/me/crafty-accounting && docker compose restart caddy',
       disabled: true,
       siteAddresses: ['localhost', '192.168.1.50'],
+      localIp: null,
       serverIp: '192.168.1.50',
       domainPort: null,
       caddyAddress: { host: 'caddy', port: 443 },
@@ -5156,6 +5158,50 @@ describe('HTTPS certificate', () => {
 
       const viewer = await addPerson('Accountant', 'read-only-password', 'viewer');
       await viewer.put('/api/tls/method').send({ method: 'internal' }).expect(403);
+    });
+
+    it('serves addresses added in the app, each with the certificate that covers it', async () => {
+      const own = () => path.join(tlsDir, 'addresses.caddy');
+      const custom = () => path.join(tlsDir, 'custom.caddy');
+      const put = (addresses: string[], as = agent) => as.put('/api/tls/addresses').send({ addresses });
+
+      // Refused: an IP address, a wildcard, and one SITE_ADDRESS has; repeats and the way it's written are tidied.
+      expect((await put(['10.0.0.9']).expect(400)).body.error).toMatch(/SITE_ADDRESS/);
+      await put(['*.example.co.uk']).expect(400);
+      expect((await put(['Crafty.Local']).expect(400)).body.error).toMatch(/served already/);
+      const res = await put(['https://Books.Example.co.uk/', 'shop.example.co.uk.', 'books.example.co.uk']).expect(200);
+      expect(res.body).toMatchObject({ restarting: true, ownCertificateAddresses: ['books.example.co.uk', 'shop.example.co.uk'] });
+      expect(res.body.extraAddresses).toEqual([
+        expect.objectContaining({ name: 'books.example.co.uk', addedBy: 'Admin' }),
+        expect.objectContaining({ name: 'shop.example.co.uk', addedBy: 'Admin' }),
+      ]);
+      expect(fs.readFileSync(own(), 'utf8')).toContain('\nbooks.example.co.uk, shop.example.co.uk {\n\ttls {\n\t\tissuer internal\n\t\tprotocols tls1.2 tls1.3\n\t}\n\timport app\n}\n');
+      await vi.waitFor(() => expect(restarts()).toBe(1));
+
+      // An uploaded certificate in use serves the ones it covers (by a wildcard here); the app's own the rest.
+      const leaf = certificate({ cn: 'crafty.local', names: [...NAMES, { dns: '*.example.co.uk' }] });
+      await upload(pfx(leaf.key, [leaf.cert], 'x'), 'x').expect(200);
+      expect(fs.readFileSync(custom(), 'utf8')).toMatch(/^books\.example\.co\.uk, shop\.example\.co\.uk \{$/m);
+      expect(fs.existsSync(own())).toBe(false);
+      await put(['books.example.co.uk', 'crafty.test']).expect(200);
+      expect(fs.readFileSync(custom(), 'utf8')).toMatch(/^books\.example\.co\.uk \{$/m);
+      expect(fs.readFileSync(own(), 'utf8')).toMatch(/^crafty\.test \{$/m);
+
+      // A domain on Cloudflare in use has its own block, so it isn't in the app's own.
+      await setUp({ domain: 'books.example.co.uk', token: TOKEN }).expect(200);
+      expect(fs.existsSync(custom())).toBe(false);
+      expect(fs.readFileSync(own(), 'utf8')).toMatch(/^crafty\.test \{$/m);
+      expect((await agent.get('/api/tls').expect(200)).body.ownCertificateAddresses).toEqual(['crafty.test']);
+
+      // Editors only; kept through a restore and a reset, and out of backups.
+      await put([], await addPerson('Accountant', 'read-only-password', 'viewer')).expect(403);
+      const dump = (await agent.get('/api/backup.sql').expect(200)).text;
+      expect(dump).not.toContain('crafty.test');
+      await agent.post('/api/restore').attach('file', Buffer.from(dump), 'backup.sql').expect(200);
+      await agent.post('/api/reset').send({ confirm: 'RESET' }).expect(200);
+      expect((await agent.get('/api/tls').expect(200)).body.extraAddresses.map((a: { name: string }) => a.name)).toEqual(['books.example.co.uk', 'crafty.test']);
+      await put([]).expect(200);
+      expect(fs.existsSync(own())).toBe(false);
     });
 
     it('works out the method in use from what was saved before methods could be chosen', () => {
