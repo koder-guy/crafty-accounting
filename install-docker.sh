@@ -82,6 +82,8 @@ main() {
     LAN_IP="$(hostname -I 2>/dev/null | awk '{ print $1 }' || true)"
     [ -n "$LAN_IP" ] || LAN_IP="$(ip -4 route get 1.1.1.1 2>/dev/null | awk '{ for (i = 1; i < NF; i++) if ($i == "src") print $(i + 1) }' || true)"
   fi
+  # This computer's address on its own network, whichever address is chosen below to browse to.
+  local NETWORK_IP="$LAN_IP"
 
   # ---- Settings ----
   local ENV_FILE="$DIR/.env" NEW_INSTALL=0
@@ -150,6 +152,7 @@ EOF
       echo "removed; enter the domain and API token there again."
     fi
   fi
+  ensure_network_ip "$NETWORK_IP"
   local HTTPS_PORT
   HTTPS_PORT="$(env_value HTTPS_PORT)"; HTTPS_PORT="${HTTPS_PORT:-443}"
 
@@ -356,6 +359,24 @@ choose_site_ip() {
 step() { printf '\n%s==> %s%s\n' "$bold" "$1" "$reset"; }
 fail() { printf '\n%sError: %s%s\n' "$red" "$1" "$reset" >&2; exit 1; }
 env_value() { sed -n "s/^$1=//p" "$DIR/.env" | tail -n 1; }
+
+# The app always opens at this computer's address on its network ($1), as well as at any domain:
+# adds it to SITE_ADDRESS if it isn't there (say, the router handed out another), and makes it
+# SITE_IP unless that's an IP address already (browsers send no name for an IP address, so
+# Caddy answers those with SITE_IP's certificate). Run on every install and update.
+ensure_network_ip() {
+  local ip="$1" site
+  is_ip "$ip" || return 0
+  site="$(env_value SITE_ADDRESS)"
+  if ! printf '%s' "$site" | tr ',' '\n' | sed 's/^ *//;s/ *$//;s#^[a-z]*://##;s/:[0-9]*$//' | grep -qxF "$ip"; then
+    set_env SITE_ADDRESS "${site:-localhost}, $ip"
+    echo "Added $ip to SITE_ADDRESS, so the app opens at this computer's network address too."
+  fi
+  if ! is_ip "$(env_value SITE_IP)"; then
+    set_env SITE_IP "$ip"
+    echo "Set SITE_IP to $ip, so browsing to the app by its IP address gets the right certificate."
+  fi
+}
 # Sets KEY=VALUE in .env, replacing the line if it's there (keeping the file's permissions).
 set_env() {
   local env_file="$DIR/.env"

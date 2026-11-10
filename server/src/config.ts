@@ -102,6 +102,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
  */
 function tlsConfig(env: NodeJS.ProcessEnv, updates: { install: InstallKind; installDir: string | null }): Config['tls'] {
   const siteAddresses = (env.SITE_ADDRESS ?? '').split(',').map((a) => a.trim()).filter(Boolean);
+  // The quick install always serves the server's local IP address too (crafty caddy adds it).
+  const localIp = env.CRAFTY_LOCAL_IP?.trim();
+  if (localIp && net.isIPv4(localIp) && !siteAddresses.some((a) => siteHost(a) === localIp)) siteAddresses.push(localIp);
   const disabled = env.TLS_CUSTOM?.trim().toLowerCase() === 'off';
   const fromEnv = env.CRAFTY_TLS_DIR?.trim() || null;
   const ips = [env.SITE_IP?.trim() ?? '', ...siteAddresses.map(siteHost)].filter((a) => net.isIP(a) && !a.startsWith('127.') && a !== '::1');

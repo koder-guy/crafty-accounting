@@ -4912,6 +4912,14 @@ describe('HTTPS certificate', () => {
     await agent.delete('/api/tls').expect(409);
   });
 
+  it("counts the quick install's local IP address among those served, and points a domain at it", () => {
+    const env = { DATA_DIR: dataDir, SITE_ADDRESS: 'craftyaccounting.uk', SITE_IP: 'craftyaccounting.uk', CRAFTY_LOCAL_IP: '192.168.50.204' };
+    expect(loadConfig(env).tls).toMatchObject({ siteAddresses: ['craftyaccounting.uk', '192.168.50.204'], serverIp: '192.168.50.204' });
+    // Not twice, nor anything that isn't an IPv4 address.
+    expect(loadConfig({ ...env, SITE_ADDRESS: 'localhost, https://192.168.50.204:8443' }).tls.siteAddresses).toEqual(['localhost', 'https://192.168.50.204:8443']);
+    expect(loadConfig({ ...env, CRAFTY_LOCAL_IP: 'not-an-ip' }).tls).toMatchObject({ siteAddresses: ['craftyaccounting.uk'], serverIp: null });
+  });
+
   it('works out where certificates go from the install', () => {
     const base = { DATA_DIR: dataDir, SITE_ADDRESS: 'localhost, 192.168.1.50' };
     expect(loadConfig(base).tls).toMatchObject({ dir: null, setup: 'unavailable', siteAddresses: ['localhost', '192.168.1.50'] });

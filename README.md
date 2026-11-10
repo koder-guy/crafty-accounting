@@ -142,8 +142,8 @@ Settings go in a `.env` file next to the app (the installers write one). Only in
 | `SESSION_SECRET` | generated | Signs the session cookie; one is generated and kept with the data if empty |
 | `PORT` | `3000` | Port the app listens on (behind Caddy with HTTPS) |
 | `HOST` | all addresses | Address the app listens on; the Linux quick install sets `127.0.0.1`, so only Caddy reaches it |
-| `SITE_ADDRESS` | `localhost` | HTTPS: address(es) you browse to, comma separated |
-| `SITE_IP` | `localhost` | HTTPS: the IP address in `SITE_ADDRESS` that browsers use, if any |
+| `SITE_ADDRESS` | `localhost` | HTTPS: address(es) you browse to, comma separated. The server's own IP address on its network is always served too: the Linux quick install finds it each time it starts, and the Docker installer adds it here |
+| `SITE_IP` | `localhost` | HTTPS: the IP address in `SITE_ADDRESS` that browsers use, if any; when it isn't an IP address, the server's own IP address is used |
 | `ACME_CA` | Let's Encrypt | HTTPS: another ACME certificate authority for a domain on Cloudflare, such as Let's Encrypt's staging one |
 | `TLS_CUSTOM` | on | HTTPS: `off` ignores a certificate uploaded in Settings → HTTPS Certificate |
 | `HTTP_PORT` / `HTTPS_PORT` | `80` / `443` | HTTPS: ports Caddy listens on |

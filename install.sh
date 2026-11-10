@@ -348,7 +348,12 @@ summary() {
   local domain
   domain="$(domain_in_use "$dir")"
   [ -z "$domain" ] || echo "  With your domain:       https://$domain"
-  for addr in $(sed -n 's/^SITE_ADDRESS=//p' "$env_file" | tail -n 1 | tr ',' ' '); do
+  local site ip
+  site="$(sed -n 's/^SITE_ADDRESS=//p' "$env_file" | tail -n 1)"
+  # The local IP address is always served too (crafty caddy adds it).
+  ip="$(lan_ip)"
+  if is_ip "$ip" && ! printf '%s' "$site" | tr ',' '\n' | tr -d ' ' | sed 's/:[0-9]*$//' | grep -qxF "$ip"; then site="${site:-localhost}, $ip"; fi
+  for addr in $(printf '%s' "$site" | tr ',' ' '); do
     [ -z "$domain" ] || [ "${addr%%:*}" != "${domain%%:*}" ] || continue
     echo "  $label  https://$addr$suffix"
     case "$label" in On*) label="Other devices at home:" ;; *) label="                      " ;; esac
@@ -642,11 +647,17 @@ PORT="$(setting PORT)"; PORT="${PORT:-3000}"
 HTTPS_PORT="$(setting HTTPS_PORT)"; HTTPS_PORT="${HTTPS_PORT:-443}"
 # Where the app writes an uploaded certificate and a domain's site block for Caddy.
 CUSTOM="$(setting CRAFTY_TLS_DIR)"; CUSTOM="${CUSTOM:-$DIR/caddy/custom}"
+# This server's address on its own network, worked out at each start (a router may hand out
+# another): the app always opens there, as well as at SITE_ADDRESS and any domain.
+LOCAL_IP="$(hostname -I 2>/dev/null | awk '{ print $1 }')"
+[ -n "$LOCAL_IP" ] || LOCAL_IP="$(ip -4 route get 1.1.1.1 2>/dev/null | awk '{ for (i = 1; i < NF; i++) if ($i == "src") print $(i + 1) }')"
+is_ipv4() { printf '%s' "$1" | grep -Eq '^([0-9]{1,3}\.){3}[0-9]{1,3}$'; }
+is_ipv4 "$LOCAL_IP" || LOCAL_IP=""
 # The address other devices browse to: the domain set up in Settings → HTTPS Certificate if
 # there is one (from the site block the app writes), else the first in SITE_ADDRESS that isn't localhost.
 ADDRESS="$(sed -n '/^[^#[:space:]].* {$/{s/ {$//p;q;}' "$CUSTOM/domain.caddy" 2>/dev/null)"
 [ -n "$ADDRESS" ] || ADDRESS="$(setting SITE_ADDRESS | tr ',' '\n' | tr -d ' ' | grep -v '^localhost$' | grep . | head -n 1)"
-ADDRESS="${ADDRESS:-localhost}"
+ADDRESS="${ADDRESS:-${LOCAL_IP:-localhost}}"
 case "$ADDRESS" in
   *:[0-9]*) URL="https://$ADDRESS" ;;
   *) if [ "$HTTPS_PORT" = 443 ]; then URL="https://$ADDRESS"; else URL="https://$ADDRESS:$HTTPS_PORT"; fi ;;
@@ -727,6 +738,16 @@ without_app_sites() {
   printf '%s' "$1" | tr ',' '\n' | awk -v t="$taken" 'BEGIN { n = split(t, names, " "); for (i = 1; i <= n; i++) skip[names[i]] = 1 } NF { a = $1; h = tolower(a); sub(/^[a-z]+:\/\//, "", h); sub(/:[0-9]+$/, "", h); if (!(h in skip)) out = out (out ? ", " : "") a } END { print out }'
 }
 
+# The comma separated list $1 (localhost if empty) with this server's local IP address, if it isn't there.
+with_local_ip() {
+  set -- "${1:-localhost}"
+  if [ -z "$LOCAL_IP" ] || printf '%s' "$1" | tr ',' '\n' | sed 's/^ *//;s/ *$//;s#^[a-z]*://##;s/:[0-9]*$//' | grep -qxF "$LOCAL_IP"; then
+    printf '%s' "$1"
+  else
+    printf '%s, %s' "$1" "$LOCAL_IP"
+  fi
+}
+
 # Off port 443, each address in the comma separated list $1 gets the port, or Caddy's
 # http->https redirect leaves it out.
 with_port() {
@@ -738,12 +759,17 @@ case "${1:-}" in
   app)
     cd "$DIR/app" || exit 1
     export NODE_ENV=production
+    # So the app lists the local IP address among those it's served at.
+    export CRAFTY_LOCAL_IP="$LOCAL_IP"
     exec "$DIR/node/bin/node" "--env-file=$ENV_FILE" server/dist/index.js ;;
   caddy)
     # Only what's set: Caddy takes a variable that's set but empty as empty, not its default.
     for name in SITE_ADDRESS SITE_IP; do
       value="$(setting $name)"
-      [ "$name" = SITE_ADDRESS ] && value="$(with_port "$(without_app_sites "$value")")"
+      [ "$name" = SITE_ADDRESS ] && value="$(with_port "$(without_app_sites "$(with_local_ip "$value")")")"
+      # Browsers send no name for an IP address, so Caddy answers those with SITE_IP's
+      # certificate: it has to be an IP address, the local one unless .env names another.
+      [ "$name" = SITE_IP ] && ! is_ipv4 "$value" && value="$LOCAL_IP"
       if [ -n "$value" ]; then export "$name=$value"; fi
     done
     # A domain on Cloudflare set up in Settings → HTTPS Certificate: the Caddyfile imports the
