@@ -89,9 +89,8 @@ async function findZone(ctx: AppContext, token: string, domain: string): Promise
 export async function saveDomain(ctx: AppContext, request: TlsDomainRequest, by: string): Promise<void> {
   const domain = request.domain.trim().toLowerCase().replace(/\.$/, '');
   if (!isDomainName(domain)) throw new HttpError(400, `"${request.domain}" isn't a domain name, such as books.example.co.uk.`);
-  if (ctx.config.tls.siteAddresses.some((a) => a.replace(/^[a-z]+:\/\//i, '').replace(/:\d+$/, '').toLowerCase() === domain)) {
-    throw new HttpError(400, `${domain} is also in SITE_ADDRESS, which uses the other certificate. Take it out of the install's .env file first.`);
-  }
+  // A domain also in SITE_ADDRESS is fine: whatever starts Caddy leaves it out of SITE_ADDRESS
+  // while domain.caddy names it, as Caddy refuses a name in two site blocks.
   const before = savedDomainRow(ctx.db);
   const token = request.token?.trim() || before?.api_token;
   if (!token) throw new HttpError(400, 'Enter the Cloudflare API token.');

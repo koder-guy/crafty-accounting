@@ -195,6 +195,7 @@ EOF
   [ -z "$DOMAIN" ] || echo "  With your domain:       https://$DOMAIN$port_suffix"
   local addr label="On this computer:     "
   for addr in $(env_value SITE_ADDRESS | tr ',' ' '); do
+    [ -z "$DOMAIN" ] || [ "${addr%%:*}" != "${DOMAIN%%:*}" ] || continue
     echo "  $label  https://$addr$port_suffix"
     case "$label" in On*) label="Other devices at home:" ;; *) label="                      " ;; esac
   done

@@ -5027,7 +5027,6 @@ describe('HTTPS certificate', () => {
     it("refuses what Cloudflare won't allow", async () => {
       await setUp({ domain: 'not a domain', token: TOKEN }).expect(400);
       await setUp({ domain: '192.168.1.50', token: TOKEN }).expect(400);
-      await setUp({ domain: 'crafty.local', token: TOKEN }).expect(400);
       expect((await setUp({ domain: 'books.example.co.uk' }).expect(400)).body.error).toMatch(/token/);
       await setUp({ domain: 'books.example.co.uk', token: 'short' }).expect(400);
       expect((await setUp({ domain: 'books.example.co.uk', token: 'x'.repeat(40) }).expect(422)).body.error).toMatch(/didn't accept/);
@@ -5036,6 +5035,16 @@ describe('HTTPS certificate', () => {
       expect((await setUp({ domain: 'books.example.co.uk', token: TOKEN }).expect(422)).body.error).toMatch(/DNS → Edit/);
       expect((await agent.get('/api/tls').expect(200)).body.domain).toBeNull();
       expect(fs.existsSync(domainFile())).toBe(false);
+    });
+
+    it('takes a domain that is also in SITE_ADDRESS, which then needs no cover from an uploaded certificate', async () => {
+      ctx.config.tls = { ...ctx.config.tls, siteAddresses: ['localhost', 'https://Books.example.co.uk:8443', '192.168.1.50'] };
+      const leaf = certificate({ cn: 'crafty.local', names: [{ dns: 'crafty.local' }] });
+      const uploaded = await upload(pfx(leaf.key, [leaf.cert], 'x'), 'x').expect(200);
+      expect(uploaded.body.certificate.uncovered).toEqual(['localhost', 'https://Books.example.co.uk:8443', '192.168.1.50']);
+      const res = await setUp({ domain: 'books.example.co.uk', token: TOKEN }).expect(200);
+      expect(res.body.domain.domain).toBe('books.example.co.uk');
+      expect(res.body.certificate.uncovered).toEqual(['localhost', '192.168.1.50']);
     });
 
     it('says which certificate Caddy serves for the domain', async () => {

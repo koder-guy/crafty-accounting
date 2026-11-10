@@ -8,7 +8,8 @@
 #   TLS_CUSTOM    "off" to ignore a certificate uploaded in Settings → HTTPS Certificate
 # A domain on Cloudflare, set up in Settings → HTTPS Certificate, gets a Let's Encrypt
 # certificate: the app writes its site block (domain.caddy, holding the API token) to the
-# folder it shares with Caddy, CRAFTY_TLS_DIR, imported below.
+# folder it shares with Caddy, CRAFTY_TLS_DIR, imported below. What starts Caddy leaves that
+# domain out of SITE_ADDRESS, as Caddy refuses a name in two site blocks.
 # With an uploaded certificate, what starts Caddy (crafty caddy, or the Docker command) sets
 # CRAFTY_SITE_TLS to "<cert.pem> <key.pem>", so "tls" serves those files for SITE_ADDRESS, and
 # sets CRAFTY_CA_HIDDEN so /crafty-root.crt (the private authority, not in use then) is missing.

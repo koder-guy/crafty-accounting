@@ -51,6 +51,12 @@ services:
       - sh
       - -c
       - |
+        # A domain set up there has its own site block, and Caddy refuses a name in two.
+        domain="$$(sed -n '/^[^#[:space:]].* {$$/{s/ {$$//;s/:[0-9]*$$//;p;q;}' /tls/domain.caddy 2>/dev/null | tr A-Z a-z)"
+        if [ -n "$$domain" ]; then
+          SITE_ADDRESS="$$(printf '%s' "$$SITE_ADDRESS" | tr ',' '\n' | awk -v d="$$domain" 'NF { a = $$1; h = tolower(a); sub(/^[a-z]+:\/\//, "", h); sub(/:[0-9]+$$/, "", h); if (h != d) out = out (out ? ", " : "") a } END { print out }')"
+          export SITE_ADDRESS="$${SITE_ADDRESS:-localhost}"
+        fi
         if [ "$$(echo "$$TLS_CUSTOM" | tr A-Z a-z)" != off ] && [ -s /tls/cert.pem ] && [ -s /tls/key.pem ]; then
           export CRAFTY_SITE_TLS="/tls/cert.pem /tls/key.pem" CRAFTY_CA_HIDDEN=-not-in-use
         fi

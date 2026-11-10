@@ -167,7 +167,10 @@ export const savedCertificatePem = (db: Db): string | null => savedRow(db)?.cert
 export function savedCertificate(ctx: AppContext): TlsCertificateInfo | null {
   const row = savedRow(ctx.db);
   if (!row) return null;
-  return { ...describeCertificate(row.cert_pem, ctx.config.tls.siteAddresses), fileName: row.file_name, addedBy: row.added_by, addedAt: row.added_at };
+  // A domain on Cloudflare has its own certificate, and Caddy leaves it out of SITE_ADDRESS.
+  const domain = savedDomainRow(ctx.db)?.domain;
+  const addresses = ctx.config.tls.siteAddresses.filter((a) => siteHost(a) !== domain);
+  return { ...describeCertificate(row.cert_pem, addresses), fileName: row.file_name, addedBy: row.added_by, addedAt: row.added_at };
 }
 
 export function tlsStatus(ctx: AppContext): TlsStatus {
