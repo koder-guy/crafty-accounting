@@ -7,7 +7,7 @@ import { APP_NAME, APP_VERSION, CERTIFICATE_WARN_DAYS, daysUntil, diskSize, lowS
 import { diskSpace, listAutoBackups, sameDisk } from './autoBackup';
 import type { AppContext } from './context';
 import type { Db } from './db';
-import { savedCertificate } from './tlsCertificate';
+import { savedCertificate, tlsMethod } from './tlsCertificate';
 import { compareVersions, parseVersion } from './updates';
 
 /** Who sees a notification: everyone, or only those who can act on it. */
@@ -193,7 +193,8 @@ const CERTIFICATE_KEY = 'certificate-expiry:';
  * more) at 7 days and once it has expired; gone when it's replaced, removed or switched off.
  */
 export function checkCertificateExpiry(ctx: AppContext, now = new Date()): void {
-  const cert = ctx.config.tls.disabled ? null : savedCertificate(ctx);
+  // Only for a certificate in use: one kept while another method is used doesn't matter yet.
+  const cert = ctx.config.tls.disabled || tlsMethod(ctx.db) !== 'custom' ? null : savedCertificate(ctx);
   let key: string | null = null;
   if (cert) {
     const days = daysUntil(cert.validTo, now);

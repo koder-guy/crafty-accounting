@@ -31,6 +31,7 @@ import type {
   TlsChangeResult,
   TlsDomainCertificate,
   TlsDomainRequest,
+  TlsMethod,
   TlsStatus,
   Scan,
   ScanList,
@@ -346,6 +347,14 @@ export function useTlsMutations() {
       onSuccess,
     }),
     remove: useMutation({ mutationFn: () => api.delete<TlsChangeResult>('/tls'), onSuccess }),
+    /** Switches to another method whose settings are saved. */
+    setMethod: useMutation({
+      mutationFn: (method: TlsMethod) => api.put<TlsChangeResult>('/tls/method', { method }),
+      onSuccess: (result) => {
+        void qc.invalidateQueries({ queryKey: ['tls', 'domain-certificate'] });
+        onSuccess(result);
+      },
+    }),
   };
 }
 

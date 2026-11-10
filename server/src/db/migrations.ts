@@ -511,6 +511,22 @@ ALTER TABLE tls_domain DROP COLUMN dns_record_id;
 ALTER TABLE tls_domain DROP COLUMN pointed_at;
 `,
   },
+  // Which HTTPS method is in use (Settings → HTTPS Certificate), so the domain and the uploaded
+  // certificate can both stay saved while one, or Caddy's own, is used. Install-level like them.
+  // Before, a saved domain was always used, and an uploaded certificate whenever there was one.
+  {
+    version: 30,
+    sql: `
+CREATE TABLE tls_settings (
+  id INTEGER PRIMARY KEY CHECK (id = 1),
+  method TEXT NOT NULL CHECK (method IN ('internal', 'cloudflare', 'custom'))
+);
+INSERT INTO tls_settings (id, method) SELECT 1, CASE
+  WHEN EXISTS (SELECT 1 FROM tls_domain) THEN 'cloudflare'
+  WHEN EXISTS (SELECT 1 FROM tls_certificate) THEN 'custom'
+  ELSE 'internal' END;
+`,
+  },
 ];
 
 export const CURRENT_SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;

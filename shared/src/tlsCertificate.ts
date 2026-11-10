@@ -50,7 +50,19 @@ export interface TlsDomainInfo {
   addedAt: string;
 }
 
+/**
+ * How SITE_ADDRESS and the domain are served: Caddy's own private certificate authority, a domain
+ * on Cloudflare with Let's Encrypt, or an uploaded certificate. Each keeps its settings while
+ * another is in use, so switching back needs nothing entering again.
+ */
+export const TLS_METHODS = ['internal', 'cloudflare', 'custom'] as const;
+export type TlsMethod = (typeof TLS_METHODS)[number];
+
 export interface TlsStatus {
+  /** The method in use: one whose settings are saved, else `internal`. */
+  method: TlsMethod;
+  /** The addresses in SITE_ADDRESS that Caddy serves, without a domain on Cloudflare in use (which has its own block). */
+  addresses: string[];
   setup: TlsSetup;
   /** For `restart-command`: what to run where the install lives. */
   restartCommand: string | null;
@@ -76,6 +88,8 @@ export type TlsDomainCertificate =
   | { state: 'waiting' }
   /** `trusted`: by the server's own list of authorities, as browsers would (Let's Encrypt's staging ones aren't). */
   | { state: 'issued'; issuer: string; validFrom: string; validTo: string; trusted: boolean }
+  /** Let's Encrypt hasn't issued one yet, so Caddy serves the domain with its own private certificate meanwhile. */
+  | { state: 'fallback' }
   | { state: 'unreachable'; message: string };
 
 /** A domain name such as books.example.co.uk: letters, digits and hyphens, in two or more parts, not an IP address. */

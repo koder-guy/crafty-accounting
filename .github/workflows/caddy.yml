@@ -81,7 +81,7 @@ jobs:
           $caddy list-modules | grep -qx dns.providers.cloudflare
           # Without a domain, and with the site block the app writes for one on Cloudflare.
           mkdir -p tls-none tls-domain
-          printf 'books.example.co.uk {\n\ttls {\n\t\tdns cloudflare Abcdefghijklmnopqrstuvwxyz0123456789_-AB\n\t\tresolvers 1.1.1.1 1.0.0.1\n\t}\n\timport app\n}\n' > tls-domain/domain.caddy
+          printf 'books.example.co.uk {\n\ttls {\n\t\tissuer acme {\n\t\t\tdns cloudflare Abcdefghijklmnopqrstuvwxyz0123456789_-AB\n\t\t\tresolvers 1.1.1.1 1.0.0.1\n\t\t}\n\t\tissuer internal\n\t}\n\timport app\n}\n' > tls-domain/domain.caddy
           for dir in tls-none tls-domain; do
             CRAFTY_TLS_DIR=$PWD/$dir SITE_ADDRESS="localhost, 192.168.1.50" SITE_IP=192.168.1.50 \
               $caddy adapt --config Caddyfile --adapter caddyfile > "adapted-$dir.json"
@@ -89,6 +89,7 @@ jobs:
           ! grep -q books.example.co.uk adapted-tls-none.json
           grep -q books.example.co.uk adapted-tls-domain.json
           grep -q '"cloudflare"' adapted-tls-domain.json
+          grep -q '"module":"internal"' adapted-tls-domain.json
 
       - name: Release
         if: steps.v.outputs.exists == 'false'

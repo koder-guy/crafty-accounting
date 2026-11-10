@@ -3,7 +3,7 @@ import { ExternalLink, Globe, LoaderCircle } from 'lucide-react';
 import { daysUntil, formatDisplayDate, isDomainName, type TlsDomainCertificate, type TlsStatus } from '@crafty/shared';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { Alert, Badge, Button, Card, CardHeader, Field } from '../../components/ui';
-import { useTlsDomainCertificate, useTlsDomainMutations } from '../../lib/queries';
+import { useTlsDomainCertificate, useTlsDomainMutations, useTlsMutations } from '../../lib/queries';
 
 const API_TOKENS = 'https://dash.cloudflare.com/profile/api-tokens';
 const date = (iso: string) => formatDisplayDate(iso.slice(0, 10));
@@ -84,7 +84,7 @@ function DomainForm({ status, onDone, onCancel }: { status: TlsStatus; onDone: (
       {save.error && <Alert>{save.error.message}</Alert>}
       <div className="flex flex-wrap gap-3">
         <Button type="submit" variant="primary" busy={save.isPending} disabled={!ready}>
-          {save.isPending ? 'Checking with Cloudflare…' : saved ? 'Save changes' : 'Set up domain'}
+          {save.isPending ? 'Checking with Cloudflare…' : status.method === 'cloudflare' ? 'Save changes' : 'Save and use this domain'}
         </Button>
         {onCancel && (
           <Button type="button" variant="ghost" onClick={onCancel}>
@@ -96,7 +96,8 @@ function DomainForm({ status, onDone, onCancel }: { status: TlsStatus; onDone: (
   );
 }
 
-function CertificateState({ cert, domain }: { cert: TlsDomainCertificate | undefined; domain: string }) {
+/** What Caddy serves for the domain just now. */
+export function CertificateState({ cert, domain }: { cert: TlsDomainCertificate | undefined; domain: string }) {
   if (!cert || cert.state === 'none') return null;
   if (cert.state === 'waiting') {
     return (
@@ -104,6 +105,15 @@ function CertificateState({ cert, domain }: { cert: TlsDomainCertificate | undef
         <span className="flex items-center gap-2">
           <LoaderCircle className="size-3.5 shrink-0 animate-spin" aria-hidden /> Waiting for Let's Encrypt. Caddy asks for the certificate once it has restarted, which usually takes a minute or two.
         </span>
+      </Alert>
+    );
+  }
+  if (cert.state === 'fallback') {
+    return (
+      <Alert tone="warning">
+        Let's Encrypt hasn't issued a certificate for {domain} yet, so Caddy serves it with its own meanwhile: devices that trust Caddy's authority (below) can open it
+        without a warning. Caddy asks Let's Encrypt again about every eight hours, and changes over by itself. If this lasts, check{' '}
+        <code className="font-mono">crafty log</code> on the server: Let's Encrypt allows five certificates a week for one name.
       </Alert>
     );
   }
@@ -124,9 +134,11 @@ function CertificateState({ cert, domain }: { cert: TlsDomainCertificate | undef
   );
 }
 
-function badgeFor(cert: TlsDomainCertificate | undefined, configured: boolean) {
+function badgeFor(cert: TlsDomainCertificate | undefined, configured: boolean, inUse: boolean) {
   if (!configured) return <Badge>Not set up</Badge>;
+  if (!inUse) return <Badge>Saved, not in use</Badge>;
   if (!cert) return null;
+  if (cert.state === 'fallback') return <Badge tone="warn">Stand-in certificate</Badge>;
   if (cert.state === 'issued') return cert.trusted ? <Badge tone="ok">In use</Badge> : <Badge tone="warn">Not trusted</Badge>;
   if (cert.state === 'waiting') return <Badge tone="warn">Waiting</Badge>;
   if (cert.state === 'unreachable') return <Badge tone="warn">Unknown</Badge>;
@@ -136,8 +148,10 @@ function badgeFor(cert: TlsDomainCertificate | undefined, configured: boolean) {
 /** A domain on Cloudflare that Caddy gets a Let's Encrypt certificate for. */
 export function TlsDomainCard({ status, canEdit }: { status: TlsStatus; canEdit: boolean }) {
   const { remove } = useTlsDomainMutations();
+  const { setMethod } = useTlsMutations();
   const saved = status.domain;
-  const { data: cert } = useTlsDomainCertificate(!!saved);
+  const inUse = !!saved && status.method === 'cloudflare';
+  const { data: cert } = useTlsDomainCertificate(inUse);
   const [editing, setEditing] = useState(false);
   const [confirmRemove, setConfirmRemove] = useState(false);
   const [applied, setApplied] = useState<{ restarting: boolean } | null>(null);
@@ -145,12 +159,12 @@ export function TlsDomainCard({ status, canEdit }: { status: TlsStatus; canEdit:
 
   return (
     <Card>
-      <CardHeader icon={<Globe className="size-5 text-accent-soft" />} title="Domain on Cloudflare" action={badgeFor(cert, !!saved)} />
+      <CardHeader icon={<Globe className="size-5 text-accent-soft" />} title="Domain on Cloudflare" action={badgeFor(cert, !!saved, inUse)} />
       <div className="space-y-5 px-5 pb-6 sm:px-6">
         {!saved && (
           <p className="text-sm text-muted">
-            If your domain's DNS is on Cloudflare, Caddy can get a certificate for it from Let's Encrypt, which every browser already trusts, with nothing to install
-            on devices. It proves the domain is yours through Cloudflare's DNS, so the server needn't be reachable from the internet.
+            Caddy proves the domain is yours through Cloudflare's DNS, so the server needn't be reachable from the internet. While Let's Encrypt's certificate is on
+            its way, Caddy's own stands in for the domain.
           </p>
         )}
 
@@ -174,7 +188,10 @@ export function TlsDomainCard({ status, canEdit }: { status: TlsStatus; canEdit:
           </dl>
         )}
 
-        {saved && !editing && <CertificateState cert={cert} domain={saved.domain} />}
+        {saved && !editing && !inUse && (
+          <p className="text-sm text-muted">Saved, but not in use: another method serves the app. Use it again here, with nothing to enter again.</p>
+        )}
+        {setMethod.error && <Alert>{setMethod.error.message}</Alert>}
         {applied && !applied.restarting && status.restartCommand && (
           <Alert tone="info">
             Caddy changes over once restarted: <code className="font-mono break-all text-ink">{status.restartCommand}</code>
@@ -201,6 +218,11 @@ export function TlsDomainCard({ status, canEdit }: { status: TlsStatus; canEdit:
           />
         ) : (
           <div className="flex flex-wrap gap-3">
+            {!inUse && (
+              <Button type="button" variant="primary" busy={setMethod.isPending} onClick={() => setMethod.mutate('cloudflare', { onSuccess: (r) => setApplied(r) })}>
+                Use this domain
+              </Button>
+            )}
             <Button
               type="button"
               onClick={() => {
@@ -228,8 +250,8 @@ export function TlsDomainCard({ status, canEdit }: { status: TlsStatus; canEdit:
         }}
       >
         <p>
-          Caddy stops serving {saved?.domain}, and the API token is forgotten. Its DNS in Cloudflare is left as it is. The addresses in SITE_ADDRESS carry on
-          as they are.
+          {inUse ? `Caddy stops serving ${saved?.domain} and goes back to its own certificate, and the API token is forgotten.` : 'The domain and its API token are forgotten.'}{' '}
+          Its DNS in Cloudflare is left as it is.
         </p>
       </ConfirmDialog>
     </Card>

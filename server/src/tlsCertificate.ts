@@ -10,7 +10,7 @@ import path from 'node:path';
 import tls from 'node:tls';
 import { spawn } from 'node:child_process';
 import forge from 'node-forge';
-import type { TlsCertificateInfo, TlsStatus } from '@crafty/shared';
+import type { TlsCertificateInfo, TlsMethod, TlsStatus } from '@crafty/shared';
 import type { AppContext } from './context';
 import type { Db } from './db';
 import { HttpError } from './http';
@@ -167,55 +167,93 @@ export const savedCertificatePem = (db: Db): string | null => savedRow(db)?.cert
 export function savedCertificate(ctx: AppContext): TlsCertificateInfo | null {
   const row = savedRow(ctx.db);
   if (!row) return null;
-  // A domain on Cloudflare has its own certificate, and Caddy leaves it out of SITE_ADDRESS.
-  const domain = savedDomainRow(ctx.db)?.domain;
-  const addresses = ctx.config.tls.siteAddresses.filter((a) => siteHost(a) !== domain);
-  return { ...describeCertificate(row.cert_pem, addresses), fileName: row.file_name, addedBy: row.added_by, addedAt: row.added_at };
+  return { ...describeCertificate(row.cert_pem, servedAddresses(ctx)), fileName: row.file_name, addedBy: row.added_by, addedAt: row.added_at };
+}
+
+/** SITE_ADDRESS without a domain on Cloudflare in use, which has its own site block: Caddy leaves it out. */
+export function servedAddresses(ctx: AppContext): string[] {
+  const domain = tlsMethod(ctx.db) === 'cloudflare' ? savedDomainRow(ctx.db)?.domain : undefined;
+  return ctx.config.tls.siteAddresses.filter((a) => siteHost(a) !== domain);
+}
+
+/** The method in use: the one chosen, if its settings are saved; else Caddy's own. */
+export function tlsMethod(db: Db): TlsMethod {
+  const chosen = (db.prepare('SELECT method FROM tls_settings WHERE id = 1').get() as { method: TlsMethod } | undefined)?.method ?? 'internal';
+  if (chosen === 'cloudflare' && !savedDomainRow(db)) return 'internal';
+  if (chosen === 'custom' && !savedRow(db)) return 'internal';
+  return chosen;
+}
+
+export function setTlsMethod(db: Db, method: TlsMethod): void {
+  db.prepare('INSERT INTO tls_settings (id, method) VALUES (1, ?) ON CONFLICT (id) DO UPDATE SET method = excluded.method').run(method);
 }
 
 export function tlsStatus(ctx: AppContext): TlsStatus {
   const { setup, restartCommand, disabled, serverIp } = ctx.config.tls;
-  return { setup, restartCommand, disabled, certificate: savedCertificate(ctx), domain: savedDomain(ctx), serverIp };
+  return { method: tlsMethod(ctx.db), addresses: servedAddresses(ctx), setup, restartCommand, disabled, certificate: savedCertificate(ctx), domain: savedDomain(ctx), serverIp };
 }
 
-/** Saves a certificate (replacing any before) and writes it out for Caddy; on failure, the one before stays. */
-export function saveCertificate(ctx: AppContext, pem: TlsPem, by: string, fileName: string | null): void {
-  const before = savedRow(ctx.db);
-  ctx.db
-    .prepare(
-      `INSERT INTO tls_certificate (id, cert_pem, key_pem, file_name, added_by) VALUES (1, ?, ?, ?, ?)
-       ON CONFLICT (id) DO UPDATE SET cert_pem = excluded.cert_pem, key_pem = excluded.key_pem, file_name = excluded.file_name,
-         added_by = excluded.added_by, added_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')`,
-    )
-    .run(pem.certPem, pem.keyPem, fileName, by);
+const TLS_TABLES = ['tls_certificate', 'tls_domain', 'tls_settings'] as const;
+
+/**
+ * Makes a change to the HTTPS settings and writes Caddy's files to match. If they can't be
+ * written, the settings go back to how they were, so the database never says one thing and
+ * Caddy's folder another.
+ */
+export function changeTls(ctx: AppContext, change: () => void): void {
+  const before = TLS_TABLES.map((table) => [table, ctx.db.prepare(`SELECT * FROM ${table}`).all() as Record<string, unknown>[]] as const);
+  ctx.db.transaction(change)();
   try {
     writeTlsFiles(ctx);
   } catch (err) {
-    ctx.db.prepare('DELETE FROM tls_certificate').run();
-    if (before) {
-      ctx.db
-        .prepare('INSERT INTO tls_certificate (id, cert_pem, key_pem, file_name, added_by, added_at) VALUES (1, ?, ?, ?, ?, ?)')
-        .run(before.cert_pem, before.key_pem, before.file_name, before.added_by, before.added_at);
+    ctx.db.transaction(() => {
+      for (const [table, rows] of before) {
+        ctx.db.prepare(`DELETE FROM ${table}`).run();
+        for (const row of rows) {
+          const columns = Object.keys(row);
+          ctx.db.prepare(`INSERT INTO ${table} (${columns.join(', ')}) VALUES (${columns.map((c) => `@${c}`).join(', ')})`).run(row);
+        }
+      }
+    })();
+    try {
+      writeTlsFiles(ctx);
+    } catch {
+      // Already reported.
     }
     throw err;
   }
 }
 
+/** Saves a certificate (replacing any before) and uses it. */
+export function saveCertificate(ctx: AppContext, pem: TlsPem, by: string, fileName: string | null): void {
+  changeTls(ctx, () => {
+    ctx.db
+      .prepare(
+        `INSERT INTO tls_certificate (id, cert_pem, key_pem, file_name, added_by) VALUES (1, ?, ?, ?, ?)
+         ON CONFLICT (id) DO UPDATE SET cert_pem = excluded.cert_pem, key_pem = excluded.key_pem, file_name = excluded.file_name,
+           added_by = excluded.added_by, added_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')`,
+      )
+      .run(pem.certPem, pem.keyPem, fileName, by);
+    setTlsMethod(ctx.db, 'custom');
+  });
+}
+
+/** Forgets the certificate; if it was in use, Caddy goes back to its own. */
 export function removeCertificate(ctx: AppContext): void {
-  ctx.db.prepare('DELETE FROM tls_certificate').run();
-  writeTlsFiles(ctx);
+  changeTls(ctx, () => ctx.db.prepare('DELETE FROM tls_certificate').run());
 }
 
 /**
- * Brings Caddy's folder in step with the database: the saved certificate's files and the
- * Cloudflare domain's site block (which holds its API token), or none. Each file is written
- * beside the old one and moved into place, so Caddy never reads half of one.
+ * Brings Caddy's folder in step with the database: the files for the method in use (the uploaded
+ * certificate's, or the Cloudflare domain's site block, which holds its API token), or none. Each
+ * file is written beside the old one and moved into place, so Caddy never reads half of one.
  */
 export function writeTlsFiles(ctx: AppContext): void {
   const dir = ctx.config.tls.dir;
   if (!dir) return;
-  const row = savedRow(ctx.db);
-  const domain = savedDomainRow(ctx.db);
+  const method = tlsMethod(ctx.db);
+  const row = method === 'custom' ? savedRow(ctx.db) : undefined;
+  const domain = method === 'cloudflare' ? savedDomainRow(ctx.db) : undefined;
   const files: [string, string | null][] = [
     [CERT_FILE, row?.cert_pem ?? null],
     [KEY_FILE, row?.key_pem ?? null],

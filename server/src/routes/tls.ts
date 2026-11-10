@@ -1,15 +1,18 @@
-// Settings → HTTPS Certificate: upload a .pfx/.p12 file (with its password, used once and not
-// kept), see what's saved, or remove it to go back to Caddy's own certificate; and set up a domain
-// on Cloudflare that Caddy gets a Let's Encrypt certificate for.
+// Settings → HTTPS Certificate: choose how the app is served (Caddy's own certificate, a domain on
+// Cloudflare that Caddy gets a Let's Encrypt certificate for, or an uploaded one); upload a
+// .pfx/.p12 file (with its password, used once and not kept); set up the domain. Each method's
+// settings stay saved while another is in use; saving one's settings starts using it.
 import { Router } from 'express';
 import multer from 'multer';
 import { z } from 'zod';
-import { MAX_PFX_BYTES, type TlsChangeResult } from '@crafty/shared';
+import { MAX_PFX_BYTES, TLS_METHODS, type TlsChangeResult } from '@crafty/shared';
 import type { AppContext } from '../context';
 import { HttpError, parseWith } from '../http';
 import { checkCertificateExpiry } from '../notifications';
-import { readPfx, removeCertificate, restartCaddyAfter, saveCertificate, savedCertificatePem, tlsStatus, writeTlsFiles } from '../tlsCertificate';
-import { probeDomain, removeDomain, restoreDomain, saveDomain, savedDomainRow } from '../tlsDomain';
+import { changeTls, readPfx, removeCertificate, restartCaddyAfter, saveCertificate, savedCertificatePem, setTlsMethod, tlsMethod, tlsStatus } from '../tlsCertificate';
+import { checkDomain, probeDomain, removeDomain, savedDomainRow, storeDomain } from '../tlsDomain';
+
+const methodSchema = z.object({ method: z.enum(TLS_METHODS) });
 
 const domainSchema = z.object({
   domain: z.string().max(253),
@@ -27,6 +30,19 @@ export function tlsRouter(ctx: AppContext): Router {
     res.json(tlsStatus(ctx));
   });
 
+  // Switches to a method whose settings are saved (Caddy's own needs none).
+  router.put('/method', (req, res) => {
+    if (!ctx.config.tls.dir) throw unavailable();
+    const { method } = parseWith(methodSchema, req.body);
+    if (method === 'cloudflare' && !savedDomainRow(ctx.db)) throw new HttpError(400, 'Set up the domain first.');
+    if (method === 'custom' && !savedCertificatePem(ctx.db)) throw new HttpError(400, 'Upload a certificate first.');
+    const before = tlsMethod(ctx.db);
+    changeTls(ctx, () => setTlsMethod(ctx.db, method));
+    checkCertificateExpiry(ctx);
+    const result: TlsChangeResult = { ...tlsStatus(ctx), restarting: before !== method && restartCaddyAfter(ctx, res) };
+    res.json(result);
+  });
+
   router.put('/', upload.single('certificate'), (req, res) => {
     if (!ctx.config.tls.dir) throw unavailable();
     if (!req.file) throw new HttpError(400, 'Choose a .pfx or .p12 file.');
@@ -40,9 +56,10 @@ export function tlsRouter(ctx: AppContext): Router {
 
   router.delete('/', (_req, res) => {
     if (!ctx.config.tls.dir) throw unavailable();
+    const wasInUse = tlsMethod(ctx.db) === 'custom';
     removeCertificate(ctx);
     checkCertificateExpiry(ctx);
-    const result: TlsChangeResult = { ...tlsStatus(ctx), restarting: !ctx.config.tls.disabled && restartCaddyAfter(ctx, res) };
+    const result: TlsChangeResult = { ...tlsStatus(ctx), restarting: wasInUse && !ctx.config.tls.disabled && restartCaddyAfter(ctx, res) };
     res.json(result);
   });
 
@@ -57,28 +74,26 @@ export function tlsRouter(ctx: AppContext): Router {
   });
 
   router.get('/domain/certificate', async (_req, res) => {
-    res.json(await probeDomain(ctx));
+    res.json(tlsMethod(ctx.db) === 'cloudflare' ? await probeDomain(ctx) : { state: 'none' });
   });
 
   router.put('/domain', async (req, res) => {
     if (!ctx.config.tls.dir) throw unavailable();
-    const before = savedDomainRow(ctx.db);
-    await saveDomain(ctx, parseWith(domainSchema, req.body), req.user!.name);
-    try {
-      writeTlsFiles(ctx);
-    } catch (err) {
-      restoreDomain(ctx.db, before);
-      throw err;
-    }
+    const checked = await checkDomain(ctx, parseWith(domainSchema, req.body));
+    changeTls(ctx, () => {
+      storeDomain(ctx.db, checked, req.user!.name);
+      setTlsMethod(ctx.db, 'cloudflare');
+    });
+    checkCertificateExpiry(ctx);
     const result: TlsChangeResult = { ...tlsStatus(ctx), restarting: restartCaddyAfter(ctx, res) };
     res.json(result);
   });
 
   router.delete('/domain', (_req, res) => {
     if (!ctx.config.tls.dir) throw unavailable();
-    removeDomain(ctx);
-    writeTlsFiles(ctx);
-    const result: TlsChangeResult = { ...tlsStatus(ctx), restarting: restartCaddyAfter(ctx, res) };
+    const wasInUse = tlsMethod(ctx.db) === 'cloudflare';
+    changeTls(ctx, () => removeDomain(ctx.db));
+    const result: TlsChangeResult = { ...tlsStatus(ctx), restarting: wasInUse && restartCaddyAfter(ctx, res) };
     res.json(result);
   });
 

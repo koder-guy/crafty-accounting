@@ -5009,14 +5009,16 @@ describe('HTTPS certificate', () => {
       expect(block).toMatch(/^books\.example\.co\.uk \{$/m);
       expect(block).toContain(`dns cloudflare ${TOKEN}`);
       expect(block).toContain('import app');
-      expect(block).not.toContain(' ca ');
+      expect(block).not.toContain('dir ');
+      // Caddy's own authority stands in while Let's Encrypt can't issue one.
+      expect(block).toMatch(/\t\t\}\n\t\t# .*\n\t\tissuer internal\n/);
       expect(fs.statSync(domainFile()).mode & 0o777).toBe(0o600);
       await vi.waitFor(() => expect(restarts()).toBe(1));
 
       // Off port 443 the site block carries the port, ACME_CA picks another authority, and the saved token is kept.
       ctx.config.tls = { ...ctx.config.tls, domainPort: 8443, acmeCa: 'https://acme-staging-v02.api.letsencrypt.org/directory' };
       await setUp({ domain: 'accounts.example.co.uk' }).expect(200);
-      expect(fs.readFileSync(domainFile(), 'utf8')).toMatch(/^accounts\.example\.co\.uk:8443 \{\n\ttls \{\n\t\tca https:\/\/acme-staging/m);
+      expect(fs.readFileSync(domainFile(), 'utf8')).toMatch(/^accounts\.example\.co\.uk:8443 \{\n\ttls \{\n\t\tissuer acme \{\n\t\t\tdir https:\/\/acme-staging/m);
 
       const removed = await agent.delete('/api/tls/domain').expect(200);
       expect(removed.body).toMatchObject({ domain: null, restarting: true });
@@ -5068,8 +5070,68 @@ describe('HTTPS certificate', () => {
       expect(issued).toMatchObject({ state: 'issued', issuer: 'books.example.co.uk', trusted: false });
       server.close();
 
+      // Caddy's own authority standing in.
+      const local = certificate({ cn: 'Caddy Local Authority - ECC Intermediate', ca: true });
+      server = await serve(certificate({ cn: 'books.example.co.uk', names: [{ dns: 'books.example.co.uk' }], issuer: local }));
+      expect((await agent.get('/api/tls/domain/certificate').expect(200)).body).toEqual({ state: 'fallback' });
+      server.close();
+
       ctx.config.tls = { ...ctx.config.tls, caddyAddress: { host: '127.0.0.1', port: 1 } };
       expect((await agent.get('/api/tls/domain/certificate').expect(200)).body.state).toBe('unreachable');
+
+      // Saved but not in use: nothing to ask Caddy.
+      await agent.put('/api/tls/method').send({ method: 'internal' }).expect(200);
+      expect((await agent.get('/api/tls/domain/certificate').expect(200)).body).toEqual({ state: 'none' });
+    });
+
+    it('keeps each method saved while another is in use, writing only its files for Caddy', async () => {
+      const files = () => (fs.existsSync(tlsDir) ? fs.readdirSync(tlsDir).sort() : []);
+      const method = async () => (await agent.get('/api/tls').expect(200)).body.method;
+      expect(await method()).toBe('internal');
+      await agent.put('/api/tls/method').send({ method: 'custom' }).expect(400);
+      await agent.put('/api/tls/method').send({ method: 'cloudflare' }).expect(400);
+      await agent.put('/api/tls/method').send({ method: 'other' }).expect(400);
+
+      // Saving a method's settings starts using it.
+      const leaf = certificate({ cn: 'crafty.local', names: NAMES });
+      expect((await upload(pfx(leaf.key, [leaf.cert], 'x'), 'x').expect(200)).body.method).toBe('custom');
+      expect(files()).toEqual(['cert.pem', 'key.pem']);
+      const set = await setUp({ domain: 'books.example.co.uk', token: TOKEN }).expect(200);
+      expect(set.body).toMatchObject({ method: 'cloudflare', certificate: { fileName: 'site.pfx' } });
+      expect(files()).toEqual(['domain.caddy']);
+      await vi.waitFor(() => expect(restarts()).toBe(2));
+
+      // Switching back needs nothing entering again, and restarts Caddy only for a change.
+      const back = await agent.put('/api/tls/method').send({ method: 'custom' }).expect(200);
+      expect(back.body).toMatchObject({ method: 'custom', restarting: true, domain: { domain: 'books.example.co.uk' } });
+      expect(files()).toEqual(['cert.pem', 'key.pem']);
+      expect((await agent.put('/api/tls/method').send({ method: 'custom' }).expect(200)).body.restarting).toBe(false);
+      await agent.put('/api/tls/method').send({ method: 'internal' }).expect(200);
+      expect(files()).toEqual([]);
+
+      // Removing one not in use changes nothing for Caddy; removing the one in use goes back to Caddy's own.
+      expect((await agent.delete('/api/tls').expect(200)).body).toMatchObject({ method: 'internal', certificate: null, restarting: false });
+      await agent.put('/api/tls/method').send({ method: 'cloudflare' }).expect(200);
+      expect((await agent.delete('/api/tls/domain').expect(200)).body).toMatchObject({ method: 'internal', domain: null, restarting: true });
+      expect(files()).toEqual([]);
+
+      const viewer = await addPerson('Accountant', 'read-only-password', 'viewer');
+      await viewer.put('/api/tls/method').send({ method: 'internal' }).expect(403);
+    });
+
+    it('works out the method in use from what was saved before methods could be chosen', () => {
+      const methodAfter = (rows: string[]) => {
+        const old = new Database(':memory:');
+        for (const migration of MIGRATIONS.filter((m) => m.version <= 29)) old.exec(migration.sql);
+        for (const row of rows) old.exec(row);
+        old.exec(MIGRATIONS.find((m) => m.version === 30)!.sql);
+        return (old.prepare('SELECT method FROM tls_settings').get() as { method: string }).method;
+      };
+      const domain = `INSERT INTO tls_domain (id, domain, zone_id, zone_name, api_token, added_by) VALUES (1, 'books.example.co.uk', 'z', 'example.co.uk', 't', 'Admin')`;
+      const cert = `INSERT INTO tls_certificate (id, cert_pem, key_pem, added_by) VALUES (1, 'c', 'k', 'Admin')`;
+      expect(methodAfter([])).toBe('internal');
+      expect(methodAfter([cert])).toBe('custom');
+      expect(methodAfter([domain, cert])).toBe('cloudflare');
     });
 
     it('keeps the domain and token out of backups, through a restore and a reset, and from viewers', async () => {

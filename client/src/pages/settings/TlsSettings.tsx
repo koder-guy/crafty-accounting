@@ -1,12 +1,13 @@
 import { useRef, useState, type FormEvent } from 'react';
-import { FileKey, FileUp, LockKeyhole } from 'lucide-react';
-import { daysUntil, formatDisplayDate, MAX_PFX_BYTES, PFX_EXTENSIONS, type TlsCertificateInfo, type TlsStatus } from '@crafty/shared';
+import { FileKey, FileUp, KeyRound, LockKeyhole, Server } from 'lucide-react';
+import { daysUntil, formatDisplayDate, MAX_PFX_BYTES, PFX_EXTENSIONS, TLS_METHODS, type TlsCertificateInfo, type TlsMethod, type TlsStatus } from '@crafty/shared';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { Alert, Badge, Button, Card, CardHeader, Field, Spinner } from '../../components/ui';
 import { useCanEdit, useTls, useTlsMutations } from '../../lib/queries';
 import { SettingsHeading } from './SettingsLayout';
 import { TlsDomainCard } from './TlsDomainCard';
-import { TlsDownloadCard } from './TlsDownloadCard';
+import { TlsSummaryCard } from './TlsSummaryCard';
+import { METHOD_INFO } from './tlsMethods';
 
 const date = (iso: string) => formatDisplayDate(iso.slice(0, 10));
 
@@ -42,7 +43,7 @@ function Applying({ status, restarting }: { status: TlsStatus; restarting: boole
   );
 }
 
-function UploadForm({ replacing, onDone, onCancel }: { replacing: boolean; onDone: (restarting: boolean) => void; onCancel?: () => void }) {
+function UploadForm({ replacing, inUse, onDone, onCancel }: { replacing: boolean; inUse: boolean; onDone: (restarting: boolean) => void; onCancel?: () => void }) {
   const { upload } = useTlsMutations();
   const [file, setFile] = useState<File | null>(null);
   const [password, setPassword] = useState('');
@@ -107,7 +108,7 @@ function UploadForm({ replacing, onDone, onCancel }: { replacing: boolean; onDon
       </Field>
       <div className="flex flex-wrap gap-3">
         <Button type="submit" variant="primary" busy={upload.isPending} disabled={!file || tooLarge}>
-          {upload.isPending ? 'Checking certificate…' : 'Use this certificate'}
+          {upload.isPending ? 'Checking certificate…' : inUse ? 'Use this certificate' : 'Upload and use this certificate'}
         </Button>
         {onCancel && (
           <Button type="button" variant="ghost" onClick={onCancel}>
@@ -153,15 +154,18 @@ function Details({ cert }: { cert: TlsCertificateInfo }) {
 }
 
 function CertificateCard({ status, canEdit }: { status: TlsStatus; canEdit: boolean }) {
-  const { remove } = useTlsMutations();
+  const { remove, setMethod } = useTlsMutations();
   const [replacing, setReplacing] = useState(false);
   const [confirmRemove, setConfirmRemove] = useState(false);
   const [applied, setApplied] = useState<{ restarting: boolean } | null>(null);
   const cert = status.certificate;
+  const inUse = !!cert && status.method === 'custom';
   const days = cert ? daysUntil(cert.validTo) : null;
 
   const badge = !cert ? (
-    <Badge>Caddy's own</Badge>
+    <Badge>Not set up</Badge>
+  ) : !inUse ? (
+    <Badge>Saved, not in use</Badge>
   ) : status.disabled ? (
     <Badge tone="warn">Switched off</Badge>
   ) : days! < 0 ? (
@@ -180,33 +184,34 @@ function CertificateCard({ status, canEdit }: { status: TlsStatus; canEdit: bool
           <Details cert={cert} />
         ) : (
           <p className="text-sm text-muted">
-            None uploaded, so the addresses in <code className="font-mono text-ink">SITE_ADDRESS</code> use Caddy's own private certificate, which each device
-            has to trust once. Upload one from your organisation or a certificate authority to use instead.
+            Upload one from your organisation or a certificate authority. It's checked, then used straight away for the addresses in{' '}
+            <code className="font-mono text-ink">SITE_ADDRESS</code>.
           </p>
         )}
 
-        {cert && cert.uncovered.length > 0 && (
+        {cert && !inUse && <p className="text-sm text-muted">Saved, but not in use: another method serves the app. Use it again here, with nothing to upload again.</p>}
+        {inUse && cert.uncovered.length > 0 && (
           <Alert tone="warning">
             It isn't for {cert.uncovered.join(', ')}, which {cert.uncovered.length === 1 ? 'is' : 'are'} in <code className="font-mono">SITE_ADDRESS</code>. Browsers warn there;
             browse by one of the names it's for instead.
           </Alert>
         )}
-        {cert?.selfSigned && (
-          <Alert tone="info">This certificate is self-signed, so each device has to trust it, as with Caddy's own.</Alert>
-        )}
-        {cert && status.disabled && (
+        {inUse && cert.selfSigned && <Alert tone="info">This certificate is self-signed, so each device has to trust it, as with Caddy's own.</Alert>}
+        {inUse && status.disabled && (
           <Alert tone="warning">
             <code className="font-mono">TLS_CUSTOM=off</code> in the install's .env file switches it off, so Caddy uses its own. Remove that line and restart to use this one.
           </Alert>
         )}
 
         {applied && <Applying status={status} restarting={applied.restarting} />}
+        {setMethod.error && <Alert>{setMethod.error.message}</Alert>}
 
         {!canEdit ? (
           !cert && <p className="text-sm text-muted">An editor can upload one.</p>
         ) : !cert || replacing ? (
           <UploadForm
             replacing={replacing}
+            inUse={inUse}
             onCancel={replacing ? () => setReplacing(false) : undefined}
             onDone={(restarting) => {
               setReplacing(false);
@@ -215,6 +220,11 @@ function CertificateCard({ status, canEdit }: { status: TlsStatus; canEdit: bool
           />
         ) : (
           <div className="flex flex-wrap gap-3">
+            {!inUse && (
+              <Button type="button" variant="primary" busy={setMethod.isPending} onClick={() => setMethod.mutate('custom', { onSuccess: (r) => setApplied(r) })}>
+                Use this certificate
+              </Button>
+            )}
             <Button
               type="button"
               onClick={() => {
@@ -242,11 +252,120 @@ function CertificateCard({ status, canEdit }: { status: TlsStatus; canEdit: bool
         }}
       >
         <p>
-          Caddy goes back to its own private certificate for the addresses in <code className="font-mono">SITE_ADDRESS</code>. Devices that don't trust it yet will warn
-          before opening the app.
+          {inUse ? (
+            <>
+              Caddy goes back to its own private certificate for the addresses in <code className="font-mono">SITE_ADDRESS</code>. Devices that don't trust it yet will
+              warn before opening the app.
+            </>
+          ) : (
+            "It's forgotten, along with its key. Nothing changes for now, as it isn't in use."
+          )}
         </p>
       </ConfirmDialog>
     </Card>
+  );
+}
+
+/** Caddy's own private certificate authority: nothing to set up, so only switching to it. */
+function InternalCard({ status, canEdit }: { status: TlsStatus; canEdit: boolean }) {
+  const { setMethod } = useTlsMutations();
+  const [confirm, setConfirm] = useState(false);
+  const [applied, setApplied] = useState<{ restarting: boolean } | null>(null);
+  const inUse = status.method === 'internal' || (status.method === 'custom' && status.disabled);
+  const kept = [status.domain && `the domain ${status.domain.domain}`, status.certificate && 'your uploaded certificate'].filter(Boolean).join(' and ');
+  return (
+    <Card>
+      <CardHeader icon={<Server className="size-5 text-accent-soft" />} title="Caddy's own certificate" action={inUse ? <Badge tone="ok">In use</Badge> : undefined} />
+      <div className="space-y-5 px-5 pb-6 sm:px-6">
+        <p className="text-sm text-muted">
+          Nothing to set up: Caddy makes its own certificate authority when it first starts, and signs a certificate for each address in{' '}
+          <code className="font-mono text-ink">SITE_ADDRESS</code> with it. Browsers warn until a device trusts the authority, which you can download at the top of this
+          page.
+        </p>
+        {applied && <Applying status={status} restarting={applied.restarting} />}
+        {setMethod.error && <Alert>{setMethod.error.message}</Alert>}
+        {!inUse && canEdit && (
+          <div>
+            <Button type="button" variant="primary" busy={setMethod.isPending} onClick={() => setConfirm(true)}>
+              Use Caddy's own certificate
+            </Button>
+          </div>
+        )}
+      </div>
+      <ConfirmDialog
+        open={confirm}
+        title="Use Caddy's own certificate?"
+        confirmLabel="Use it"
+        tone="send"
+        onClose={() => setConfirm(false)}
+        onConfirm={async () => setApplied(await setMethod.mutateAsync('internal'))}
+      >
+        <p>
+          Devices that don't trust Caddy's authority yet will warn before opening the app.{kept ? ` The settings for ${kept} stay saved, to switch back to.` : ''}
+        </p>
+      </ConfirmDialog>
+    </Card>
+  );
+}
+
+/** The three methods as radio cards, like choosing an AI model; the chosen one's settings show below. */
+function MethodChooser({ status, chosen, onChoose }: { status: TlsStatus; chosen: TlsMethod; onChoose: (method: TlsMethod) => void }) {
+  const inUse: TlsMethod = status.method === 'custom' && status.disabled ? 'internal' : status.method;
+  const saved: Record<TlsMethod, boolean> = { internal: true, cloudflare: !!status.domain, custom: !!status.certificate };
+  return (
+    <Card>
+      <CardHeader icon={<KeyRound className="size-5 text-accent-soft" />} title="Certificate management" />
+      <fieldset className="space-y-2 px-5 pb-6 sm:px-6">
+        <legend className="sr-only">How the app's certificate is managed</legend>
+        {TLS_METHODS.map((method) => (
+          <label key={method} className={optionClass(chosen === method)}>
+            <input
+              type="radio"
+              name="tls-method"
+              value={method}
+              checked={chosen === method}
+              onChange={() => onChoose(method)}
+              className="mt-1 size-4 accent-[var(--color-accent)]"
+            />
+            <span className="min-w-0 flex-1">
+              <span className="block text-sm font-medium text-ink">{METHOD_INFO[method].name}</span>
+              <span className="block text-sm text-muted">{METHOD_INFO[method].description}</span>
+            </span>
+            {inUse === method ? (
+              <span className="shrink-0">
+                <Badge tone="ok">In use</Badge>
+              </span>
+            ) : (
+              method !== 'internal' &&
+              saved[method] && (
+                <span className="shrink-0">
+                  <Badge>Saved</Badge>
+                </span>
+              )
+            )}
+          </label>
+        ))}
+        <p className="pt-2 text-sm text-muted">Choosing one shows its settings below. The app changes over when you save them, or press Use.</p>
+      </fieldset>
+    </Card>
+  );
+}
+
+/** The radio cards, as on AI Document Scanning. */
+const optionClass = (chosen: boolean) =>
+  `flex cursor-pointer items-start gap-3 rounded-lg border px-4 py-3 transition-colors ${
+    chosen ? 'border-accent-soft/60 bg-accent-bg' : 'border-line-strong bg-surface-2/60 hover:border-accent-soft/40'
+  }`;
+
+function Methods({ status, canEdit }: { status: TlsStatus; canEdit: boolean }) {
+  const [chosen, setChosen] = useState<TlsMethod>(status.method === 'custom' && status.disabled ? 'custom' : status.method);
+  return (
+    <>
+      <MethodChooser status={status} chosen={chosen} onChoose={setChosen} />
+      {chosen === 'internal' && <InternalCard status={status} canEdit={canEdit} />}
+      {chosen === 'cloudflare' && <TlsDomainCard status={status} canEdit={canEdit} />}
+      {chosen === 'custom' && <CertificateCard status={status} canEdit={canEdit} />}
+    </>
   );
 }
 
@@ -257,7 +376,7 @@ export function TlsSettings() {
     <div className="space-y-6">
       <SettingsHeading
         title="HTTPS Certificate"
-        description="Serve the app with a certificate browsers already trust: one of your own, or one from Let's Encrypt for a domain on Cloudflare."
+        description="How the app is served over HTTPS, and the certificate devices need to open it without a warning."
       />
       {isLoading ? (
         <Spinner />
@@ -273,9 +392,8 @@ export function TlsSettings() {
         </Card>
       ) : (
         <>
-          <TlsDomainCard status={status} canEdit={canEdit} />
-          <CertificateCard status={status} canEdit={canEdit} />
-          <TlsDownloadCard status={status} />
+          <TlsSummaryCard status={status} />
+          <Methods status={status} canEdit={canEdit} />
         </>
       )}
     </div>

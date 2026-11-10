@@ -85,61 +85,71 @@ async function findZone(ctx: AppContext, token: string, domain: string): Promise
   );
 }
 
-/** Checks the request with Cloudflare and saves it. */
-export async function saveDomain(ctx: AppContext, request: TlsDomainRequest, by: string): Promise<void> {
+export interface CheckedDomain {
+  domain: string;
+  zone: Zone;
+  token: string;
+}
+
+/** Checks the request with Cloudflare: the domain's zone, and that the token can get at its DNS. */
+export async function checkDomain(ctx: AppContext, request: TlsDomainRequest): Promise<CheckedDomain> {
   const domain = request.domain.trim().toLowerCase().replace(/\.$/, '');
   if (!isDomainName(domain)) throw new HttpError(400, `"${request.domain}" isn't a domain name, such as books.example.co.uk.`);
   // A domain also in SITE_ADDRESS is fine: whatever starts Caddy leaves it out of SITE_ADDRESS
   // while domain.caddy names it, as Caddy refuses a name in two site blocks.
-  const before = savedDomainRow(ctx.db);
-  const token = request.token?.trim() || before?.api_token;
+  const token = request.token?.trim() || savedDomainRow(ctx.db)?.api_token;
   if (!token) throw new HttpError(400, 'Enter the Cloudflare API token.');
   if (!isCloudflareToken(token)) throw new HttpError(400, "That doesn't look like a Cloudflare API token, which is 40 letters, digits, hyphens and underscores.");
 
   const zone = await findZone(ctx, token, domain);
   // Reading the zone's DNS records checks the token can get at them, which Caddy needs along with editing them.
   await callCloudflare(ctx, token, 'GET', `/zones/${zone.id}/dns_records?name=${encodeURIComponent(domain)}`);
-  ctx.db
-    .prepare(
-      `INSERT INTO tls_domain (id, domain, zone_id, zone_name, api_token, added_by) VALUES (1, ?, ?, ?, ?, ?)
-       ON CONFLICT (id) DO UPDATE SET domain = excluded.domain, zone_id = excluded.zone_id, zone_name = excluded.zone_name,
-         api_token = excluded.api_token, added_by = excluded.added_by, added_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')`,
-    )
-    .run(domain, zone.id, zone.name, token, by);
+  return { domain, zone, token };
 }
 
-/** Puts back the domain saved before a change that couldn't be written out for Caddy. */
-export function restoreDomain(db: Db, row: Row | undefined): void {
-  db.prepare('DELETE FROM tls_domain').run();
-  if (!row) return;
+/** Saves a domain checkDomain has checked. */
+export function storeDomain(db: Db, { domain, zone, token }: CheckedDomain, by: string): void {
   db.prepare(
-    `INSERT INTO tls_domain (id, domain, zone_id, zone_name, api_token, added_by, added_at)
-     VALUES (1, @domain, @zone_id, @zone_name, @api_token, @added_by, @added_at)`,
-  ).run(row);
+    `INSERT INTO tls_domain (id, domain, zone_id, zone_name, api_token, added_by) VALUES (1, ?, ?, ?, ?, ?)
+     ON CONFLICT (id) DO UPDATE SET domain = excluded.domain, zone_id = excluded.zone_id, zone_name = excluded.zone_name,
+       api_token = excluded.api_token, added_by = excluded.added_by, added_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')`,
+  ).run(domain, zone.id, zone.name, token, by);
 }
 
 /** Forgets the domain and its token. */
-export function removeDomain(ctx: AppContext): void {
-  ctx.db.prepare('DELETE FROM tls_domain').run();
+export function removeDomain(db: Db): void {
+  db.prepare('DELETE FROM tls_domain').run();
 }
 
-/** The site block Caddy imports for the domain: Let's Encrypt by Cloudflare's DNS, serving the app. */
+/**
+ * The site block Caddy imports for the domain: Let's Encrypt by Cloudflare's DNS, serving the app.
+ * Until Let's Encrypt issues a certificate (it may be refusing for a while, say over its limit of
+ * five a week for one name), Caddy's own private authority stands in, so devices that trust it
+ * can still open the app. That one lasts 12 hours, and each renewal tries Let's Encrypt first.
+ */
 export function domainCaddyfile(ctx: AppContext, row: Pick<Row, 'domain' | 'api_token'>): string {
   const { domainPort, acmeCa } = ctx.config.tls;
   return [
     '# Written by Crafty Accounting from Settings → HTTPS Certificate, and again each time it starts.',
     `${row.domain}${domainPort ? `:${domainPort}` : ''} {`,
     '\ttls {',
-    ...(acmeCa ? [`\t\tca ${acmeCa}`] : []),
-    `\t\tdns cloudflare ${row.api_token}`,
-    "\t\t# Asked whether the challenge record is out yet: a home network's own DNS may answer for the domain itself.",
-    '\t\tresolvers 1.1.1.1 1.0.0.1',
+    '\t\tissuer acme {',
+    ...(acmeCa ? [`\t\t\tdir ${acmeCa}`] : []),
+    `\t\t\tdns cloudflare ${row.api_token}`,
+    "\t\t\t# Asked whether the challenge record is out yet: a home network's own DNS may answer for the domain itself.",
+    '\t\t\tresolvers 1.1.1.1 1.0.0.1',
+    '\t\t}',
+    "\t\t# Meanwhile, while Let's Encrypt can't issue one.",
+    '\t\tissuer internal',
     '\t}',
     '\timport app',
     '}',
     '',
   ].join('\n');
 }
+
+/** Caddy's own private authority, which signs the stand-in certificate. */
+const CADDY_LOCAL = /Caddy Local Authority/;
 
 /** "CN=R11\nO=Let's Encrypt\nC=US" → "Let's Encrypt (R11)". */
 function issuerName(cert: crypto.X509Certificate): string {
@@ -161,6 +171,7 @@ export function probeDomain(ctx: AppContext): Promise<TlsDomainCertificate> {
       socket.end();
       // Until it has one, Caddy answers with another of its certificates (or none).
       if (!peer || !peer.checkHost(row.domain)) return resolve({ state: 'waiting' });
+      if (CADDY_LOCAL.test(peer.issuer)) return resolve({ state: 'fallback' });
       resolve({
         state: 'issued',
         issuer: issuerName(peer),
