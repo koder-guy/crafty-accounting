@@ -57,7 +57,7 @@ It needs Linux with systemd (Debian, Ubuntu, Fedora and most others) on Intel/AM
 /home/crafty/crafty-accounting/crafty status
 ```
 
-`crafty` also takes `log`, `restart` (after changing the settings in `/home/crafty/crafty-accounting/.env`) and `update`. To stop or start the app, as root: `systemctl stop crafty-accounting crafty-caddy` (or `start`).
+`crafty` also takes `log`, `restart` (after changing the settings in `/home/crafty/crafty-accounting/.env`), `update` and `tls` (a certificate for your own domain, see [HTTPS](#https)). To stop or start the app, as root: `systemctl stop crafty-accounting crafty-caddy` (or `start`).
 
 **From an earlier quick install** (version 1.8 or before, run with `crafty start`): run the install command as root. It reuses your `crafty` account, books and settings, moves HTTPS to ports 80 and 443, stops the copy started with `crafty start` and removes a `@reboot` crontab line for it. An update from **Settings → Updates** can't make that change, so do this first.
 
@@ -106,9 +106,9 @@ Caddy (`crafty-caddy`) provides HTTPS in front of the app (`crafty-accounting`).
 
 ### HTTPS
 
-Both installs serve HTTPS through Caddy. `TLS_ISSUER` in `.env` chooses how Caddy gets its certificate. After changing it, or `SITE_ADDRESS`, run `/home/crafty/crafty-accounting/crafty restart` (Linux quick install) or `docker compose up -d` (Docker).
+Both installs serve HTTPS through Caddy. The addresses in `SITE_ADDRESS` always use a private certificate. You can add your own domain (`DOMAIN`) with a Let's Encrypt certificate, which browsers already trust; `TLS_MODE` chooses how. After changing these settings, run `/home/crafty/crafty-accounting/crafty restart` (Linux quick install) or `docker compose up -d` (Docker).
 
-**Home network (`TLS_ISSUER=internal`, the default).** Caddy creates its own certificate authority, which each device must trust once. Each device can download it from `https://<server address>/crafty-root.crt` (past the browser's warning, this once). The installers also save it as `crafty-root.crt` in the install's folder, and print its SHA-256 fingerprint, a command to paste into a Mac's Terminal that downloads it, checks the fingerprint and trusts it, and, on a first install, the certificate itself to copy into a file. As the download isn't checked, compare the fingerprint before trusting it; Keychain Access shows it under **SHA-256**.
+**Home network (`SITE_ADDRESS`, and `TLS_MODE=internal`, the default).** Caddy creates its own certificate authority, which each device must trust once. Each device can download it from `https://<server address>/crafty-root.crt` (past the browser's warning, this once). The installers also save it as `crafty-root.crt` in the install's folder, and print its SHA-256 fingerprint, a command to paste into a Mac's Terminal that downloads it, checks the fingerprint and trusts it, and, on a first install, the certificate itself to copy into a file. As the download isn't checked, compare the fingerprint before trusting it; Keychain Access shows it under **SHA-256**.
 
 Then install `crafty-root.crt` on each device:
 - **Mac:** add it to the System keychain, then in Keychain Access set **Trust → When using this certificate** to **Always Trust**.
@@ -118,9 +118,25 @@ Then install `crafty-root.crt` on each device:
 
 The authority lasts 10 years. The Linux quick install keeps it in `/home/crafty/crafty-accounting/caddy/data`, Docker in the `caddy-data` volume; removing it creates a new one, which you'd have to trust again.
 
-**Public domain (`TLS_ISSUER=you@example.com`).** Point your domain at your home IP, forward ports 80 and 443 to the server, and set `SITE_ADDRESS` to the domain. Caddy then gets a Let's Encrypt certificate, with nothing to install on devices. Use strong passwords if the app can be reached from the internet.
+**Your domain through Cloudflare (`TLS_MODE=cloudflare`).** If your domain's DNS is on Cloudflare, Caddy can get a Let's Encrypt certificate for it while the app stays on your home network, with nothing forwarded and nothing to install on devices. Caddy proves the domain is yours by adding a temporary DNS record through Cloudflare's API.
 
-**Your own certificate (Settings → HTTPS Certificate).** Upload a `.pfx` or `.p12` file holding a certificate and its private key, such as one from your organisation or a certificate authority, with its password. The app checks it, keeps it (not in backups) and Caddy serves it instead of the one `TLS_ISSUER` gives. The Linux quick install restarts Caddy straight away; on Docker, run `docker compose restart caddy` in the install's folder. The bell warns 30 days before it expires. Its names should match `SITE_ADDRESS`, or browsers warn. If browsers can't open the app with it, add `TLS_CUSTOM=off` to `.env` and restart as above to go back to Caddy's own certificate, then remove or replace it.
+1. In Cloudflare, create an API token (**My Profile → API Tokens → Create Token**, starting from **Edit zone DNS**) with **Zone → DNS → Edit** and **Zone → Zone → Read**, for your domain's zone only. A token, not the Global API Key.
+2. Add an **A record** for the name you'll use, such as `books.example.co.uk`, pointing at the server's address on your network (e.g. `192.168.1.50`), with the proxy off (**DNS only**, the grey cloud). Cloudflare's proxy can't reach a home address.
+3. Linux quick install: run `/home/crafty/crafty-accounting/crafty tls cloudflare` as root or the `crafty` account. It asks for the domain and the token, checks the token with Cloudflare, saves them, restarts and waits for the certificate. Docker: add these to `.env` and run `docker compose up -d`:
+
+   ```
+   TLS_MODE=cloudflare
+   DOMAIN=books.example.co.uk
+   CLOUDFLARE_API_TOKEN=<the token>
+   ```
+
+Then open `https://books.example.co.uk`. Some routers and DNS filters (Fritz!Box, pfSense, Pi-hole and others) refuse DNS answers that point at a home address, as protection against "DNS rebinding"; if the name doesn't work at home, allow the domain there, or add it to the router's own DNS. The token is kept in `.env`, so keep that file private; it's never in backups.
+
+**Your domain over the internet (`TLS_MODE=letsencrypt`).** Point the domain at your home's public IP, forward ports 80 and 443 to the server, and set `DOMAIN` (`crafty tls letsencrypt` on the Linux quick install). Let's Encrypt checks the domain by connecting to it. Use strong passwords if the app can be reached from the internet.
+
+`DOMAIN` can list several names, comma separated, but keep them out of `SITE_ADDRESS`. To try it out without using up Let's Encrypt's limits, set `ACME_CA=https://acme-staging-v02.api.letsencrypt.org/directory` (browsers won't trust that certificate), then remove it and restart. `crafty tls` on its own shows the current setup and whether the domain has its certificate; `crafty tls internal` goes back to the private certificate only.
+
+**Your own certificate (Settings → HTTPS Certificate).** Upload a `.pfx` or `.p12` file holding a certificate and its private key, such as one from your organisation or a certificate authority, with its password. The app checks it, keeps it (not in backups) and Caddy serves it for the addresses in `SITE_ADDRESS` instead of its own private certificate (a `DOMAIN` keeps its Let's Encrypt one). The Linux quick install restarts Caddy straight away; on Docker, run `docker compose restart caddy` in the install's folder. The bell warns 30 days before it expires. Its names should match `SITE_ADDRESS`, or browsers warn. If browsers can't open the app with it, add `TLS_CUSTOM=off` to `.env` and restart as above to go back to Caddy's own certificate, then remove or replace it.
 
 If ports 80 and 443 are taken, change `HTTP_PORT` and `HTTPS_PORT`; the address then needs the port, such as `https://crafty.local:8443`.
 
@@ -136,7 +152,10 @@ Settings go in a `.env` file next to the app (the installers write one). Only in
 | `HOST` | all addresses | Address the app listens on; the Linux quick install sets `127.0.0.1`, so only Caddy reaches it |
 | `SITE_ADDRESS` | `localhost` | HTTPS: address(es) you browse to, comma separated |
 | `SITE_IP` | `localhost` | HTTPS: the IP address in `SITE_ADDRESS` that browsers use, if any |
-| `TLS_ISSUER` | `internal` | HTTPS: `internal`, or your email address for Let's Encrypt |
+| `TLS_MODE` | `internal` | HTTPS: how `DOMAIN` gets a Let's Encrypt certificate: `cloudflare` or `letsencrypt`; `internal` for no `DOMAIN` |
+| `DOMAIN` | | HTTPS: your own domain name(s), comma separated |
+| `CLOUDFLARE_API_TOKEN` | | HTTPS: for `TLS_MODE=cloudflare`, a token that can edit the zone's DNS |
+| `ACME_CA` | Let's Encrypt | HTTPS: another ACME certificate authority, such as Let's Encrypt's staging one |
 | `TLS_CUSTOM` | on | HTTPS: `off` ignores a certificate uploaded in Settings → HTTPS Certificate |
 | `HTTP_PORT` / `HTTPS_PORT` | `80` / `443` | HTTPS: ports Caddy listens on |
 | `MAX_UPLOAD_MB` | `20` | Largest document you can attach |

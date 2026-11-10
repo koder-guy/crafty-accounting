@@ -178,8 +178,8 @@ function CertificateCard({ status, canEdit }: { status: TlsStatus; canEdit: bool
           <Details cert={cert} />
         ) : (
           <p className="text-sm text-muted">
-            None uploaded, so Caddy uses the certificate set by <code className="font-mono text-ink">TLS_ISSUER</code> in the install's .env file: its own private
-            one (which each device has to trust), or one from Let's Encrypt for a public domain.
+            None uploaded, so the addresses in <code className="font-mono text-ink">SITE_ADDRESS</code> use Caddy's own private certificate, which each device
+            has to trust. A domain of your own set with <code className="font-mono text-ink">DOMAIN</code> gets one from Let's Encrypt instead.
           </p>
         )}
 
@@ -240,7 +240,7 @@ function CertificateCard({ status, canEdit }: { status: TlsStatus; canEdit: bool
         }}
       >
         <p>
-          Caddy goes back to the certificate set by <code className="font-mono">TLS_ISSUER</code>. If that's its own private one, devices that don't trust it yet will warn
+          Caddy goes back to its own private certificate for the addresses in <code className="font-mono">SITE_ADDRESS</code>. Devices that don't trust it yet will warn
           before opening the app.
         </p>
       </ConfirmDialog>

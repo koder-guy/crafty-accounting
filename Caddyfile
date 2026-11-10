@@ -1,24 +1,35 @@
 # HTTPS front end for Crafty Accounting, used by docker-compose.yml and by the
-# quick install (install.sh) when HTTPS is on. Settings come from .env:
-#   SITE_ADDRESS  the address(es) you browse to, comma separated,
-#                 e.g. "crafty.local, 192.168.1.50" or "accounts.example.co.uk"
-#   TLS_ISSUER    "internal" for a private certificate from Caddy's own
-#                 certificate authority (home network), or your email address
-#                 to get a free Let's Encrypt certificate for a public domain.
+# quick install (install.sh). Settings come from .env:
+#   SITE_ADDRESS  the address(es) you browse to at home, comma separated, e.g.
+#                 "crafty.local, 192.168.1.50". A private certificate from Caddy's own
+#                 certificate authority, which devices trust once, or one uploaded in
+#                 Settings → HTTPS Certificate.
 #   SITE_IP       the IP address in SITE_ADDRESS that browsers use, if any
 #   TLS_CUSTOM    "off" to ignore a certificate uploaded in Settings → HTTPS Certificate
+#   TLS_MODE      how DOMAIN gets a certificate every browser already trusts:
+#                   internal      no DOMAIN, only SITE_ADDRESS (the default)
+#                   letsencrypt   Let's Encrypt, checked over the internet (ports 80 and
+#                                 443 forwarded to this server)
+#                   cloudflare    Let's Encrypt, checked through Cloudflare's DNS with
+#                                 CLOUDFLARE_API_TOKEN; nothing needs to be reachable
+#   DOMAIN        your own domain name(s), comma separated, e.g. "books.example.co.uk"
+#   CLOUDFLARE_API_TOKEN  for cloudflare: a token allowed to edit that zone's DNS
+#   ACME_CA       optional: another certificate authority's ACME address, such as Let's
+#                 Encrypt's staging one for trying it out
 # With an uploaded certificate, what starts Caddy (crafty caddy, or the Docker command) sets
-# TLS_ISSUER to "<cert.pem> <key.pem>", so "tls" serves those files, and sets CRAFTY_CA_HIDDEN
-# so /crafty-root.crt (the private authority, not in use then) is missing.
+# CRAFTY_SITE_TLS to "<cert.pem> <key.pem>", so "tls" serves those files for SITE_ADDRESS, and
+# sets CRAFTY_CA_HIDDEN so /crafty-root.crt (the private authority, not in use then) is missing.
 # Plain http:// requests are redirected to https:// automatically.
 #
 # The quick install also sets CADDY_HTTP_PORT (Caddy listens on it itself rather than
 # through Docker's port mapping), CRAFTY_OTHER_ADDRESSES (the catch-all below, with
 # the HTTPS port), CRAFTY_UPSTREAM (the app on this computer), and CRAFTY_ENV_PLACE and
 # CRAFTY_APPLY (where .env is and how to apply a change). Off port 443 it gives each
-# address in SITE_ADDRESS the port; https_port stays 443, as Caddy only puts the port
-# in its http->https redirect when it differs from https_port.
-
+# address in SITE_ADDRESS and DOMAIN the port; https_port stays 443, as Caddy only puts
+# the port in its http->https redirect when it differs from https_port.
+#
+# Caddy here is built with the caddy-dns/cloudflare module (Dockerfile.caddy, and the
+# "Caddy with Cloudflare DNS" workflow for the quick install).
 {
 	# Browsers don't send an IP address as the server name, and Docker hides the
 	# address they connected to, so Caddy needs telling which certificate to use.
@@ -34,15 +45,15 @@
 	grace_period 5s
 }
 
-{$SITE_ADDRESS:localhost} {
-	tls {$TLS_ISSUER:internal}
+# Everything an address serves.
+(app) {
 	# Compressing the live-update stream would hold its messages back.
 	@compressible not path /api/events
 	encode @compressible zstd gzip
 	header -Server
 	# Caddy's private certificate authority, for devices to download and trust (see "HTTPS"
 	# in the README). Only the certificate: its key stays in the folder. Missing (404) when
-	# the certificate comes from Let's Encrypt or is your own.
+	# SITE_ADDRESS uses an uploaded certificate of your own.
 	handle /crafty-root.crt {
 		root * {$XDG_DATA_HOME:/data}/caddy/pki/authorities/local{$CRAFTY_CA_HIDDEN}
 		rewrite * /root.crt
@@ -58,9 +69,42 @@
 	}
 }
 
+{$SITE_ADDRESS:localhost} {
+	tls {$CRAFTY_SITE_TLS:internal}
+	import app
+}
+
+# DOMAIN, by TLS_MODE. Only the chosen one is read, so DOMAIN can be unset for internal.
+(domain_internal) {
+}
+
+(domain_letsencrypt) {
+	{$DOMAIN:set-DOMAIN-in-env.invalid} {
+		tls {
+			ca {$ACME_CA:https://acme-v02.api.letsencrypt.org/directory}
+		}
+		import app
+	}
+}
+
+(domain_cloudflare) {
+	{$DOMAIN:set-DOMAIN-in-env.invalid} {
+		tls {
+			ca {$ACME_CA:https://acme-v02.api.letsencrypt.org/directory}
+			dns cloudflare {env.CLOUDFLARE_API_TOKEN}
+			# Asked whether the challenge record is out yet: a home network's own DNS may
+			# answer for the domain itself, or block it.
+			resolvers 1.1.1.1 1.0.0.1
+		}
+		import app
+	}
+}
+
+import domain_{$TLS_MODE:internal}
+
 # Any other address would otherwise get an empty page, which looks like a broken app.
 {$CRAFTY_OTHER_ADDRESSES:https://} {
-	tls {$TLS_ISSUER:internal}
+	tls {$CRAFTY_SITE_TLS:internal}
 	header -Server
 	header Content-Type "text/plain; charset=utf-8"
 	respond 404 {

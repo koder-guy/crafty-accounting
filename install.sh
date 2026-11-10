@@ -32,6 +32,12 @@ set -euo pipefail
 REPO="${CRAFTY_REPO:-koder-guy/crafty-accounting}"
 NODE_DIST="https://nodejs.org/dist/latest-v22.x"
 CADDY_VERSION="2.11.8"
+# Caddy is built with the caddy-dns/cloudflare module (for TLS_MODE=cloudflare) by this
+# repository's "Caddy with Cloudflare DNS" workflow, which publishes it as a release when
+# either version here changes. Keep Dockerfile.caddy's module version in step.
+CADDY_DNS_CLOUDFLARE="0.2.4"
+CADDY_RELEASE="caddy-$CADDY_VERSION-cloudflare-$CADDY_DNS_CLOUDFLARE"
+CADDY_REPO="koder-guy/crafty-accounting"
 # Bump when the service files below change: an update without root then says to rerun as root.
 SERVICES_VERSION=1
 APP_SERVICE=crafty-accounting
@@ -162,9 +168,9 @@ root_main() {
   rm -rf "$dir/app.old"
 
   # Caddy's private certificate authority, for devices to trust (unless a certificate of
-  # your own is in use, uploaded in Settings → HTTPS Certificate).
+  # your own is in use for SITE_ADDRESS, uploaded in Settings → HTTPS Certificate).
   local cert="" ca="$dir/caddy/data/caddy/pki/authorities/local/root.crt"
-  if ! custom_cert_in_use "$dir" && [ "$(sed -n 's/^TLS_ISSUER=//p' "$env_file" | tail -n 1)" = internal ] && [ -f "$ca" ]; then
+  if ! custom_cert_in_use "$dir" && [ -f "$ca" ]; then
     cp "$ca" "$dir/crafty-root.crt" && chown "$user": "$dir/crafty-root.crt"
     cert="$dir/crafty-root.crt"
   fi
@@ -281,6 +287,13 @@ summary() {
   [ "${https_port:-443}" = 443 ] || suffix=":$https_port"
   printf '\n%s%sCrafty Accounting is running.%s\n\n' "$bold" "$green" "$reset"
   echo "Open it in a web browser:"
+  local mode domain
+  mode="$(sed -n 's/^TLS_MODE=//p' "$env_file" | tail -n 1)"
+  domain="$(sed -n 's/^DOMAIN=//p' "$env_file" | tail -n 1)"
+  if [ "${mode:-internal}" = internal ]; then domain=""; fi
+  for addr in $(printf '%s' "$domain" | tr ',' ' '); do
+    echo "  With your domain:       https://$addr$suffix"
+  done
   for addr in $(sed -n 's/^SITE_ADDRESS=//p' "$env_file" | tail -n 1 | tr ',' ' '); do
     echo "  $label  https://$addr$suffix"
     case "$label" in On*) label="Other devices at home:" ;; *) label="                      " ;; esac
@@ -295,6 +308,11 @@ summary() {
   else
     echo "Sign in with your existing username and password."
   fi
+  if [ -n "$domain" ]; then
+    echo
+    echo "Your domain's certificate is from Let's Encrypt, which browsers already trust."
+    echo "To check it or change how it's set up: $dir/crafty tls"
+  fi
   if custom_cert_in_use "$dir"; then
     echo
     echo "HTTPS uses the certificate uploaded in Settings → HTTPS Certificate. If browsers"
@@ -302,8 +320,14 @@ summary() {
   fi
   if [ -n "$cert" ]; then
     echo
-    echo "The certificate is private to this install, so browsers warn about it until each"
-    echo "device trusts it once (see \"HTTPS\" in the README). It's $cert"
+    if [ -n "$domain" ]; then
+      echo "The other addresses use a certificate private to this install, so browsers warn"
+      echo "about them until each device trusts it once (see \"HTTPS\" in the README)."
+      echo "It's $cert"
+    else
+      echo "The certificate is private to this install, so browsers warn about it until each"
+      echo "device trusts it once (see \"HTTPS\" in the README). It's $cert"
+    fi
     local other="" show_pem="$new_install"
     if cert_served "${https_port:-443}" "$cert"; then
       other="$(other_address "$(sed -n 's/^SITE_ADDRESS=//p' "$env_file" | tail -n 1)" "$https_port")"
@@ -405,14 +429,15 @@ user_main() {
   (cd app.new && npm run build --silent >/dev/null 2>&1) || fail "the build failed. Run this again; if it fails again, please report it."
 
   # ---- Caddy ----
-  step "Checking Caddy $CADDY_VERSION"
-  if [ -x caddy/caddy ] && caddy/caddy version 2>/dev/null | grep -q "^v$CADDY_VERSION "; then
+  # caddy/release names the build installed (Caddy's own version doesn't show the module's).
+  step "Checking Caddy $CADDY_VERSION (with Cloudflare DNS $CADDY_DNS_CLOUDFLARE)"
+  if [ -x caddy/caddy ] && [ "$(cat caddy/release 2>/dev/null)" = "$CADDY_RELEASE" ]; then
     echo "Caddy $CADDY_VERSION is up to date."
   else
     local caddy_arch caddy_file caddy_url
     case "$ARCH" in x64) caddy_arch=amd64 ;; *) caddy_arch=arm64 ;; esac
     caddy_file="caddy_${CADDY_VERSION}_linux_${caddy_arch}.tar.gz"
-    caddy_url="https://github.com/caddyserver/caddy/releases/download/v$CADDY_VERSION"
+    caddy_url="https://github.com/$CADDY_REPO/releases/download/$CADDY_RELEASE"
     echo "Downloading Caddy $CADDY_VERSION."
     rm -rf caddy.download && mkdir caddy.download
     curl -fsSL -o "caddy.download/$caddy_file" "$caddy_url/$caddy_file" || fail "couldn't download Caddy from $caddy_url."
@@ -421,6 +446,7 @@ user_main() {
     tar -xzf "caddy.download/$caddy_file" -C caddy.download caddy
     mkdir -p caddy
     mv caddy.download/caddy caddy/caddy.new && mv caddy/caddy.new caddy/caddy
+    printf '%s\n' "$CADDY_RELEASE" > caddy/release
     rm -rf caddy.download
   fi
 
@@ -506,8 +532,25 @@ EOF
     printf '\n# HTTPS: the addresses you browse to, and a private certificate for them (see "HTTPS"\n# in the README). If this computer'"'"'s IP address changes, update SITE_ADDRESS and SITE_IP.\n' >> "$ENV_FILE"
     set_env SITE_ADDRESS "localhost${ip:+, $ip}"
     set_env SITE_IP "${ip:-localhost}"
-    set_env TLS_ISSUER internal
+    set_env TLS_MODE internal
   fi
+  # Up to 1.10.71 TLS_ISSUER was "internal", or an email address for Let's Encrypt with the
+  # domain in SITE_ADDRESS. SITE_ADDRESS is now always the private certificate's.
+  local issuer
+  issuer="$(env_value TLS_ISSUER)"
+  if [ -n "$issuer" ] && [ -z "$(env_value TLS_MODE)" ]; then
+    if [ "$issuer" = internal ]; then
+      set_env TLS_MODE internal
+    else
+      set_env TLS_MODE letsencrypt
+      set_env DOMAIN "$(env_value SITE_ADDRESS)"
+      set_env SITE_ADDRESS localhost
+      set_env SITE_IP localhost
+      echo "Moved $(env_value DOMAIN) from SITE_ADDRESS to DOMAIN, with TLS_MODE=letsencrypt (see \"HTTPS\" in the README)."
+    fi
+  fi
+  delete_env TLS_ISSUER
+  [ -n "$(env_value TLS_MODE)" ] || set_env TLS_MODE internal
   # 8080 and 8443 together were the old installer's fallback for a normal user.
   if [ "$(env_value HTTP_PORT)" = 8080 ] && [ "$(env_value HTTPS_PORT)" = 8443 ] && [ -z "${CRAFTY_HTTPS_PORT:-}" ]; then
     set_env HTTP_PORT 80
@@ -541,15 +584,19 @@ delete_env() {
 write_crafty_script() {
   cat > "$DIR/crafty.new" <<'EOF'
 #!/bin/sh
-# Crafty Accounting:  crafty status | log | restart | restart-caddy | update
+# Crafty Accounting:  crafty status | log | restart | restart-caddy | update | tls
 # The services crafty-accounting and crafty-caddy run "crafty app" and "crafty caddy".
 DIR="$(cd "$(dirname "$0")" && pwd)"
 ENV_FILE="$DIR/.env"
 setting() { sed -n "s/^$1=//p" "$ENV_FILE" | tail -n 1; }
 PORT="$(setting PORT)"; PORT="${PORT:-3000}"
 HTTPS_PORT="$(setting HTTPS_PORT)"; HTTPS_PORT="${HTTPS_PORT:-443}"
-# The address other devices browse to: the first in SITE_ADDRESS that isn't localhost.
-ADDRESS="$(setting SITE_ADDRESS | tr ',' '\n' | tr -d ' ' | grep -v '^localhost$' | grep . | head -n 1)"
+TLS_MODE="$(setting TLS_MODE)"; TLS_MODE="${TLS_MODE:-internal}"
+# The address other devices browse to: the domain with a Let's Encrypt certificate if
+# there is one, else the first in SITE_ADDRESS that isn't localhost.
+ADDRESS=""
+[ "$TLS_MODE" = internal ] || ADDRESS="$(setting DOMAIN | tr ',' '\n' | tr -d ' ' | grep . | head -n 1)"
+[ -n "$ADDRESS" ] || ADDRESS="$(setting SITE_ADDRESS | tr ',' '\n' | tr -d ' ' | grep -v '^localhost$' | grep . | head -n 1)"
 ADDRESS="${ADDRESS:-localhost}"
 case "$ADDRESS" in
   *:[0-9]*) URL="https://$ADDRESS" ;;
@@ -623,27 +670,163 @@ status() {
   return $ok
 }
 
+# Off port 443, each address in the comma separated list $1 gets the port, or Caddy's
+# http->https redirect leaves it out.
+with_port() {
+  if [ "$HTTPS_PORT" = 443 ]; then printf '%s' "$1"; return; fi
+  printf '%s' "$1" | tr ',' '\n' | awk -v p="$HTTPS_PORT" 'NF { a = $1; if (a !~ /:[0-9]+$/) a = a ":" p; out = out (out ? ", " : "") a } END { print out }'
+}
+
+# Sets KEY=VALUE in .env, replacing the line if it's there (keeping the file's owner and permissions).
+set_setting() {
+  if grep -q "^$1=" "$ENV_FILE"; then
+    awk -v k="$1" -v v="$2" 'index($0, k "=") == 1 { print k "=" v; next } { print }' "$ENV_FILE" > "$ENV_FILE.tmp" \
+      && cat "$ENV_FILE.tmp" > "$ENV_FILE" && rm -f "$ENV_FILE.tmp"
+  else
+    printf '%s=%s\n' "$1" "$2" >> "$ENV_FILE"
+  fi
+}
+
+# Calls Cloudflare's API at path $1 with the token in $2, given to curl on its standard
+# input so it isn't on the command line, where other accounts could see it.
+cloudflare() {
+  printf 'header = "Authorization: Bearer %s"\n' "$2" \
+    | curl -sS --max-time 20 -K - "https://api.cloudflare.com/client/v4$1" 2>/dev/null
+}
+
+# The Cloudflare zone (as example.co.uk) that token $2 can see for domain $1, if any.
+cloudflare_zone() {
+  z="$1"
+  while :; do
+    case "$z" in *.*) ;; *) return 1 ;; esac
+    if cloudflare "/zones?name=$z" "$2" | grep -Eq '"count": *[1-9]'; then echo "$z"; return 0; fi
+    z="${z#*.}"
+  done
+}
+
+# Whether domain $1 answers on this computer with a certificate the system trusts.
+cert_ok() {
+  curl -fsS --max-time 10 --resolve "$1:$HTTPS_PORT:127.0.0.1" "https://$1:$HTTPS_PORT/api/health" >/dev/null 2>&1
+}
+
+ask() {
+  printf '%s' "$1" >&2
+  IFS= read -r answer || answer=""
+  printf '%s' "$answer"
+}
+
+# crafty tls [internal | letsencrypt | cloudflare]: how DOMAIN gets its certificate.
+tls() {
+  mode="${1:-}"
+  domain="$(setting DOMAIN)"
+  case "$mode" in
+    "")
+      echo "TLS_MODE=$TLS_MODE"
+      if [ "$TLS_MODE" != internal ]; then
+        echo "DOMAIN=$domain"
+        for d in $(printf '%s' "$domain" | tr ',' ' '); do
+          if cert_ok "$d"; then echo "$d: a trusted certificate."; else echo "$d: no trusted certificate yet (see: $0 log)."; fi
+        done
+      fi
+      echo
+      echo "To change it:  $0 tls internal | letsencrypt | cloudflare"
+      echo "  internal     only the addresses in SITE_ADDRESS, with the private certificate"
+      echo "  letsencrypt  also your domain, with Let's Encrypt checking it over the internet"
+      echo "               (ports 80 and 443 forwarded to this computer)"
+      echo "  cloudflare   also your domain, with Let's Encrypt checking it through Cloudflare's"
+      echo "               DNS (needs an API token; nothing needs to be reachable from outside)"
+      return 0 ;;
+    internal | letsencrypt | cloudflare) ;;
+    *) echo "Usage: $0 tls [internal | letsencrypt | cloudflare]" >&2; return 2 ;;
+  esac
+  if [ "$mode" != internal ]; then
+    domain="$(ask "Your domain, e.g. books.example.co.uk${domain:+ [$domain]}: ")" || return 1
+    domain="$(printf '%s' "${domain:-$(setting DOMAIN)}" | sed 's/ *, */, /g; s/^ *//; s/ *$//')"
+    if [ -z "$domain" ] || ! printf '%s' "$domain" | grep -Eq '^[A-Za-z0-9][A-Za-z0-9.-]*\.[A-Za-z]+(, [A-Za-z0-9][A-Za-z0-9.-]*\.[A-Za-z]+)*$'; then
+      echo "\"$domain\" isn't a domain name, such as books.example.co.uk." >&2; return 1
+    fi
+    for d in $(printf '%s' "$domain" | tr -d ' ' | tr ',' ' '); do
+      if setting SITE_ADDRESS | tr ',' '\n' | tr -d ' ' | grep -qix "$d"; then
+        echo "$d is also in SITE_ADDRESS. Take it out of $ENV_FILE first." >&2; return 1
+      fi
+    done
+  fi
+  if [ "$mode" = cloudflare ]; then
+    echo "Cloudflare API token (Zone → DNS → Edit and Zone → Zone → Read, for the domain's zone)."
+    old="$(setting CLOUDFLARE_API_TOKEN)"
+    [ -n "$old" ] && echo "Leave it empty to keep the one saved."
+    printf 'Token (not shown as you type): '
+    stty -echo 2>/dev/null; IFS= read -r token || token=""; stty echo 2>/dev/null; echo
+    token="$(printf '%s' "${token:-$old}" | tr -d ' \r\n')"
+    [ -n "$token" ] || { echo "No token given, so nothing was changed." >&2; return 1; }
+    printf 'Checking it with Cloudflare... '
+    if ! cloudflare /user/tokens/verify "$token" | grep -Eq '"status": *"active"'; then
+      echo "failed."; echo "Cloudflare doesn't accept that token (or couldn't be reached). Nothing was changed." >&2; return 1
+    fi
+    for d in $(printf '%s' "$domain" | tr -d ' ' | tr ',' ' '); do
+      zone="$(cloudflare_zone "$d" "$token")" || {
+        echo "failed."; echo "The token can't see a Cloudflare zone for $d. Give it Zone → Zone → Read and Zone → DNS → Edit for that zone. Nothing was changed." >&2; return 1
+      }
+      printf '%s (zone %s) ' "$d" "$zone"
+    done
+    echo "OK."
+    set_setting CLOUDFLARE_API_TOKEN "$token"
+  fi
+  [ "$mode" = internal ] || set_setting DOMAIN "$domain"
+  set_setting TLS_MODE "$mode"
+  echo "Saved TLS_MODE=$mode in $ENV_FILE. Restarting."
+  # Afresh, so it reads the new settings.
+  "$0" restart || return 1
+  [ "$mode" = internal ] && return 0
+  echo "Waiting for Let's Encrypt (up to 3 minutes)..."
+  for d in $(printf '%s' "$domain" | tr -d ' ' | tr ',' ' '); do
+    if wait_for "cert_ok $d" 180; then
+      echo "$d has its certificate."
+    else
+      echo "$d has no trusted certificate yet. What Caddy says:" >&2
+      journalctl -u crafty-caddy -n 200 --no-pager 2>/dev/null | grep -i "$d" | grep -Ei 'error|fail' | tail -n 5 >&2
+      echo "Check that $d points at this computer, and see: $0 log" >&2
+      return 1
+    fi
+  done
+  if [ "$mode" = cloudflare ]; then
+    echo
+    echo "Browsers find $domain through DNS, so Cloudflare needs an A record for it"
+    echo "(DNS only, the grey cloud) pointing at this computer's address on your network. Some"
+    echo "routers refuse answers pointing at home addresses (DNS rebinding protection); allow"
+    echo "the domain there if so."
+  fi
+}
+
 case "${1:-}" in
   app)
     cd "$DIR/app" || exit 1
     export NODE_ENV=production
     exec "$DIR/node/bin/node" "--env-file=$ENV_FILE" server/dist/index.js ;;
   caddy)
-    # Off port 443, each address carries the port, or Caddy's http->https redirect leaves it out.
-    site="$(setting SITE_ADDRESS)"
-    if [ "$HTTPS_PORT" != 443 ]; then
-      site="$(printf '%s' "$site" | tr ',' '\n' | awk -v p="$HTTPS_PORT" 'NF { a = $1; if (a !~ /:[0-9]+$/) a = a ":" p; out = out (out ? ", " : "") a } END { print out }')"
+    case "$TLS_MODE" in
+      internal) ;;
+      letsencrypt | cloudflare)
+        [ -n "$(setting DOMAIN)" ] || { echo "TLS_MODE=$TLS_MODE needs DOMAIN in $ENV_FILE. Set both with: $0 tls" >&2; exit 1; } ;;
+      *) echo "TLS_MODE in $ENV_FILE must be internal, letsencrypt or cloudflare, not \"$TLS_MODE\". Set it with: $0 tls" >&2; exit 1 ;;
+    esac
+    if [ "$TLS_MODE" = cloudflare ] && [ -z "$(setting CLOUDFLARE_API_TOKEN)" ]; then
+      echo "TLS_MODE=cloudflare needs CLOUDFLARE_API_TOKEN in $ENV_FILE. Set it with: $0 tls cloudflare" >&2; exit 1
     fi
-    tls_issuer="$(setting TLS_ISSUER)"
-    # A certificate of your own, uploaded in Settings → HTTPS Certificate, unless TLS_CUSTOM=off.
-    # The Caddyfile's "tls {$TLS_ISSUER}" then reads "tls <cert> <key>", and /crafty-root.crt
-    # points at a folder that isn't there, as the private authority isn't in use.
+    export TLS_MODE
+    # Only what's set: Caddy takes a variable that's set but empty as empty, not its default.
+    for name in SITE_ADDRESS SITE_IP DOMAIN CLOUDFLARE_API_TOKEN ACME_CA; do
+      value="$(setting $name)"
+      case "$name" in SITE_ADDRESS | DOMAIN) value="$(with_port "$value")" ;; esac
+      if [ -n "$value" ]; then export "$name=$value"; fi
+    done
+    # A certificate of your own for SITE_ADDRESS, uploaded in Settings → HTTPS Certificate, unless
+    # TLS_CUSTOM=off. The Caddyfile's "tls {$CRAFTY_SITE_TLS}" then reads "tls <cert> <key>", and
+    # /crafty-root.crt points at a folder that isn't there, as the private authority isn't in use.
     custom="$DIR/caddy/custom"
     if [ "$(setting TLS_CUSTOM | tr 'A-Z' 'a-z')" != off ] && [ -s "$custom/cert.pem" ] && [ -s "$custom/key.pem" ]; then
-      tls_issuer="$custom/cert.pem $custom/key.pem"
-      export CRAFTY_CA_HIDDEN=-not-in-use
+      export CRAFTY_SITE_TLS="$custom/cert.pem $custom/key.pem" CRAFTY_CA_HIDDEN=-not-in-use
     fi
-    export SITE_ADDRESS="$site" SITE_IP="$(setting SITE_IP)" TLS_ISSUER="$tls_issuer"
     export CADDY_HTTP_PORT="$(setting HTTP_PORT)" CRAFTY_OTHER_ADDRESSES="https://:$HTTPS_PORT" CRAFTY_UPSTREAM="127.0.0.1:$PORT"
     export CRAFTY_ENV_PLACE="at $ENV_FILE" CRAFTY_APPLY="$DIR/crafty restart"
     # Its certificates, including the private certificate authority, live here.
@@ -654,6 +837,7 @@ case "${1:-}" in
   restart) restart || exit 1 ;;
   # Picks up a new HTTPS certificate (the app runs this after one is uploaded or removed).
   restart-caddy) restart crafty-caddy || exit 1 ;;
+  tls) tls "${2:-}" || exit $? ;;
   update)
     # A copy of the installer that came with the app, since the update replaces the app.
     # (Outside the account's folder when root runs it, so the account can still update later.)
@@ -662,7 +846,7 @@ case "${1:-}" in
     exec /bin/bash "$copy" ;;
   start | stop)
     echo "Crafty Accounting runs as a service. As root: systemctl $1 $SERVICES" >&2; exit 2 ;;
-  *) echo "Usage: $0 status | log | restart | restart-caddy | update" >&2; exit 2 ;;
+  *) echo "Usage: $0 status | log | restart | restart-caddy | update | tls" >&2; exit 2 ;;
 esac
 EOF
   chmod +x "$DIR/crafty.new"

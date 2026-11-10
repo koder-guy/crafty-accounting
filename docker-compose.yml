@@ -30,24 +30,33 @@ services:
       - crafty-tls:/tls
 
   caddy:
-    image: caddy:2.11-alpine
+    # Caddy with the Cloudflare DNS module (for TLS_MODE=cloudflare).
+    build:
+      context: .
+      dockerfile: Dockerfile.caddy
+    image: crafty-caddy:latest
     container_name: crafty-caddy
     restart: unless-stopped
     depends_on:
       - crafty-accounting
+    # Each with a default: Caddy reads a variable that's set but empty as empty.
     environment:
       SITE_ADDRESS: ${SITE_ADDRESS:-localhost}
       SITE_IP: ${SITE_IP:-localhost}
-      TLS_ISSUER: ${TLS_ISSUER:-internal}
+      TLS_MODE: ${TLS_MODE:-internal}
+      DOMAIN: ${DOMAIN:-set-DOMAIN-in-env.invalid}
+      CLOUDFLARE_API_TOKEN: ${CLOUDFLARE_API_TOKEN:-}
+      ACME_CA: ${ACME_CA:-https://acme-v02.api.letsencrypt.org/directory}
       TLS_CUSTOM: ${TLS_CUSTOM:-}
-    # A certificate uploaded in Settings -> HTTPS Certificate is used, unless TLS_CUSTOM=off
-    # (see the Caddyfile). It's read on starting: docker compose restart caddy after a change.
+    # A certificate uploaded in Settings -> HTTPS Certificate is used for SITE_ADDRESS, unless
+    # TLS_CUSTOM=off (see the Caddyfile). It's read on starting: docker compose restart caddy
+    # after a change.
     command:
       - sh
       - -c
       - |
         if [ "$$(echo "$$TLS_CUSTOM" | tr A-Z a-z)" != off ] && [ -s /tls/cert.pem ] && [ -s /tls/key.pem ]; then
-          export TLS_ISSUER="/tls/cert.pem /tls/key.pem" CRAFTY_CA_HIDDEN=-not-in-use
+          export CRAFTY_SITE_TLS="/tls/cert.pem /tls/key.pem" CRAFTY_CA_HIDDEN=-not-in-use
         fi
         exec caddy run --config /etc/caddy/Caddyfile --adapter caddyfile
     ports:

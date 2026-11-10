@@ -1,0 +1,103 @@
+name: Caddy with Cloudflare DNS
+
+# The Caddy that install.sh downloads: CADDY_VERSION with the caddy-dns/cloudflare module
+# at CADDY_DNS_CLOUDFLARE (both read from install.sh), for Linux on Intel/AMD and ARM.
+# Published as a release tagged caddy-<version>-cloudflare-<module version>, with a SHA-512
+# checksums file laid out like Caddy's own. A release that already exists is downloaded
+# instead of built again. Either way the Caddyfile is checked in each TLS_MODE.
+
+on:
+  push:
+    branches: [main]
+    paths: [install.sh, Caddyfile, .github/workflows/caddy.yml]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  caddy:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Versions
+        id: v
+        run: |
+          caddy="$(sed -n 's/^CADDY_VERSION="\(.*\)"$/\1/p' install.sh)"
+          dns="$(sed -n 's/^CADDY_DNS_CLOUDFLARE="\(.*\)"$/\1/p' install.sh)"
+          [ -n "$caddy" ] && [ -n "$dns" ] || { echo "CADDY_VERSION or CADDY_DNS_CLOUDFLARE missing from install.sh"; exit 1; }
+          grep -q "caddy-dns/cloudflare@v$dns\$" Dockerfile.caddy || { echo "Dockerfile.caddy doesn't use caddy-dns/cloudflare v$dns"; exit 1; }
+          tag="caddy-$caddy-cloudflare-$dns"
+          exists=false
+          gh release view "$tag" >/dev/null 2>&1 && exists=true
+          echo "caddy=$caddy" >> "$GITHUB_OUTPUT"
+          echo "dns=$dns" >> "$GITHUB_OUTPUT"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "exists=$exists" >> "$GITHUB_OUTPUT"
+          echo "$tag (already released: $exists)"
+
+      - uses: actions/setup-go@v6
+        if: steps.v.outputs.exists == 'false'
+        with:
+          go-version: stable
+          cache: false
+
+      - name: Build
+        if: steps.v.outputs.exists == 'false'
+        env:
+          CADDY: ${{ steps.v.outputs.caddy }}
+          DNS: ${{ steps.v.outputs.dns }}
+        run: |
+          go install github.com/caddyserver/xcaddy/cmd/xcaddy@v0.4.7
+          mkdir -p dist
+          for arch in amd64 arm64; do
+            GOOS=linux GOARCH=$arch CGO_ENABLED=0 "$(go env GOPATH)/bin/xcaddy" build "v$CADDY" \
+              --with "github.com/caddy-dns/cloudflare@v$DNS" --output "dist/$arch/caddy"
+            tar -czf "dist/caddy_${CADDY}_linux_${arch}.tar.gz" -C "dist/$arch" caddy
+          done
+          (cd dist && sha512sum caddy_*.tar.gz > "caddy_${CADDY}_checksums.txt")
+
+      - name: Download the release
+        if: steps.v.outputs.exists == 'true'
+        env:
+          CADDY: ${{ steps.v.outputs.caddy }}
+          TAG: ${{ steps.v.outputs.tag }}
+        run: |
+          mkdir -p dist/amd64
+          gh release download "$TAG" --dir dist
+          (cd dist && sha512sum -c "caddy_${CADDY}_checksums.txt")
+          tar -xzf "dist/caddy_${CADDY}_linux_amd64.tar.gz" -C dist/amd64 caddy
+
+      - name: Check
+        env:
+          CADDY: ${{ steps.v.outputs.caddy }}
+        run: |
+          caddy=dist/amd64/caddy
+          $caddy version
+          $caddy version | grep -q "^v$CADDY\b"
+          $caddy list-modules | grep -qx dns.providers.cloudflare
+          for mode in internal letsencrypt cloudflare; do
+            echo "TLS_MODE=$mode"
+            TLS_MODE=$mode DOMAIN=books.example.co.uk SITE_ADDRESS="localhost, 192.168.1.50" SITE_IP=192.168.1.50 \
+              CLOUDFLARE_API_TOKEN=test $caddy adapt --config Caddyfile --adapter caddyfile > "adapted-$mode.json"
+          done
+          # Only the chosen mode serves DOMAIN, and only cloudflare uses the DNS challenge.
+          ! grep -q books.example.co.uk adapted-internal.json
+          grep -q books.example.co.uk adapted-letsencrypt.json
+          ! grep -q '"cloudflare"' adapted-letsencrypt.json
+          grep -q '"cloudflare"' adapted-cloudflare.json
+
+      - name: Release
+        if: steps.v.outputs.exists == 'false'
+        env:
+          CADDY: ${{ steps.v.outputs.caddy }}
+          DNS: ${{ steps.v.outputs.dns }}
+          TAG: ${{ steps.v.outputs.tag }}
+        run: |
+          gh release create "$TAG" dist/caddy_*.tar.gz dist/caddy_*_checksums.txt \
+            --target "$GITHUB_SHA" --latest=false \
+            --title "Caddy $CADDY with Cloudflare DNS $DNS" \
+            --notes "Caddy $CADDY built with github.com/caddy-dns/cloudflare v$DNS by xcaddy, for install.sh. Not a Crafty Accounting release."

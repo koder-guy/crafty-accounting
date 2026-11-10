@@ -108,7 +108,8 @@ SESSION_SECRET=$(od -An -N32 -tx1 /dev/urandom | tr -d ' \n')
 # README). If this computer's IP address changes, update SITE_ADDRESS.
 SITE_ADDRESS=$site
 SITE_IP=${LAN_IP:-localhost}
-TLS_ISSUER=internal
+# A certificate every browser already trusts for your own domain: see "HTTPS" in the README.
+TLS_MODE=internal
 HTTP_PORT=$http_port
 HTTPS_PORT=$https_port
 
@@ -135,6 +136,35 @@ EOF
         echo "Added SITE_IP=$site_ip, so browsing to https://$site_ip works."
       fi
     fi
+    # Up to 1.10.71 TLS_ISSUER was "internal", or an email address for Let's Encrypt with the
+    # domain in SITE_ADDRESS. SITE_ADDRESS is now always the private certificate's.
+    local issuer
+    issuer="$(env_value TLS_ISSUER)"
+    if [ -n "$issuer" ] && [ -z "$(env_value TLS_MODE)" ]; then
+      if [ "$issuer" = internal ]; then
+        set_env TLS_MODE internal
+      else
+        set_env TLS_MODE letsencrypt
+        set_env DOMAIN "$(env_value SITE_ADDRESS)"
+        set_env SITE_ADDRESS localhost
+        set_env SITE_IP localhost
+        echo "Moved $(env_value DOMAIN) from SITE_ADDRESS to DOMAIN, with TLS_MODE=letsencrypt (see \"HTTPS\" in the README)."
+      fi
+    fi
+    delete_env TLS_ISSUER
+    [ -n "$(env_value TLS_MODE)" ] || set_env TLS_MODE internal
+  fi
+  local TLS_MODE DOMAIN
+  TLS_MODE="$(env_value TLS_MODE)"; TLS_MODE="${TLS_MODE:-internal}"
+  DOMAIN=""
+  [ "$TLS_MODE" = internal ] || DOMAIN="$(env_value DOMAIN | tr -d ' ')"
+  case "$TLS_MODE" in
+    internal) ;;
+    letsencrypt | cloudflare) [ -n "$DOMAIN" ] || fail "TLS_MODE=$TLS_MODE needs DOMAIN in $ENV_FILE (see \"HTTPS\" in the README)." ;;
+    *) fail "TLS_MODE in $ENV_FILE must be internal, letsencrypt or cloudflare, not \"$TLS_MODE\"." ;;
+  esac
+  if [ "$TLS_MODE" = cloudflare ] && [ -z "$(env_value CLOUDFLARE_API_TOKEN)" ]; then
+    fail "TLS_MODE=cloudflare needs CLOUDFLARE_API_TOKEN in $ENV_FILE (see \"HTTPS\" in the README)."
   fi
   local HTTPS_PORT
   HTTPS_PORT="$(env_value HTTPS_PORT)"; HTTPS_PORT="${HTTPS_PORT:-443}"
@@ -160,13 +190,26 @@ EOF
   curl -fsSk "https://localhost:$HTTPS_PORT/api/health" >/dev/null 2>&1 \
     || fail "the app didn't answer on https://localhost:$HTTPS_PORT. See: cd $DIR && docker compose logs"
 
+  # The domain's certificate from Let's Encrypt.
+  local addr DOMAIN_OK=1
+  if [ -n "$DOMAIN" ]; then
+    printf "Waiting for Let's Encrypt (up to 3 minutes)"
+    for addr in $(printf '%s' "$DOMAIN" | tr ',' ' '); do
+      for i in $(seq 1 36); do
+        domain_cert_ok "$addr" && break
+        printf '.'; sleep 5
+      done
+      domain_cert_ok "$addr" || DOMAIN_OK=0
+    done
+    if [ "$DOMAIN_OK" = 1 ]; then printf ' done.\n'; else printf '\n'; fi
+  fi
+
   # Caddy's private certificate authority, for devices to trust, unless a certificate of
-  # your own is in use (uploaded in Settings → HTTPS Certificate).
+  # your own is in use for SITE_ADDRESS (uploaded in Settings → HTTPS Certificate).
   local CERT="" CUSTOM_CERT=""
   if [ "$(env_value TLS_CUSTOM | tr 'A-Z' 'a-z')" != off ] && compose exec -T caddy test -s /tls/cert.pem >/dev/null 2>&1; then
     CUSTOM_CERT=1
-  elif [ "$(env_value TLS_ISSUER)" = internal ] \
-    && compose cp caddy:/data/caddy/pki/authorities/local/root.crt "$DIR/crafty-root.crt" >/dev/null 2>&1; then
+  elif compose cp caddy:/data/caddy/pki/authorities/local/root.crt "$DIR/crafty-root.crt" >/dev/null 2>&1; then
     CERT="$DIR/crafty-root.crt"
   fi
 
@@ -175,7 +218,10 @@ EOF
   [ "$HTTPS_PORT" = 443 ] || port_suffix=":$HTTPS_PORT"
   printf '\n%s%sCrafty Accounting is running.%s\n\n' "$bold" "$green" "$reset"
   echo "Open it in a web browser:"
-  local addr label="On this computer:     "
+  for addr in $(printf '%s' "$DOMAIN" | tr ',' ' '); do
+    echo "  With your domain:       https://$addr$port_suffix"
+  done
+  local label="On this computer:     "
   for addr in $(env_value SITE_ADDRESS | tr ',' ' '); do
     echo "  $label  https://$addr$port_suffix"
     case "$label" in On*) label="Other devices at home:" ;; *) label="                      " ;; esac
@@ -190,6 +236,20 @@ EOF
   else
     echo "Sign in with your existing username and password."
   fi
+  if [ -n "$DOMAIN" ]; then
+    echo
+    if [ "$DOMAIN_OK" = 1 ]; then
+      echo "Your domain's certificate is from Let's Encrypt, which browsers already trust."
+    else
+      echo "${red}Your domain has no certificate from Let's Encrypt yet.${reset} What Caddy says:"
+      compose logs --no-color --tail 200 caddy 2>/dev/null | grep -Ei 'error|fail' | tail -n 5
+      echo "Check DOMAIN and CLOUDFLARE_API_TOKEN, and see: cd $DIR && $DOCKER_CMD compose logs caddy"
+    fi
+    if [ "$TLS_MODE" = cloudflare ]; then
+      echo "Cloudflare needs an A record for it (DNS only, the grey cloud) pointing at this"
+      echo "computer's address on your network (see \"HTTPS\" in the README)."
+    fi
+  fi
   if [ -n "$CUSTOM_CERT" ]; then
     echo
     echo "HTTPS uses the certificate uploaded in Settings → HTTPS Certificate. If browsers"
@@ -197,8 +257,13 @@ EOF
   fi
   if [ -n "$CERT" ]; then
     echo
-    echo "The certificate is private to this install, so browsers warn about it until"
-    echo "each device trusts it once. The certificate is $CERT"
+    if [ -n "$DOMAIN" ]; then
+      echo "The other addresses use a certificate private to this install, so browsers warn"
+      echo "about them until each device trusts it once. The certificate is $CERT"
+    else
+      echo "The certificate is private to this install, so browsers warn about it until"
+      echo "each device trusts it once. The certificate is $CERT"
+    fi
     if [ "$OS" = darwin ]; then
       echo "To trust it on this Mac (asks for your password):"
       echo "  sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain \"$CERT\""
@@ -282,6 +347,26 @@ other_address() {
 step() { printf '\n%s==> %s%s\n' "$bold" "$1" "$reset"; }
 fail() { printf '\n%sError: %s%s\n' "$red" "$1" "$reset" >&2; exit 1; }
 env_value() { sed -n "s/^$1=//p" "$DIR/.env" | tail -n 1; }
+# Sets KEY=VALUE in .env, replacing the line if it's there (keeping the file's permissions).
+set_env() {
+  local env_file="$DIR/.env"
+  if grep -q "^$1=" "$env_file"; then
+    awk -v k="$1" -v v="$2" 'index($0, k "=") == 1 { print k "=" v; next } { print }' "$env_file" > "$env_file.tmp"
+    cat "$env_file.tmp" > "$env_file" && rm -f "$env_file.tmp"
+  else
+    printf '%s=%s\n' "$1" "$2" >> "$env_file"
+  fi
+}
+delete_env() {
+  local env_file="$DIR/.env"
+  grep -q "^$1=" "$env_file" || return 0
+  grep -v "^$1=" "$env_file" > "$env_file.tmp"
+  cat "$env_file.tmp" > "$env_file" && rm -f "$env_file.tmp"
+}
+# Whether domain $1 answers on this computer with a certificate the system trusts.
+domain_cert_ok() {
+  curl -fsS --max-time 10 --resolve "$1:$HTTPS_PORT:127.0.0.1" "https://$1:$HTTPS_PORT/api/health" >/dev/null 2>&1
+}
 port_busy() { (exec 3<>"/dev/tcp/127.0.0.1/$1") 2>/dev/null; }
 compose() { $DOCKER_CMD compose "$@"; }
 

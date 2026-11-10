@@ -1,0 +1,8 @@
+# Caddy with the Cloudflare DNS module, so TLS_MODE=cloudflare can get Let's Encrypt
+# certificates without anything being reachable from the internet (see "HTTPS" in the
+# README). Keep the module's version in step with CADDY_DNS_CLOUDFLARE in install.sh.
+FROM caddy:2.11-builder-alpine AS builder
+RUN xcaddy build --with github.com/caddy-dns/cloudflare@v0.2.4
+
+FROM caddy:2.11-alpine
+COPY --from=builder /usr/bin/caddy /usr/bin/caddy
