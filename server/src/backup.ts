@@ -21,9 +21,9 @@ import { syncScansNotification } from './notifications';
 
 const REQUIRED_TABLES = ['schema_migrations', 'tax_years', 'settings', 'categories', 'incomes', 'expenses', 'expense_line_items', 'mtd_submissions'];
 const ALLOWED_STATEMENT = /^(CREATE TABLE |CREATE INDEX |CREATE UNIQUE INDEX |INSERT INTO )/;
-const INSTALL_TABLES = new Set(['users', 'hmrc_connections', 'ai_settings', 'square_settings', 'tls_certificate', 'notifications', 'notification_reads']);
+const INSTALL_TABLES = new Set(['users', 'hmrc_connections', 'ai_settings', 'square_settings', 'tls_certificate', 'tls_domain', 'notifications', 'notification_reads']);
 /** Install tables copied across a restore as they are (users are handled on their own). */
-const KEPT_TABLES = ['hmrc_connections', 'ai_settings', 'square_settings', 'tls_certificate', 'notifications', 'notification_reads'];
+const KEPT_TABLES = ['hmrc_connections', 'ai_settings', 'square_settings', 'tls_certificate', 'tls_domain', 'notifications', 'notification_reads'];
 const MAX_ZIP_BYTES = 4 * 1024 ** 3;
 
 const quoteIdent = (name: string) => `"${name.replace(/"/g, '""')}"`;

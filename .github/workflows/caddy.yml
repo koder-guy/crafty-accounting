@@ -4,7 +4,7 @@ name: Caddy with Cloudflare DNS
 # at CADDY_DNS_CLOUDFLARE (both read from install.sh), for Linux on Intel/AMD and ARM.
 # Published as a release tagged caddy-<version>-cloudflare-<module version>, with a SHA-512
 # checksums file laid out like Caddy's own. A release that already exists is downloaded
-# instead of built again. Either way the Caddyfile is checked in each TLS_MODE.
+# instead of built again. Either way the Caddyfile is checked, with and without a domain.
 
 on:
   push:
@@ -79,16 +79,16 @@ jobs:
           $caddy version
           $caddy version | grep -q "^v$CADDY\b"
           $caddy list-modules | grep -qx dns.providers.cloudflare
-          for mode in internal letsencrypt cloudflare; do
-            echo "TLS_MODE=$mode"
-            TLS_MODE=$mode DOMAIN=books.example.co.uk SITE_ADDRESS="localhost, 192.168.1.50" SITE_IP=192.168.1.50 \
-              CLOUDFLARE_API_TOKEN=test $caddy adapt --config Caddyfile --adapter caddyfile > "adapted-$mode.json"
+          # Without a domain, and with the site block the app writes for one on Cloudflare.
+          mkdir -p tls-none tls-domain
+          printf 'books.example.co.uk {\n\ttls {\n\t\tdns cloudflare Abcdefghijklmnopqrstuvwxyz0123456789_-AB\n\t\tresolvers 1.1.1.1 1.0.0.1\n\t}\n\timport app\n}\n' > tls-domain/domain.caddy
+          for dir in tls-none tls-domain; do
+            CRAFTY_TLS_DIR=$PWD/$dir SITE_ADDRESS="localhost, 192.168.1.50" SITE_IP=192.168.1.50 \
+              $caddy adapt --config Caddyfile --adapter caddyfile > "adapted-$dir.json"
           done
-          # Only the chosen mode serves DOMAIN, and only cloudflare uses the DNS challenge.
-          ! grep -q books.example.co.uk adapted-internal.json
-          grep -q books.example.co.uk adapted-letsencrypt.json
-          ! grep -q '"cloudflare"' adapted-letsencrypt.json
-          grep -q '"cloudflare"' adapted-cloudflare.json
+          ! grep -q books.example.co.uk adapted-tls-none.json
+          grep -q books.example.co.uk adapted-tls-domain.json
+          grep -q '"cloudflare"' adapted-tls-domain.json
 
       - name: Release
         if: steps.v.outputs.exists == 'false'

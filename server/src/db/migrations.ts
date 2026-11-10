@@ -482,6 +482,26 @@ ALTER TABLE ai_settings ADD COLUMN gemini_key_added_at TEXT;
 ALTER TABLE ai_settings ADD COLUMN gemini_model TEXT;
 `,
   },
+  // A domain on Cloudflare that Caddy gets a Let's Encrypt certificate for (Settings → HTTPS
+  // Certificate), with the API token Caddy uses for Cloudflare's DNS. `dns_record_id` is the
+  // A/AAAA record the app made pointing the domain at this server, removed with the domain.
+  // Install-level like tls_certificate: left out of backups, kept through a restore or reset.
+  {
+    version: 28,
+    sql: `
+CREATE TABLE tls_domain (
+  id INTEGER PRIMARY KEY CHECK (id = 1),
+  domain TEXT NOT NULL,
+  zone_id TEXT NOT NULL,
+  zone_name TEXT NOT NULL,
+  api_token TEXT NOT NULL,
+  dns_record_id TEXT,
+  pointed_at TEXT,
+  added_by TEXT NOT NULL,
+  added_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+);
+`,
+  },
 ];
 
 export const CURRENT_SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;

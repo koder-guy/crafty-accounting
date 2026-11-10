@@ -5,6 +5,7 @@ import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { Alert, Badge, Button, Card, CardHeader, Field, Spinner } from '../../components/ui';
 import { useCanEdit, useTls, useTlsMutations } from '../../lib/queries';
 import { SettingsHeading } from './SettingsLayout';
+import { TlsDomainCard } from './TlsDomainCard';
 
 const date = (iso: string) => formatDisplayDate(iso.slice(0, 10));
 
@@ -172,14 +173,14 @@ function CertificateCard({ status, canEdit }: { status: TlsStatus; canEdit: bool
 
   return (
     <Card>
-      <CardHeader icon={<FileKey className="size-5 text-accent-soft" />} title="Certificate" action={badge} />
+      <CardHeader icon={<FileKey className="size-5 text-accent-soft" />} title="Your own certificate" action={badge} />
       <div className="space-y-5 px-5 pb-6 sm:px-6">
         {cert ? (
           <Details cert={cert} />
         ) : (
           <p className="text-sm text-muted">
             None uploaded, so the addresses in <code className="font-mono text-ink">SITE_ADDRESS</code> use Caddy's own private certificate, which each device
-            has to trust. A domain of your own set with <code className="font-mono text-ink">DOMAIN</code> gets one from Let's Encrypt instead.
+            has to trust once. Upload one from your organisation or a certificate authority to use instead.
           </p>
         )}
 
@@ -255,7 +256,7 @@ export function TlsSettings() {
     <div className="space-y-6">
       <SettingsHeading
         title="HTTPS Certificate"
-        description="Serve the app with a certificate of your own, such as one from your organisation or a certificate authority, instead of Caddy's."
+        description="Serve the app with a certificate browsers already trust: one of your own, or one from Let's Encrypt for a domain on Cloudflare."
       />
       {isLoading ? (
         <Spinner />
@@ -265,12 +266,15 @@ export function TlsSettings() {
         <Card>
           <CardHeader icon={<LockKeyhole className="size-5 text-accent-soft" />} title="Not available on this install" />
           <p className="px-5 pb-6 text-sm text-muted sm:px-6">
-            A certificate can be uploaded here on the Linux quick install and the Docker install, which serve HTTPS through Caddy. This copy of the app isn't run
+            Certificates can be set up here on the Linux quick install and the Docker install, which serve HTTPS through Caddy. This copy of the app isn't run
             by either, so set up HTTPS wherever it's served from.
           </p>
         </Card>
       ) : (
-        <CertificateCard status={status} canEdit={canEdit} />
+        <>
+          <TlsDomainCard status={status} canEdit={canEdit} />
+          <CertificateCard status={status} canEdit={canEdit} />
+        </>
       )}
     </div>
   );

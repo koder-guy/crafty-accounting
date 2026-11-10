@@ -6,16 +6,9 @@
 #                 Settings → HTTPS Certificate.
 #   SITE_IP       the IP address in SITE_ADDRESS that browsers use, if any
 #   TLS_CUSTOM    "off" to ignore a certificate uploaded in Settings → HTTPS Certificate
-#   TLS_MODE      how DOMAIN gets a certificate every browser already trusts:
-#                   internal      no DOMAIN, only SITE_ADDRESS (the default)
-#                   letsencrypt   Let's Encrypt, checked over the internet (ports 80 and
-#                                 443 forwarded to this server)
-#                   cloudflare    Let's Encrypt, checked through Cloudflare's DNS with
-#                                 CLOUDFLARE_API_TOKEN; nothing needs to be reachable
-#   DOMAIN        your own domain name(s), comma separated, e.g. "books.example.co.uk"
-#   CLOUDFLARE_API_TOKEN  for cloudflare: a token allowed to edit that zone's DNS
-#   ACME_CA       optional: another certificate authority's ACME address, such as Let's
-#                 Encrypt's staging one for trying it out
+# A domain on Cloudflare, set up in Settings → HTTPS Certificate, gets a Let's Encrypt
+# certificate: the app writes its site block (domain.caddy, holding the API token) to the
+# folder it shares with Caddy, CRAFTY_TLS_DIR, imported below.
 # With an uploaded certificate, what starts Caddy (crafty caddy, or the Docker command) sets
 # CRAFTY_SITE_TLS to "<cert.pem> <key.pem>", so "tls" serves those files for SITE_ADDRESS, and
 # sets CRAFTY_CA_HIDDEN so /crafty-root.crt (the private authority, not in use then) is missing.
@@ -25,8 +18,8 @@
 # through Docker's port mapping), CRAFTY_OTHER_ADDRESSES (the catch-all below, with
 # the HTTPS port), CRAFTY_UPSTREAM (the app on this computer), and CRAFTY_ENV_PLACE and
 # CRAFTY_APPLY (where .env is and how to apply a change). Off port 443 it gives each
-# address in SITE_ADDRESS and DOMAIN the port; https_port stays 443, as Caddy only puts
-# the port in its http->https redirect when it differs from https_port.
+# address in SITE_ADDRESS the port, as the app does for a domain; https_port stays 443, as
+# Caddy only puts the port in its http->https redirect when it differs from https_port.
 #
 # Caddy here is built with the caddy-dns/cloudflare module (Dockerfile.caddy, and the
 # "Caddy with Cloudflare DNS" workflow for the quick install).
@@ -74,33 +67,8 @@
 	import app
 }
 
-# DOMAIN, by TLS_MODE. Only the chosen one is read, so DOMAIN can be unset for internal.
-(domain_internal) {
-}
-
-(domain_letsencrypt) {
-	{$DOMAIN:set-DOMAIN-in-env.invalid} {
-		tls {
-			ca {$ACME_CA:https://acme-v02.api.letsencrypt.org/directory}
-		}
-		import app
-	}
-}
-
-(domain_cloudflare) {
-	{$DOMAIN:set-DOMAIN-in-env.invalid} {
-		tls {
-			ca {$ACME_CA:https://acme-v02.api.letsencrypt.org/directory}
-			dns cloudflare {env.CLOUDFLARE_API_TOKEN}
-			# Asked whether the challenge record is out yet: a home network's own DNS may
-			# answer for the domain itself, or block it.
-			resolvers 1.1.1.1 1.0.0.1
-		}
-		import app
-	}
-}
-
-import domain_{$TLS_MODE:internal}
+# A domain on Cloudflare (Settings → HTTPS Certificate), when one is set up; nothing otherwise.
+import {$CRAFTY_TLS_DIR:/tls}/*.caddy
 
 # Any other address would otherwise get an empty page, which looks like a broken app.
 {$CRAFTY_OTHER_ADDRESSES:https://} {

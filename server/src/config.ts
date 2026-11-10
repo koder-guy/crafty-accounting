@@ -1,7 +1,9 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import net from 'node:net';
 import type { HmrcEnvironment, InstallKind, TlsSetup } from '@crafty/shared';
+import { siteHost } from './tlsCertificate';
 
 export interface Config {
   dataDir: string;
@@ -45,7 +47,17 @@ export interface Config {
     disabled: boolean;
     /** SITE_ADDRESS, the addresses Caddy serves, to check the certificate covers them. */
     siteAddresses: string[];
+    /** This server's address on the network (SITE_IP, else the first IP in SITE_ADDRESS), to point a domain at. */
+    serverIp: string | null;
+    /** The port a domain on Cloudflare is served on, when it isn't 443 (the quick install's HTTPS_PORT). */
+    domainPort: number | null;
+    /** Where Caddy answers HTTPS, to see which certificate it serves for the domain. */
+    caddyAddress: { host: string; port: number } | null;
+    /** Another ACME certificate authority than Let's Encrypt, such as its staging one (ACME_CA). */
+    acmeCa: string | null;
   };
+  /** Sends Cloudflare's API calls here instead (CLOUDFLARE_API_URL), to try a domain against a stand-in. For development only. */
+  cloudflareApiUrl: string | null;
 }
 
 const truthy = (value: string | undefined) => value === 'true' || value === '1';
@@ -79,6 +91,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     squareApiUrl: env.SQUARE_API_URL?.trim().replace(/\/$/, '') || null,
     updates,
     tls: tlsConfig(env, updates),
+    cloudflareApiUrl: env.CLOUDFLARE_API_URL?.trim().replace(/\/$/, '') || null,
   };
 }
 
@@ -91,13 +104,28 @@ function tlsConfig(env: NodeJS.ProcessEnv, updates: { install: InstallKind; inst
   const siteAddresses = (env.SITE_ADDRESS ?? '').split(',').map((a) => a.trim()).filter(Boolean);
   const disabled = env.TLS_CUSTOM?.trim().toLowerCase() === 'off';
   const fromEnv = env.CRAFTY_TLS_DIR?.trim() || null;
+  const ips = [env.SITE_IP?.trim() ?? '', ...siteAddresses.map(siteHost)].filter((a) => net.isIP(a) && !a.startsWith('127.') && a !== '::1');
+  const httpsPort = Number(env.HTTPS_PORT) || 443;
+  const shared = { disabled, siteAddresses, serverIp: ips[0] ?? null, acmeCa: env.ACME_CA?.trim() || null };
+  // CRAFTY_CADDY_ADDRESS (host:port) says where Caddy answers, for installs other than these two.
+  const caddyFromEnv = /^(.+):(\d+)$/.exec(env.CRAFTY_CADDY_ADDRESS?.trim() ?? '');
+  const caddyAddress = caddyFromEnv ? { host: caddyFromEnv[1], port: Number(caddyFromEnv[2]) } : null;
   if (updates.install === 'native' && updates.installDir) {
-    return { dir: fromEnv ?? path.join(updates.installDir, 'caddy', 'custom'), setup: 'restarts-itself', restartCommand: null, disabled, siteAddresses };
+    return {
+      ...shared,
+      dir: fromEnv ?? path.join(updates.installDir, 'caddy', 'custom'),
+      setup: 'restarts-itself',
+      restartCommand: null,
+      domainPort: httpsPort === 443 ? null : httpsPort,
+      caddyAddress: caddyAddress ?? { host: '127.0.0.1', port: httpsPort },
+    };
   }
-  if (!fromEnv) return { dir: null, setup: 'unavailable', restartCommand: null, disabled, siteAddresses };
+  if (!fromEnv) return { ...shared, dir: null, setup: 'unavailable', restartCommand: null, domainPort: null, caddyAddress };
   const restartCommand =
     updates.install === 'docker' ? `${updates.installDir ? `cd ${updates.installDir} && ` : ''}docker compose restart caddy` : env.CRAFTY_TLS_RESTART?.trim() || null;
-  return { dir: path.resolve(fromEnv), setup: 'restart-command', restartCommand, disabled, siteAddresses };
+  // In Docker, Caddy listens on 443 inside its container, whichever port the host maps to it.
+  const docker = updates.install === 'docker' ? { host: 'caddy', port: 443 } : null;
+  return { ...shared, dir: path.resolve(fromEnv), setup: 'restart-command', restartCommand, domainPort: null, caddyAddress: caddyAddress ?? docker };
 }
 
 /**

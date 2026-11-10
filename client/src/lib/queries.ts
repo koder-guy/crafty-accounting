@@ -29,6 +29,8 @@ import type {
   SquareSettingsInput,
   SquareStatus,
   TlsChangeResult,
+  TlsDomainCertificate,
+  TlsDomainRequest,
   TlsStatus,
   Scan,
   ScanList,
@@ -344,6 +346,31 @@ export function useTlsMutations() {
       onSuccess,
     }),
     remove: useMutation({ mutationFn: () => api.delete<TlsChangeResult>('/tls'), onSuccess }),
+  };
+}
+
+/** What Caddy serves for the domain on Cloudflare: asked again every few seconds until Let's Encrypt's certificate is in place. */
+export const useTlsDomainCertificate = (enabled: boolean) =>
+  useQuery({
+    queryKey: ['tls', 'domain-certificate'],
+    queryFn: () => api.get<TlsDomainCertificate>('/tls/domain/certificate'),
+    enabled,
+    refetchInterval: (query) => {
+      const data = query.state.data;
+      return data?.state === 'issued' && data.trusted ? false : 5000;
+    },
+  });
+
+export function useTlsDomainMutations() {
+  const qc = useQueryClient();
+  // Caddy restarts to change over, but the page's own address keeps its certificate, so no reload.
+  const onSuccess = (result: TlsChangeResult) => {
+    qc.setQueryData(['tls'], result);
+    void qc.invalidateQueries({ queryKey: ['tls', 'domain-certificate'] });
+  };
+  return {
+    save: useMutation({ mutationFn: (request: TlsDomainRequest) => api.put<TlsChangeResult>('/tls/domain', request), onSuccess }),
+    remove: useMutation({ mutationFn: () => api.delete<TlsChangeResult>('/tls/domain'), onSuccess }),
   };
 }
 

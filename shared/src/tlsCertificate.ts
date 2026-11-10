@@ -1,5 +1,6 @@
 // Settings → HTTPS Certificate: a certificate and private key of the owner's own, uploaded as a
-// .pfx/.p12 file, which Caddy serves instead of its own private certificate or Let's Encrypt's.
+// .pfx/.p12 file, which Caddy serves for SITE_ADDRESS instead of its own private certificate; and
+// a domain whose DNS is on Cloudflare, for which Caddy gets a Let's Encrypt certificate.
 
 /** Largest .pfx/.p12 file accepted; real ones are a few kilobytes. */
 export const MAX_PFX_BYTES = 1024 * 1024;
@@ -38,6 +39,19 @@ export interface TlsCertificateInfo {
   addedAt: string;
 }
 
+/** A domain on Cloudflare that Caddy gets a Let's Encrypt certificate for, by Cloudflare's DNS. */
+export interface TlsDomainInfo {
+  domain: string;
+  /** The Cloudflare zone it's in, such as example.co.uk. */
+  zone: string;
+  /** The start and end of the API token; it's never sent back whole. */
+  tokenHint: string;
+  /** The address the app pointed the domain at in Cloudflare, when it made that record. */
+  pointedAt: string | null;
+  addedBy: string;
+  addedAt: string;
+}
+
 export interface TlsStatus {
   setup: TlsSetup;
   /** For `restart-command`: what to run where the install lives. */
@@ -45,11 +59,46 @@ export interface TlsStatus {
   /** TLS_CUSTOM=off in .env: the saved certificate is ignored. */
   disabled: boolean;
   certificate: TlsCertificateInfo | null;
+  domain: TlsDomainInfo | null;
+  /** This server's address on the network (SITE_IP, or the first IP in SITE_ADDRESS), to point a domain at. */
+  serverIp: string | null;
 }
+
+/** Setting up a domain on Cloudflare. */
+export interface TlsDomainRequest {
+  domain: string;
+  /** Leave out to keep the saved token. */
+  token?: string;
+  /** An IP address to point the domain at with a DNS-only record, or null to leave its DNS alone. */
+  pointAt: string | null;
+}
+
+/** What Caddy serves for the domain just now. */
+export type TlsDomainCertificate =
+  | { state: 'none' }
+  /** Caddy answers, but has no certificate for the domain yet. */
+  | { state: 'waiting' }
+  /** `trusted`: by the server's own list of authorities, as browsers would (Let's Encrypt's staging ones aren't). */
+  | { state: 'issued'; issuer: string; validFrom: string; validTo: string; trusted: boolean }
+  | { state: 'unreachable'; message: string };
+
+/** A domain name such as books.example.co.uk: letters, digits and hyphens, in two or more parts, not an IP address. */
+export function isDomainName(value: string): boolean {
+  return (
+    value.length <= 253 &&
+    /^(?!-)[a-z0-9-]{1,63}(?<!-)(\.(?!-)[a-z0-9-]{1,63}(?<!-))+$/.test(value) &&
+    /[a-z]/.test(value.slice(value.lastIndexOf('.') + 1))
+  );
+}
+
+/** Cloudflare API tokens are 40 letters, digits, hyphens and underscores; anything else is a slip when pasting. */
+export const isCloudflareToken = (value: string) => /^[A-Za-z0-9_-]{30,80}$/.test(value);
 
 /** After uploading or removing: whether Caddy is restarting by itself, so the page should reload. */
 export interface TlsChangeResult extends TlsStatus {
   restarting: boolean;
+  /** Something that didn't work but didn't stop the change, such as a DNS record left in Cloudflare. */
+  warning?: string | null;
 }
 
 /** Whole days from `now` until `date` (negative once it's passed). */

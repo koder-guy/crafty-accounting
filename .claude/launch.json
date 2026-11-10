@@ -57,6 +57,20 @@
       "autoPort": false
     },
     {
+      "name": "api-check-cloudflare",
+      "runtimeExecutable": "/bin/sh",
+      "runtimeArgs": ["-c", "cd server && D=$(mktemp -d) && PATH=/opt/homebrew/opt/node@22/bin:$PATH PORT=3102 DATA_DIR=$D ADMIN_NAME=Admin ADMIN_PASSWORD=check-password SESSION_SECRET=check-secret CRAFTY_TLS_DIR=$D/caddy-custom CRAFTY_TLS_RESTART='docker compose restart caddy' CRAFTY_CADDY_ADDRESS=127.0.0.1:3197 CLOUDFLARE_API_URL=http://localhost:3198 SITE_ADDRESS='localhost, crafty.local, 192.168.1.50' SITE_IP=192.168.1.50 npx tsx src/index.ts"],
+      "port": 3102,
+      "autoPort": false
+    },
+    {
+      "name": "fake-cloudflare",
+      "runtimeExecutable": "/bin/sh",
+      "runtimeArgs": ["-c", "PATH=/opt/homebrew/opt/node@22/bin:$PATH node server/dev/fake-cloudflare.mjs"],
+      "port": 3198,
+      "autoPort": false
+    },
+    {
       "name": "api-check-alt",
       "runtimeExecutable": "/bin/sh",
       "runtimeArgs": ["-c", "cd server && PATH=/opt/homebrew/opt/node@22/bin:$PATH PORT=3103 DATA_DIR=$(mktemp -d) ADMIN_NAME=Admin ADMIN_PASSWORD=check-password SESSION_SECRET=check-secret npx tsx src/index.ts"],

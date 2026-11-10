@@ -14,6 +14,7 @@ import type { TlsCertificateInfo, TlsStatus } from '@crafty/shared';
 import type { AppContext } from './context';
 import type { Db } from './db';
 import { HttpError } from './http';
+import { DOMAIN_FILE, domainCaddyfile, savedDomain, savedDomainRow } from './tlsDomain';
 
 export const CERT_FILE = 'cert.pem';
 export const KEY_FILE = 'key.pem';
@@ -167,8 +168,8 @@ export function savedCertificate(ctx: AppContext): TlsCertificateInfo | null {
 }
 
 export function tlsStatus(ctx: AppContext): TlsStatus {
-  const { setup, restartCommand, disabled } = ctx.config.tls;
-  return { setup, restartCommand, disabled, certificate: savedCertificate(ctx) };
+  const { setup, restartCommand, disabled, serverIp } = ctx.config.tls;
+  return { setup, restartCommand, disabled, certificate: savedCertificate(ctx), domain: savedDomain(ctx), serverIp };
 }
 
 /** Saves a certificate (replacing any before) and writes it out for Caddy; on failure, the one before stays. */
@@ -200,29 +201,33 @@ export function removeCertificate(ctx: AppContext): void {
 }
 
 /**
- * Brings Caddy's folder in step with the database: the saved certificate's files, or none.
- * Each file is written beside the old one and moved into place, so Caddy never reads half of one.
+ * Brings Caddy's folder in step with the database: the saved certificate's files and the
+ * Cloudflare domain's site block (which holds its API token), or none. Each file is written
+ * beside the old one and moved into place, so Caddy never reads half of one.
  */
 export function writeTlsFiles(ctx: AppContext): void {
   const dir = ctx.config.tls.dir;
   if (!dir) return;
   const row = savedRow(ctx.db);
+  const domain = savedDomainRow(ctx.db);
+  const files: [string, string | null][] = [
+    [CERT_FILE, row?.cert_pem ?? null],
+    [KEY_FILE, row?.key_pem ?? null],
+    [DOMAIN_FILE, domain ? domainCaddyfile(ctx, domain) : null],
+  ];
   try {
-    if (!row) {
-      for (const name of [CERT_FILE, KEY_FILE]) fs.rmSync(path.join(dir, name), { force: true });
-      return;
-    }
-    fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
-    for (const [name, content] of [
-      [CERT_FILE, row.cert_pem],
-      [KEY_FILE, row.key_pem],
-    ] as const) {
+    if (files.some(([, content]) => content !== null)) fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
+    for (const [name, content] of files) {
       const file = path.join(dir, name);
+      if (content === null) {
+        fs.rmSync(file, { force: true });
+        continue;
+      }
       fs.writeFileSync(`${file}.new`, content, { mode: 0o600 });
       fs.renameSync(`${file}.new`, file);
     }
   } catch (err) {
-    throw new HttpError(500, `The certificate couldn't be written to ${dir} for Caddy: ${(err as Error).message}`);
+    throw new HttpError(500, `The HTTPS settings couldn't be written to ${dir} for Caddy: ${(err as Error).message}`);
   }
 }
 

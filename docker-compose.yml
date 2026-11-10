@@ -30,7 +30,7 @@ services:
       - crafty-tls:/tls
 
   caddy:
-    # Caddy with the Cloudflare DNS module (for TLS_MODE=cloudflare).
+    # Caddy with the Cloudflare DNS module, for a domain on Cloudflare (Settings -> HTTPS Certificate).
     build:
       context: .
       dockerfile: Dockerfile.caddy
@@ -43,14 +43,10 @@ services:
     environment:
       SITE_ADDRESS: ${SITE_ADDRESS:-localhost}
       SITE_IP: ${SITE_IP:-localhost}
-      TLS_MODE: ${TLS_MODE:-internal}
-      DOMAIN: ${DOMAIN:-set-DOMAIN-in-env.invalid}
-      CLOUDFLARE_API_TOKEN: ${CLOUDFLARE_API_TOKEN:-}
-      ACME_CA: ${ACME_CA:-https://acme-v02.api.letsencrypt.org/directory}
       TLS_CUSTOM: ${TLS_CUSTOM:-}
     # A certificate uploaded in Settings -> HTTPS Certificate is used for SITE_ADDRESS, unless
-    # TLS_CUSTOM=off (see the Caddyfile). It's read on starting: docker compose restart caddy
-    # after a change.
+    # TLS_CUSTOM=off, and a domain set up there is imported from /tls (see the Caddyfile). Both
+    # are read on starting: docker compose restart caddy after a change.
     command:
       - sh
       - -c
