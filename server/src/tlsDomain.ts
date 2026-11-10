@@ -1,11 +1,10 @@
 // Settings → HTTPS Certificate: a domain whose DNS is on Cloudflare, for which Caddy gets a Let's
 // Encrypt certificate by the DNS challenge, so nothing has to be reachable from the internet.
-// The app checks the API token with Cloudflare, can point the domain at this server (a DNS-only
-// A or AAAA record it made, removed again with the domain), and keeps both in tls_domain. Caddy
+// The app checks the API token and the domain's zone with Cloudflare and keeps both in tls_domain;
+// pointing the domain at this server is left to the person, in Cloudflare. Caddy
 // can't read the database, so writeTlsFiles writes a site block for the domain (DOMAIN_FILE) to
 // the folder the Caddyfile imports *.caddy from. Calls go through ctx.fetch, which tests replace.
 import crypto from 'node:crypto';
-import net from 'node:net';
 import tls from 'node:tls';
 import { apiKeyHint, isCloudflareToken, isDomainName, type TlsDomainCertificate, type TlsDomainInfo, type TlsDomainRequest } from '@crafty/shared';
 import type { AppContext } from './context';
@@ -20,8 +19,6 @@ interface Row {
   zone_id: string;
   zone_name: string;
   api_token: string;
-  dns_record_id: string | null;
-  pointed_at: string | null;
   added_by: string;
   added_at: string;
 }
@@ -35,7 +32,6 @@ export function savedDomain(ctx: AppContext): TlsDomainInfo | null {
     domain: row.domain,
     zone: row.zone_name,
     tokenHint: apiKeyHint(row.api_token),
-    pointedAt: row.pointed_at,
     addedBy: row.added_by,
     addedAt: row.added_at,
   };
@@ -47,13 +43,12 @@ interface CloudflareReply<T> {
   result?: T;
 }
 
-async function callCloudflare<T>(ctx: AppContext, token: string, method: string, path: string, body?: object): Promise<T> {
+async function callCloudflare<T>(ctx: AppContext, token: string, method: string, path: string): Promise<T> {
   let res: Response;
   try {
     res = await ctx.fetch(`${ctx.config.cloudflareApiUrl ?? API}${path}`, {
       method,
-      headers: { Authorization: `Bearer ${token}`, Accept: 'application/json', ...(body ? { 'Content-Type': 'application/json' } : {}) },
-      body: body ? JSON.stringify(body) : undefined,
+      headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
       signal: AbortSignal.timeout(30_000),
     });
   } catch {
@@ -90,66 +85,8 @@ async function findZone(ctx: AppContext, token: string, domain: string): Promise
   );
 }
 
-interface DnsRecord {
-  id: string;
-  type: string;
-  name: string;
-  content: string;
-  proxied?: boolean;
-}
-
-/**
- * Points the domain at `ip` with a DNS-only record, unless it already does. Returns the id of the
- * record if it's one made here (`ours`, the one made before, is changed rather than made again; null
- * when the person's own record already points there), and refuses to change one pointing elsewhere.
- */
-async function pointDomain(ctx: AppContext, token: string, zone: Zone, domain: string, ip: string, ours: string | null): Promise<string | null> {
-  const type = net.isIPv6(ip) ? 'AAAA' : 'A';
-  const records = await callCloudflare<DnsRecord[]>(ctx, token, 'GET', `/zones/${zone.id}/dns_records?name=${encodeURIComponent(domain)}`);
-  const existing = (records ?? []).filter((r) => ['A', 'AAAA', 'CNAME'].includes(r.type));
-  const same = existing.find((r) => r.type === type && r.content === ip);
-  if (same?.proxied) {
-    throw new HttpError(
-      409,
-      `${domain} is proxied by Cloudflare (the orange cloud), which can't reach a server on your network. Set it to DNS only in Cloudflare and try again.`,
-    );
-  }
-  if (same) return same.id === ours ? ours : null;
-  const mine = existing.find((r) => r.id === ours);
-  if (mine && existing.length === 1) {
-    await callCloudflare(ctx, token, 'PATCH', `/zones/${zone.id}/dns_records/${mine.id}`, { type, content: ip, proxied: false });
-    return mine.id;
-  }
-  if (existing.length) {
-    throw new HttpError(
-      409,
-      `${domain} already points at ${existing.map((r) => r.content).join(' and ')} in Cloudflare. Change it there, or untick pointing it at this server to leave it as it is.`,
-    );
-  }
-  const made = await callCloudflare<DnsRecord>(ctx, token, 'POST', `/zones/${zone.id}/dns_records`, {
-    type,
-    name: domain,
-    content: ip,
-    ttl: 1,
-    proxied: false,
-    comment: 'Crafty Accounting (Settings → HTTPS Certificate)',
-  });
-  return made.id;
-}
-
-/** Removes a record made here; a failure only matters as a warning, as the domain goes either way. */
-async function removeRecord(ctx: AppContext, row: Row): Promise<string | null> {
-  if (!row.dns_record_id) return null;
-  try {
-    await callCloudflare(ctx, row.api_token, 'DELETE', `/zones/${row.zone_id}/dns_records/${row.dns_record_id}`);
-    return null;
-  } catch (err) {
-    return `The DNS record for ${row.domain} couldn't be removed from Cloudflare (${(err as Error).message}). Remove it there if it's no longer wanted.`;
-  }
-}
-
-/** Checks the request with Cloudflare, points the domain at this server if asked, and saves it. Returns any warning. */
-export async function saveDomain(ctx: AppContext, request: TlsDomainRequest, by: string): Promise<string | null> {
+/** Checks the request with Cloudflare and saves it. */
+export async function saveDomain(ctx: AppContext, request: TlsDomainRequest, by: string): Promise<void> {
   const domain = request.domain.trim().toLowerCase().replace(/\.$/, '');
   if (!isDomainName(domain)) throw new HttpError(400, `"${request.domain}" isn't a domain name, such as books.example.co.uk.`);
   if (ctx.config.tls.siteAddresses.some((a) => a.replace(/^[a-z]+:\/\//i, '').replace(/:\d+$/, '').toLowerCase() === domain)) {
@@ -159,31 +96,17 @@ export async function saveDomain(ctx: AppContext, request: TlsDomainRequest, by:
   const token = request.token?.trim() || before?.api_token;
   if (!token) throw new HttpError(400, 'Enter the Cloudflare API token.');
   if (!isCloudflareToken(token)) throw new HttpError(400, "That doesn't look like a Cloudflare API token, which is 40 letters, digits, hyphens and underscores.");
-  const pointAt = request.pointAt?.trim() || null;
-  if (pointAt && (!net.isIP(pointAt) || pointAt.startsWith('127.') || pointAt === '::1')) {
-    throw new HttpError(400, `"${pointAt}" isn't this server's address on your network, such as 192.168.1.50.`);
-  }
 
   const zone = await findZone(ctx, token, domain);
-  // Also checks the token can read the zone's DNS, which Caddy needs along with editing it.
-  let recordId: string | null = null;
-  if (pointAt) {
-    const ours = before?.domain === domain && before.zone_id === zone.id ? before.dns_record_id : null;
-    recordId = await pointDomain(ctx, token, zone, domain, pointAt, ours);
-  } else {
-    await callCloudflare(ctx, token, 'GET', `/zones/${zone.id}/dns_records?name=${encodeURIComponent(domain)}`);
-  }
-
-  const warning = before && before.dns_record_id && before.dns_record_id !== recordId ? await removeRecord(ctx, before) : null;
+  // Reading the zone's DNS records checks the token can get at them, which Caddy needs along with editing them.
+  await callCloudflare(ctx, token, 'GET', `/zones/${zone.id}/dns_records?name=${encodeURIComponent(domain)}`);
   ctx.db
     .prepare(
-      `INSERT INTO tls_domain (id, domain, zone_id, zone_name, api_token, dns_record_id, pointed_at, added_by) VALUES (1, ?, ?, ?, ?, ?, ?, ?)
+      `INSERT INTO tls_domain (id, domain, zone_id, zone_name, api_token, added_by) VALUES (1, ?, ?, ?, ?, ?)
        ON CONFLICT (id) DO UPDATE SET domain = excluded.domain, zone_id = excluded.zone_id, zone_name = excluded.zone_name,
-         api_token = excluded.api_token, dns_record_id = excluded.dns_record_id, pointed_at = excluded.pointed_at,
-         added_by = excluded.added_by, added_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')`,
+         api_token = excluded.api_token, added_by = excluded.added_by, added_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')`,
     )
-    .run(domain, zone.id, zone.name, token, recordId, recordId ? pointAt : null, by);
-  return warning;
+    .run(domain, zone.id, zone.name, token, by);
 }
 
 /** Puts back the domain saved before a change that couldn't be written out for Caddy. */
@@ -191,18 +114,14 @@ export function restoreDomain(db: Db, row: Row | undefined): void {
   db.prepare('DELETE FROM tls_domain').run();
   if (!row) return;
   db.prepare(
-    `INSERT INTO tls_domain (id, domain, zone_id, zone_name, api_token, dns_record_id, pointed_at, added_by, added_at)
-     VALUES (1, @domain, @zone_id, @zone_name, @api_token, @dns_record_id, @pointed_at, @added_by, @added_at)`,
+    `INSERT INTO tls_domain (id, domain, zone_id, zone_name, api_token, added_by, added_at)
+     VALUES (1, @domain, @zone_id, @zone_name, @api_token, @added_by, @added_at)`,
   ).run(row);
 }
 
-/** Forgets the domain, removing the DNS record made for it. Returns any warning. */
-export async function removeDomain(ctx: AppContext): Promise<string | null> {
-  const row = savedDomainRow(ctx.db);
-  if (!row) return null;
-  const warning = await removeRecord(ctx, row);
+/** Forgets the domain and its token. */
+export function removeDomain(ctx: AppContext): void {
   ctx.db.prepare('DELETE FROM tls_domain').run();
-  return warning;
 }
 
 /** The site block Caddy imports for the domain: Let's Encrypt by Cloudflare's DNS, serving the app. */

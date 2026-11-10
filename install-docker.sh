@@ -18,6 +18,8 @@
 #   CRAFTY_DIR             where to install (default ~/crafty-accounting)
 #   CRAFTY_HTTP_PORT       HTTP port (default 80, or 8080 if 80 is taken)
 #   CRAFTY_HTTPS_PORT      HTTPS port (default 443, or 8443 if 443 is taken)
+#   CRAFTY_SITE_IP         the IP address you'll browse to, on a new install (default: asked when
+#                          this computer's network address and public address differ)
 #   CRAFTY_BRANCH          branch or tag to install (default: the latest release)
 #   CRAFTY_TARBALL         URL of the app's source .tar.gz, instead of GitHub's for CRAFTY_BRANCH
 #   CRAFTY_PROJECT         Docker Compose project name (default crafty-accounting)
@@ -92,6 +94,7 @@ main() {
     if [ -z "$https_port" ]; then
       https_port=443; port_busy 443 && https_port=8443
     fi
+    if [ -n "${CRAFTY_SITE_IP:-}" ]; then LAN_IP="$CRAFTY_SITE_IP"; else LAN_IP="$(choose_site_ip "$LAN_IP")"; fi
     local site="localhost"
     [ -n "$HOST_NAME" ] && site="$site, $HOST_NAME.local"
     [ -n "$LAN_IP" ] && site="$site, $LAN_IP"
@@ -301,6 +304,53 @@ other_address() {
     case "$addr" in localhost | localhost:* | 127.* | ::1 | "[::1]" | "[::1]":*) continue ;; esac
     case "$addr" in *:[0-9]*) echo "$addr" ;; *) if [ "${2:-443}" = 443 ]; then echo "$addr"; else echo "$addr:$2"; fi ;; esac
     return
+  done
+}
+
+# This computer's public IPv4 address, as Cloudflare sees it (its 1.1.1.1 trace page); empty offline.
+public_ip() {
+  curl -4 -fsS --max-time 5 https://1.1.1.1/cdn-cgi/trace 2>/dev/null | sed -n 's/^ip=//p' || true
+}
+
+# Whether $1 is an IPv4 address.
+is_ip() {
+  printf '%s' "$1" | grep -Eq '^([0-9]{1,3}\.){3}[0-9]{1,3}$'
+}
+
+# The address browsers will use for this computer, given its address on its own network ($1).
+# That's usually it, but a cloud server has a private address (often 10.x) and is reached by its
+# public one, and a server at home can have ports forwarded to it. When the two differ, the
+# person is asked (on the terminal), unless there's no terminal to ask on.
+choose_site_ip() {
+  local lan="$1" public answer
+  public="$(public_ip)"
+  if [ -z "$public" ] || [ "$public" = "$lan" ] || ! (: </dev/tty) 2>/dev/null; then
+    printf '%s' "${lan:-$public}"
+    return
+  fi
+  if [ -z "$lan" ]; then
+    printf '%s' "$public"
+    return
+  fi
+  {
+    echo
+    printf '%sWhich address will you open Crafty Accounting at?%s\n' "$bold" "$reset"
+    echo "  1) $lan   this computer's address on its own network, for a computer at home or"
+    echo "     in an office, used from other devices on the same network"
+    echo "  2) $public   its public address on the internet, for a cloud server, or one at"
+    echo "     home with ports 80 and 443 forwarded to it"
+    echo "  Or type another IPv4 address. (It can be changed later: SITE_ADDRESS and SITE_IP in .env.)"
+  } >/dev/tty
+  while :; do
+    printf 'Choose 1 or 2, or type an address: ' >/dev/tty
+    IFS= read -r answer </dev/tty || answer=1
+    answer="$(printf '%s' "$answer" | tr -d ' ')"
+    case "$answer" in
+      1) printf '%s' "$lan"; return ;;
+      2) printf '%s' "$public"; return ;;
+      *) if [ -n "$answer" ] && is_ip "$answer"; then printf '%s' "$answer"; return; fi ;;
+    esac
+    echo "That isn't 1, 2 or an IP address." >/dev/tty
   done
 }
 

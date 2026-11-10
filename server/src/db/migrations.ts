@@ -502,6 +502,15 @@ CREATE TABLE tls_domain (
 );
 `,
   },
+  // The app no longer points a domain at this server in Cloudflare (that's left to the person),
+  // so the record it made and the address aren't kept. A record made before stays in Cloudflare.
+  {
+    version: 29,
+    sql: `
+ALTER TABLE tls_domain DROP COLUMN dns_record_id;
+ALTER TABLE tls_domain DROP COLUMN pointed_at;
+`,
+  },
 ];
 
 export const CURRENT_SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;

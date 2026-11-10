@@ -46,8 +46,6 @@ export interface TlsDomainInfo {
   zone: string;
   /** The start and end of the API token; it's never sent back whole. */
   tokenHint: string;
-  /** The address the app pointed the domain at in Cloudflare, when it made that record. */
-  pointedAt: string | null;
   addedBy: string;
   addedAt: string;
 }
@@ -60,7 +58,7 @@ export interface TlsStatus {
   disabled: boolean;
   certificate: TlsCertificateInfo | null;
   domain: TlsDomainInfo | null;
-  /** This server's address on the network (SITE_IP, or the first IP in SITE_ADDRESS), to point a domain at. */
+  /** This server's address (SITE_IP, or the first IP in SITE_ADDRESS), which a domain should point at. */
   serverIp: string | null;
 }
 
@@ -69,8 +67,6 @@ export interface TlsDomainRequest {
   domain: string;
   /** Leave out to keep the saved token. */
   token?: string;
-  /** An IP address to point the domain at with a DNS-only record, or null to leave its DNS alone. */
-  pointAt: string | null;
 }
 
 /** What Caddy serves for the domain just now. */
@@ -97,8 +93,6 @@ export const isCloudflareToken = (value: string) => /^[A-Za-z0-9_-]{30,80}$/.tes
 /** After uploading or removing: whether Caddy is restarting by itself, so the page should reload. */
 export interface TlsChangeResult extends TlsStatus {
   restarting: boolean;
-  /** Something that didn't work but didn't stop the change, such as a DNS record left in Cloudflare. */
-  warning?: string | null;
 }
 
 /** Whole days from `now` until `date` (negative once it's passed). */

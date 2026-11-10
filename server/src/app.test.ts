@@ -4953,59 +4953,44 @@ describe('HTTPS certificate', () => {
 
   describe('domain on Cloudflare', () => {
     const TOKEN = 'cf_Abcdefghijklmnopqrstuvwxyz0123456789AB';
-    interface FakeRecord { id: string; type: string; name: string; content: string; proxied: boolean }
-    let records: FakeRecord[];
-    let calls: { method: string; path: string; body?: Record<string, unknown> }[];
+    let calls: { method: string; path: string }[];
+    /** Whether the token may read the zone's DNS records. */
+    let dnsReadable: boolean;
 
-    /** Cloudflare's API, with the zone example.co.uk and the given records. */
+    /** Cloudflare's API, with the zone example.co.uk. */
     beforeEach(() => {
-      records = [];
       calls = [];
-      let next = 1;
+      dnsReadable = true;
       ctx.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
         const url = new URL(String(input));
         const method = init?.method ?? 'GET';
         const path = url.pathname.replace('/client/v4', '');
-        const body = typeof init?.body === 'string' ? (JSON.parse(init.body) as Record<string, unknown>) : undefined;
-        calls.push({ method, path, body });
+        calls.push({ method, path });
         const reply = (status: number, result?: unknown) =>
-          new Response(JSON.stringify(status < 400 ? { success: true, errors: [], result } : { success: false, errors: [{ code: 1000, message: 'Invalid API Token' }] }), { status });
+          new Response(
+            JSON.stringify(
+              status < 400 ? { success: true, errors: [], result } : { success: false, errors: [{ code: status === 403 ? 10000 : 1000, message: status === 403 ? 'Authentication error' : 'Invalid API Token' }] },
+            ),
+            { status },
+          );
         if (new Headers(init?.headers).get('authorization') !== `Bearer ${TOKEN}`) return reply(401);
         if (path === '/zones') return reply(200, url.searchParams.get('name') === 'example.co.uk' ? [{ id: 'zone-1', name: 'example.co.uk' }] : []);
-        const m = /^\/zones\/zone-1\/dns_records(?:\/(.+))?$/.exec(path);
-        if (!m) return reply(404);
-        if (method === 'GET') return reply(200, records.filter((r) => r.name === url.searchParams.get('name')));
-        if (method === 'POST') {
-          const record = { id: `rec-${next++}`, type: String(body!.type), name: String(body!.name), content: String(body!.content), proxied: !!body!.proxied };
-          records.push(record);
-          return reply(200, record);
-        }
-        const record = records.find((r) => r.id === m[1]);
-        if (!record) return reply(404);
-        if (method === 'PATCH') {
-          record.content = String(body!.content);
-          return reply(200, record);
-        }
-        records = records.filter((r) => r !== record);
-        return reply(200, { id: record.id });
+        if (path === '/zones/zone-1/dns_records') return dnsReadable ? reply(200, []) : reply(403);
+        return reply(404);
       }) as typeof fetch;
     });
 
-    const setUp = (body: object, as = agent) => as.put('/api/tls/domain').send({ pointAt: null, ...body });
+    const setUp = (body: object, as = agent) => as.put('/api/tls/domain').send(body);
     const domainFile = () => path.join(tlsDir, 'domain.caddy');
 
-    it('checks the token with Cloudflare, points the domain at this server, and writes its site block for Caddy', async () => {
-      const res = await setUp({ domain: 'Books.Example.co.uk', token: TOKEN, pointAt: '192.168.1.50' }).expect(200);
-      expect(res.body).toMatchObject({
-        restarting: true,
-        warning: null,
-        domain: { domain: 'books.example.co.uk', zone: 'example.co.uk', pointedAt: '192.168.1.50', addedBy: 'Admin' },
-      });
+    it("checks the token and zone with Cloudflare, and writes the domain's site block for Caddy", async () => {
+      const res = await setUp({ domain: 'Books.Example.co.uk', token: TOKEN }).expect(200);
+      expect(res.body).toMatchObject({ restarting: true, serverIp: '192.168.1.50', domain: { domain: 'books.example.co.uk', zone: 'example.co.uk', addedBy: 'Admin' } });
       expect(res.body.domain.tokenHint).not.toContain(TOKEN);
       expect(JSON.stringify((await agent.get('/api/tls').expect(200)).body)).not.toContain(TOKEN);
-      // The zone is found from the domain's parent name.
+      // The zone is found from the domain's parent name, and its DNS is only read, never changed.
       expect(calls.filter((c) => c.path === '/zones')).toHaveLength(2);
-      expect(records).toEqual([{ id: 'rec-1', type: 'A', name: 'books.example.co.uk', content: '192.168.1.50', proxied: false }]);
+      expect(calls.every((c) => c.method === 'GET')).toBe(true);
       const block = fs.readFileSync(domainFile(), 'utf8');
       expect(block).toMatch(/^books\.example\.co\.uk \{$/m);
       expect(block).toContain(`dns cloudflare ${TOKEN}`);
@@ -5014,35 +4999,18 @@ describe('HTTPS certificate', () => {
       expect(fs.statSync(domainFile()).mode & 0o777).toBe(0o600);
       await vi.waitFor(() => expect(restarts()).toBe(1));
 
-      // Off port 443 the site block carries the port, and ACME_CA picks another authority.
+      // Off port 443 the site block carries the port, ACME_CA picks another authority, and the saved token is kept.
       ctx.config.tls = { ...ctx.config.tls, domainPort: 8443, acmeCa: 'https://acme-staging-v02.api.letsencrypt.org/directory' };
-      await setUp({ domain: 'books.example.co.uk', pointAt: '192.168.1.50' }).expect(200);
-      expect(fs.readFileSync(domainFile(), 'utf8')).toMatch(/^books\.example\.co\.uk:8443 \{\n\ttls \{\n\t\tca https:\/\/acme-staging/m);
-      // The record made before is kept, not made again.
-      expect(records).toHaveLength(1);
-    });
+      await setUp({ domain: 'accounts.example.co.uk' }).expect(200);
+      expect(fs.readFileSync(domainFile(), 'utf8')).toMatch(/^accounts\.example\.co\.uk:8443 \{\n\ttls \{\n\t\tca https:\/\/acme-staging/m);
 
-    it('moves the record it made, keeps the saved token, and removes both with the domain', async () => {
-      await setUp({ domain: 'books.example.co.uk', token: TOKEN, pointAt: '192.168.1.50' }).expect(200);
-      expect((await setUp({ domain: 'books.example.co.uk', pointAt: '192.168.1.60' }).expect(200)).body.domain.pointedAt).toBe('192.168.1.60');
-      expect(records).toEqual([expect.objectContaining({ id: 'rec-1', content: '192.168.1.60' })]);
-
-      // A new name gets a record of its own, and the old one goes.
-      await setUp({ domain: 'accounts.example.co.uk', pointAt: '192.168.1.60' }).expect(200);
-      expect(records.map((r) => r.name)).toEqual(['accounts.example.co.uk']);
-
-      // Not pointing it leaves the DNS to the person, and forgets the record made before.
-      expect((await setUp({ domain: 'accounts.example.co.uk' }).expect(200)).body.domain.pointedAt).toBeNull();
-      expect(records).toEqual([]);
-
-      await setUp({ domain: 'accounts.example.co.uk', pointAt: '192.168.1.60' }).expect(200);
-      const res = await agent.delete('/api/tls/domain').expect(200);
-      expect(res.body).toMatchObject({ domain: null, restarting: true, warning: null });
-      expect(records).toEqual([]);
+      const removed = await agent.delete('/api/tls/domain').expect(200);
+      expect(removed.body).toMatchObject({ domain: null, restarting: true });
       expect(fs.existsSync(domainFile())).toBe(false);
+      expect(calls.filter((c) => c.method !== 'GET')).toEqual([]);
     });
 
-    it("refuses what Cloudflare won't do, and leaves a record it didn't make alone", async () => {
+    it("refuses what Cloudflare won't allow", async () => {
       await setUp({ domain: 'not a domain', token: TOKEN }).expect(400);
       await setUp({ domain: '192.168.1.50', token: TOKEN }).expect(400);
       await setUp({ domain: 'crafty.local', token: TOKEN }).expect(400);
@@ -5050,21 +5018,10 @@ describe('HTTPS certificate', () => {
       await setUp({ domain: 'books.example.co.uk', token: 'short' }).expect(400);
       expect((await setUp({ domain: 'books.example.co.uk', token: 'x'.repeat(40) }).expect(422)).body.error).toMatch(/didn't accept/);
       expect((await setUp({ domain: 'books.example.com', token: TOKEN }).expect(422)).body.error).toMatch(/can't see a Cloudflare zone/);
-      await setUp({ domain: 'books.example.co.uk', token: TOKEN, pointAt: '127.0.0.1' }).expect(400);
-
-      records.push({ id: 'theirs', type: 'A', name: 'books.example.co.uk', content: '203.0.113.9', proxied: false });
-      expect((await setUp({ domain: 'books.example.co.uk', token: TOKEN, pointAt: '192.168.1.50' }).expect(409)).body.error).toMatch(/already points at 203\.0\.113\.9/);
-      records[0] = { ...records[0], content: '192.168.1.50', proxied: true };
-      expect((await setUp({ domain: 'books.example.co.uk', token: TOKEN, pointAt: '192.168.1.50' }).expect(409)).body.error).toMatch(/proxied/);
+      dnsReadable = false;
+      expect((await setUp({ domain: 'books.example.co.uk', token: TOKEN }).expect(422)).body.error).toMatch(/DNS → Edit/);
       expect((await agent.get('/api/tls').expect(200)).body.domain).toBeNull();
       expect(fs.existsSync(domainFile())).toBe(false);
-
-      // Already pointing here: nothing to make, and nothing to remove later.
-      records[0].proxied = false;
-      expect((await setUp({ domain: 'books.example.co.uk', token: TOKEN, pointAt: '192.168.1.50' }).expect(200)).body.domain.pointedAt).toBeNull();
-      await agent.delete('/api/tls/domain').expect(200);
-      expect(records.map((r) => r.id)).toEqual(['theirs']);
-      expect(calls.some((c) => c.method !== 'GET')).toBe(false);
     });
 
     it('says which certificate Caddy serves for the domain', async () => {
@@ -5106,7 +5063,16 @@ describe('HTTPS certificate', () => {
       expect((await agent.get('/api/tls')).body.domain.domain).toBe('books.example.co.uk');
     });
 
-    it('works out where Caddy answers and which address to point a domain at', () => {
+    it('drops the DNS record columns from a domain saved by 1.10.73, keeping the domain', () => {
+      const old = new Database(':memory:');
+      for (const migration of MIGRATIONS.filter((m) => m.version <= 28)) old.exec(migration.sql);
+      old.prepare(`INSERT INTO tls_domain (id, domain, zone_id, zone_name, api_token, dns_record_id, pointed_at, added_by) VALUES (1, 'books.example.co.uk', 'z', 'example.co.uk', ?, 'rec-1', '10.0.0.4', 'Admin')`).run(TOKEN);
+      old.exec(MIGRATIONS.find((m) => m.version === 29)!.sql);
+      expect(old.prepare('SELECT * FROM tls_domain').get()).toEqual(expect.objectContaining({ domain: 'books.example.co.uk', api_token: TOKEN }));
+      expect(Object.keys(old.prepare('SELECT * FROM tls_domain').get() as object)).not.toContain('dns_record_id');
+    });
+
+    it('works out where Caddy answers and the server address a domain should point at', () => {
       const env = { DATA_DIR: dataDir, SITE_ADDRESS: 'localhost, crafty.local', SITE_IP: 'localhost', HTTPS_PORT: '8443' };
       expect(loadConfig(env).tls).toMatchObject({ serverIp: null, caddyAddress: null, domainPort: null });
       expect(loadConfig({ ...env, SITE_ADDRESS: 'localhost, 192.168.1.50:8443', CRAFTY_CADDY_ADDRESS: 'proxy:443' }).tls).toMatchObject({

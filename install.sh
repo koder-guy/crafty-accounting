@@ -23,6 +23,8 @@
 #   CRAFTY_HTTP_PORT       Caddy's ports (default 80 and 443)
 #   CRAFTY_HTTPS_PORT
 #   CRAFTY_PORT            port the app listens on behind Caddy, on a new install (default 3000)
+#   CRAFTY_SITE_IP         the IP address you'll browse to, on a new install (default: asked when
+#                          this computer's network address and public address differ)
 #   CRAFTY_BRANCH          branch or tag to install (default: the latest release)
 #   CRAFTY_TARBALL         URL of the app's source .tar.gz, instead of GitHub's for CRAFTY_BRANCH
 #   CRAFTY_REPO            GitHub repository to install from (default koder-guy/crafty-accounting)
@@ -86,6 +88,53 @@ lan_ip() {
   printf '%s' "$ip"
 }
 
+# This computer's public IPv4 address, as Cloudflare sees it (its 1.1.1.1 trace page); empty offline.
+public_ip() {
+  curl -4 -fsS --max-time 5 https://1.1.1.1/cdn-cgi/trace 2>/dev/null | sed -n 's/^ip=//p' || true
+}
+
+# Whether $1 is an IPv4 address.
+is_ip() {
+  printf '%s' "$1" | grep -Eq '^([0-9]{1,3}\.){3}[0-9]{1,3}$'
+}
+
+# The address browsers will use for this computer, given its address on its own network ($1).
+# That's usually it, but a cloud server has a private address (often 10.x) and is reached by its
+# public one, and a server at home can have ports forwarded to it. When the two differ, the
+# person is asked (on the terminal), unless there's no terminal to ask on.
+choose_site_ip() {
+  local lan="$1" public answer
+  public="$(public_ip)"
+  if [ -z "$public" ] || [ "$public" = "$lan" ] || ! (: </dev/tty) 2>/dev/null; then
+    printf '%s' "${lan:-$public}"
+    return
+  fi
+  if [ -z "$lan" ]; then
+    printf '%s' "$public"
+    return
+  fi
+  {
+    echo
+    printf '%sWhich address will you open Crafty Accounting at?%s\n' "$bold" "$reset"
+    echo "  1) $lan   this computer's address on its own network, for a computer at home or"
+    echo "     in an office, used from other devices on the same network"
+    echo "  2) $public   its public address on the internet, for a cloud server, or one at"
+    echo "     home with ports 80 and 443 forwarded to it"
+    echo "  Or type another IPv4 address. (It can be changed later: SITE_ADDRESS and SITE_IP in .env.)"
+  } >/dev/tty
+  while :; do
+    printf 'Choose 1 or 2, or type an address: ' >/dev/tty
+    IFS= read -r answer </dev/tty || answer=1
+    answer="$(printf '%s' "$answer" | tr -d ' ')"
+    case "$answer" in
+      1) printf '%s' "$lan"; return ;;
+      2) printf '%s' "$public"; return ;;
+      *) if [ -n "$answer" ] && is_ip "$answer"; then printf '%s' "$answer"; return; fi ;;
+    esac
+    echo "That isn't 1, 2 or an IP address." >/dev/tty
+  done
+}
+
 # This script's own text, to hand to the crafty account.
 this_script() {
   if [ -n "${BASH_EXECUTION_STRING:-}" ]; then
@@ -131,6 +180,9 @@ root_main() {
   [ -f "$dir/.env" ] && new_install=0
   # So `crafty log` can read the services' logs.
   if getent group systemd-journal >/dev/null 2>&1; then usermod -aG systemd-journal "$user"; fi
+  # The address to browse to, asked here as the account can't use this terminal.
+  local site_ip="${CRAFTY_SITE_IP:-}"
+  if [ "$new_install" = 1 ] && [ -z "$site_ip" ]; then site_ip="$(choose_site_ip "$(lan_ip)")"; fi
 
   # The download, build and settings belong to the account, so it does that part itself.
   local script
@@ -142,7 +194,7 @@ root_main() {
     PATH=/usr/local/bin:/usr/bin:/bin LANG="${LANG:-C.UTF-8}" TERM="${TERM:-dumb}" \
     CRAFTY_PHASE=user CRAFTY_REPO="$REPO" CRAFTY_BRANCH="${CRAFTY_BRANCH:-}" CRAFTY_TARBALL="${CRAFTY_TARBALL:-}" \
     CRAFTY_HTTP_PORT="${CRAFTY_HTTP_PORT:-}" CRAFTY_HTTPS_PORT="${CRAFTY_HTTPS_PORT:-}" CRAFTY_PORT="${CRAFTY_PORT:-}" \
-    /bin/bash "$script"; then
+    CRAFTY_SITE_IP="$site_ip" /bin/bash "$script"; then
     rm -f "$script"
     fail "setting up as $user didn't finish (see above). Anything already running is unchanged."
   fi
@@ -531,8 +583,8 @@ EOF
   set_env TRUST_PROXY true
   delete_env HTTPS
   if [ -z "$(env_value SITE_ADDRESS)" ]; then
-    local ip
-    ip="$(lan_ip)"
+    local ip="${CRAFTY_SITE_IP:-}"
+    [ -n "$ip" ] || ip="$(lan_ip)"
     printf '\n# HTTPS: the addresses you browse to, and a private certificate for them (see "HTTPS"\n# in the README). If this computer'"'"'s IP address changes, update SITE_ADDRESS and SITE_IP.\n' >> "$ENV_FILE"
     set_env SITE_ADDRESS "localhost${ip:+, $ip}"
     set_env SITE_IP "${ip:-localhost}"

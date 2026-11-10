@@ -43,6 +43,8 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/koder-guy/crafty-account
 - sets up two services, `crafty-accounting` (the app) and `crafty-caddy` (HTTPS on ports 80 and 443), which start now, on every boot, and again if they stop;
 - prints the `https://` addresses to open.
 
+If the server's address on its own network differs from its public one (a cloud server usually has a private `10.x` address), it asks which you'll browse to. To answer in advance, put `CRAFTY_SITE_IP=203.0.113.10` (your address) before `bash`. To change it later, edit `SITE_ADDRESS` and `SITE_IP` in `/home/crafty/crafty-accounting/.env` and run `/home/crafty/crafty-accounting/crafty restart`.
+
 It needs Linux with systemd (Debian, Ubuntu, Fedora and most others) on Intel/AMD or ARM. On a Mac, on Alpine, or without systemd, use [Docker](#quick-install-with-docker).
 
 **Signing in for the first time:** use the username `Admin` and the password `admin`. You'll be asked to choose your own password before anything else; change your username and add other users in **Settings → Users**.
@@ -69,7 +71,7 @@ For a Mac, or any Linux. Needs Docker: on a Mac, [Docker Desktop](https://www.do
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/koder-guy/crafty-accounting/main/install-docker.sh)"
 ```
 
-[`install-docker.sh`](install-docker.sh) sets everything up in `~/crafty-accounting`, starts the containers and prints the `https://` addresses to open. Sign in as `Admin` / `admin` and choose your own password. It uses ports 80 and 443, or 8080 and 8443 if those are taken (choose with `CRAFTY_HTTP_PORT` and `CRAFTY_HTTPS_PORT`). It saves Caddy's certificate as `crafty-root.crt` and prints the command to trust it on a Mac; for other devices see [HTTPS](#https). To update, run `~/crafty-accounting/install-docker.sh` again.
+[`install-docker.sh`](install-docker.sh) sets everything up in `~/crafty-accounting`, starts the containers and prints the `https://` addresses to open. Like the Linux install, it asks which address you'll browse to when the computer's network and public addresses differ (`CRAFTY_SITE_IP` answers in advance). Sign in as `Admin` / `admin` and choose your own password. It uses ports 80 and 443, or 8080 and 8443 if those are taken (choose with `CRAFTY_HTTP_PORT` and `CRAFTY_HTTPS_PORT`). It saves Caddy's certificate as `crafty-root.crt` and prints the command to trust it on a Mac; for other devices see [HTTPS](#https). To update, run `~/crafty-accounting/install-docker.sh` again.
 
 ## Run with Docker Compose by hand
 
@@ -121,7 +123,8 @@ The authority lasts 10 years. The Linux quick install keeps it in `/home/crafty/
 **A domain on Cloudflare (Settings → HTTPS Certificate).** If your domain's DNS is on Cloudflare, Caddy can get a Let's Encrypt certificate for a name in it, such as `books.example.co.uk`, while the app stays on your home network: nothing forwarded, nothing to install on devices. Caddy proves the domain is yours by adding a temporary DNS record through Cloudflare's API.
 
 1. In Cloudflare, create an API token (**My Profile → API Tokens → Create Token**, starting from **Edit zone DNS**) with **Zone → DNS → Edit** and **Zone → Zone → Read**, for your domain's zone only. A token, not the Global API Key.
-2. In the app, enter the domain and the token. The app checks them with Cloudflare and, unless you untick it, points the domain at the server's address on your network with a DNS-only record. Caddy then restarts (on Docker, run `docker compose restart caddy` in the install's folder) and gets the certificate, which takes a minute or two; the page shows when it's in place. Caddy renews it by itself.
+2. In Cloudflare, add an **A record** for the name you'll use, such as `books.example.co.uk`, pointing at the server's address (the one in `SITE_IP`), with the proxy off (**DNS only**, the grey cloud). Cloudflare's proxy can't reach a server on a home network.
+3. In the app, enter the domain and the token. The app checks them with Cloudflare, then Caddy restarts (on Docker, run `docker compose restart caddy` in the install's folder) and gets the certificate, which takes a minute or two; the page shows when it's in place. Caddy renews it by itself.
 
 Then open `https://books.example.co.uk`. Some routers and DNS filters (Fritz!Box, pfSense, Pi-hole and others) refuse DNS answers that point at a home address, as protection against "DNS rebinding"; if the name doesn't work at home, allow the domain there, or add it to the router's own DNS. The token is kept with the install, not in backups. To try it out without using up Let's Encrypt's limits, set `ACME_CA=https://acme-staging-v02.api.letsencrypt.org/directory` in `.env` and restart (browsers won't trust that certificate), then remove it, restart and save the domain again.
 

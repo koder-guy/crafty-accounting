@@ -14,7 +14,6 @@ import { probeDomain, removeDomain, restoreDomain, saveDomain, savedDomainRow } 
 const domainSchema = z.object({
   domain: z.string().max(253),
   token: z.string().max(200).optional(),
-  pointAt: z.string().max(45).nullable(),
 });
 
 export function tlsRouter(ctx: AppContext): Router {
@@ -54,22 +53,22 @@ export function tlsRouter(ctx: AppContext): Router {
   router.put('/domain', async (req, res) => {
     if (!ctx.config.tls.dir) throw unavailable();
     const before = savedDomainRow(ctx.db);
-    const warning = await saveDomain(ctx, parseWith(domainSchema, req.body), req.user!.name);
+    await saveDomain(ctx, parseWith(domainSchema, req.body), req.user!.name);
     try {
       writeTlsFiles(ctx);
     } catch (err) {
       restoreDomain(ctx.db, before);
       throw err;
     }
-    const result: TlsChangeResult = { ...tlsStatus(ctx), restarting: restartCaddyAfter(ctx, res), warning };
+    const result: TlsChangeResult = { ...tlsStatus(ctx), restarting: restartCaddyAfter(ctx, res) };
     res.json(result);
   });
 
-  router.delete('/domain', async (_req, res) => {
+  router.delete('/domain', (_req, res) => {
     if (!ctx.config.tls.dir) throw unavailable();
-    const warning = await removeDomain(ctx);
+    removeDomain(ctx);
     writeTlsFiles(ctx);
-    const result: TlsChangeResult = { ...tlsStatus(ctx), restarting: restartCaddyAfter(ctx, res), warning };
+    const result: TlsChangeResult = { ...tlsStatus(ctx), restarting: restartCaddyAfter(ctx, res) };
     res.json(result);
   });
 
