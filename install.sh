@@ -294,10 +294,29 @@ cert_fingerprint() {
     | tr 'a-f' 'A-F' | sed 's/../&:/g; s/:$//'
 }
 
-# Whether Caddy, on HTTPS port $1 of this computer, serves certificate $2 at /crafty-root.crt.
-# A version whose Caddyfile doesn't would answer with the app's page instead.
+# The names this computer's Caddy answers HTTPS for, one per line, to check it by: localhost,
+# this computer's own address ($2) and each address in SITE_ADDRESS ($1). localhost alone isn't
+# enough: SITE_ADDRESS may leave it out, and then Caddy has no certificate for it.
+served_names() {
+  { printf '%s\n%s\n' localhost "$2"; printf '%s' "$1" | tr ',' '\n'; } \
+    | sed 's/^ *//;s/ *$//;s#^[a-z]*://##;s/:[0-9]*$//' | grep . | awk '!seen[$0]++'
+}
+
+# Fetches path $3 from Caddy on HTTPS port $1 of this computer, by the first of the names in $2
+# that answers (each connecting here, whatever its DNS says), to stdout; curl's options follow.
+https_here() {
+  local port="$1" names="$2" path="$3" name
+  shift 3
+  for name in $names; do
+    curl "$@" --connect-to "$name:$port:127.0.0.1:$port" "https://$name:$port$path" 2>/dev/null && return 0
+  done
+  return 1
+}
+
+# Whether Caddy, on HTTPS port $1 of this computer, serves certificate $2 at /crafty-root.crt,
+# by any of the names in $3. A version whose Caddyfile doesn't would answer with the app's page.
 cert_served() {
-  curl -fsSk --max-time 10 "https://localhost:$1/crafty-root.crt" 2>/dev/null | cmp -s - "$2"
+  https_here "$1" "$3" /crafty-root.crt -fsSk --max-time 10 | cmp -s - "$2"
 }
 
 # How to get certificate $1 onto other devices, served by Caddy at https://$2/crafty-root.crt
@@ -389,7 +408,7 @@ summary() {
       echo "device trusts it once (see \"HTTPS\" in the README). It's $cert"
     fi
     local other="" show_pem="$new_install"
-    if cert_served "${https_port:-443}" "$cert"; then
+    if cert_served "${https_port:-443}" "$cert" "$(served_names "$(sed -n 's/^SITE_ADDRESS=//p' "$env_file" | tail -n 1)" "$(lan_ip)")"; then
       other="$(other_address "$(sed -n 's/^SITE_ADDRESS=//p' "$env_file" | tail -n 1)" "$https_port")"
     else
       show_pem=1
@@ -679,8 +698,15 @@ wait_for() {
 }
 
 app_up() { curl -fsS "http://127.0.0.1:$PORT/api/health" >/dev/null 2>&1; }
-# Any answer at all over HTTPS means Caddy is serving (the certificate isn't checked).
-caddy_up() { [ "$(curl -sk -o /dev/null -w '%{http_code}' "https://localhost:$HTTPS_PORT/api/health" 2>/dev/null)" != 000 ]; }
+# Any answer at all over HTTPS means Caddy is serving (the certificate isn't checked), by any
+# name it serves: localhost, the local IP address or one in SITE_ADDRESS, each connecting here.
+# Only localhost once failed every update when SITE_ADDRESS left it out (no certificate for it).
+caddy_up() {
+  for name in $(printf '%s\n%s\n%s' localhost "$LOCAL_IP" "$(setting SITE_ADDRESS | tr ',' '\n')" | sed 's/^ *//;s/ *$//;s#^[a-z]*://##;s/:[0-9]*$//' | grep .); do
+    [ "$(curl -sk --max-time 5 --connect-to "$name:$HTTPS_PORT:127.0.0.1:$HTTPS_PORT" -o /dev/null -w '%{http_code}' "https://$name:$HTTPS_PORT/api/health" 2>/dev/null)" != 000 ] && return 0
+  done
+  return 1
+}
 
 # Restarts the services named in $1 (both unless given), Caddy first.
 restart() {

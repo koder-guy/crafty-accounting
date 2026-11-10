@@ -169,13 +169,15 @@ EOF
   step "Starting the app"
   compose up -d
   printf 'Waiting for the app'
+  local names
+  names="$(served_names "$(env_value SITE_ADDRESS)" "$NETWORK_IP")"
   local i
   for i in $(seq 1 60); do
-    if curl -fsSk "https://localhost:$HTTPS_PORT/api/health" >/dev/null 2>&1; then printf ' ready.\n'; break; fi
+    if https_here "$HTTPS_PORT" "$names" /api/health -fsSk --max-time 5 >/dev/null; then printf ' ready.\n'; break; fi
     printf '.'; sleep 2
   done
-  curl -fsSk "https://localhost:$HTTPS_PORT/api/health" >/dev/null 2>&1 \
-    || fail "the app didn't answer on https://localhost:$HTTPS_PORT. See: cd $DIR && docker compose logs"
+  https_here "$HTTPS_PORT" "$names" /api/health -fsSk --max-time 5 >/dev/null \
+    || fail "the app didn't answer over HTTPS on port $HTTPS_PORT. See: cd $DIR && docker compose logs"
 
   # A domain on Cloudflare set up in Settings → HTTPS Certificate: the site block the app writes for Caddy.
   local DOMAIN
@@ -235,12 +237,12 @@ EOF
       echo "To trust it on this Mac (asks for your password):"
       echo "  sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain \"$CERT\""
       local other=""
-      cert_served "$HTTPS_PORT" "$CERT" && other="$(other_address "$(env_value SITE_ADDRESS)" "$HTTPS_PORT")"
+      cert_served "$HTTPS_PORT" "$CERT" "$(served_names "$(env_value SITE_ADDRESS)" "$NETWORK_IP")" && other="$(other_address "$(env_value SITE_ADDRESS)" "$HTTPS_PORT")"
       [ -n "$other" ] && echo "Other devices can download it from https://$other/crafty-root.crt"
       echo "For other devices, see \"HTTPS\" in the README."
     else
       local other="" show_pem="$NEW_INSTALL"
-      cert_served "$HTTPS_PORT" "$CERT" && other="$(other_address "$(env_value SITE_ADDRESS)" "$HTTPS_PORT")"
+      cert_served "$HTTPS_PORT" "$CERT" "$(served_names "$(env_value SITE_ADDRESS)" "$NETWORK_IP")" && other="$(other_address "$(env_value SITE_ADDRESS)" "$HTTPS_PORT")"
       [ -n "$other" ] || show_pem=1
       cert_help "$CERT" "$other" "$show_pem"
     fi
@@ -266,10 +268,29 @@ cert_fingerprint() {
     | tr 'a-f' 'A-F' | sed 's/../&:/g; s/:$//'
 }
 
-# Whether Caddy, on HTTPS port $1 of this computer, serves certificate $2 at /crafty-root.crt.
-# A version whose Caddyfile doesn't would answer with the app's page instead.
+# The names this computer's Caddy answers HTTPS for, one per line, to check it by: localhost,
+# this computer's own address ($2) and each address in SITE_ADDRESS ($1). localhost alone isn't
+# enough: SITE_ADDRESS may leave it out, and then Caddy has no certificate for it.
+served_names() {
+  { printf '%s\n%s\n' localhost "$2"; printf '%s' "$1" | tr ',' '\n'; } \
+    | sed 's/^ *//;s/ *$//;s#^[a-z]*://##;s/:[0-9]*$//' | grep . | awk '!seen[$0]++'
+}
+
+# Fetches path $3 from Caddy on HTTPS port $1 of this computer, by the first of the names in $2
+# that answers (each connecting here, whatever its DNS says), to stdout; curl's options follow.
+https_here() {
+  local port="$1" names="$2" path="$3" name
+  shift 3
+  for name in $names; do
+    curl "$@" --connect-to "$name:$port:127.0.0.1:$port" "https://$name:$port$path" 2>/dev/null && return 0
+  done
+  return 1
+}
+
+# Whether Caddy, on HTTPS port $1 of this computer, serves certificate $2 at /crafty-root.crt,
+# by any of the names in $3. A version whose Caddyfile doesn't would answer with the app's page.
 cert_served() {
-  curl -fsSk --max-time 10 "https://localhost:$1/crafty-root.crt" 2>/dev/null | cmp -s - "$2"
+  https_here "$1" "$3" /crafty-root.crt -fsSk --max-time 10 | cmp -s - "$2"
 }
 
 # How to get certificate $1 onto other devices, served by Caddy at https://$2/crafty-root.crt
