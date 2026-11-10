@@ -34,6 +34,11 @@ export interface TlsCertificateInfo {
   keyType: string;
   /** Addresses in SITE_ADDRESS the certificate isn't for: browsers warn there. */
   uncovered: string[];
+  /**
+   * Names it's for that aren't in SITE_ADDRESS, which Caddy serves with it too, while it's in
+   * use. Domain names only: not wildcards (which name no one address) or IP addresses.
+   */
+  added: string[];
   fileName: string | null;
   addedBy: string;
   addedAt: string;

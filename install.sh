@@ -719,12 +719,12 @@ status() {
   return $ok
 }
 
-# The comma separated list $1 without the domain set up in Settings → HTTPS Certificate,
-# which has a site block of its own (domain.caddy): Caddy refuses a name in two site blocks.
-without_domain() {
-  domain="$(sed -n '/^[^#[:space:]].* {$/{s/ {$//;s/:[0-9]*$//;p;q;}' "$CUSTOM/domain.caddy" 2>/dev/null | tr 'A-Z' 'a-z')"
-  if [ -z "$domain" ]; then printf '%s' "$1"; return; fi
-  printf '%s' "$1" | tr ',' '\n' | awk -v d="$domain" 'NF { a = $1; h = tolower(a); sub(/^[a-z]+:\/\//, "", h); sub(/:[0-9]+$/, "", h); if (h != d) out = out (out ? ", " : "") a } END { print out }'
+# The comma separated list $1 without the names in the site blocks the app writes to $CUSTOM
+# from Settings → HTTPS Certificate (a domain on Cloudflare, an uploaded certificate's other
+# names): Caddy refuses a name in two site blocks.
+without_app_sites() {
+  taken="$(sed -n '/^[^#[:space:]].* {$/{s/ {$//;p;}' "$CUSTOM"/*.caddy 2>/dev/null | tr ',' '\n' | sed 's/^ *//;s/ *$//;s/:[0-9]*$//' | tr 'A-Z\n' 'a-z ')"
+  printf '%s' "$1" | tr ',' '\n' | awk -v t="$taken" 'BEGIN { n = split(t, names, " "); for (i = 1; i <= n; i++) skip[names[i]] = 1 } NF { a = $1; h = tolower(a); sub(/^[a-z]+:\/\//, "", h); sub(/:[0-9]+$/, "", h); if (!(h in skip)) out = out (out ? ", " : "") a } END { print out }'
 }
 
 # Off port 443, each address in the comma separated list $1 gets the port, or Caddy's
@@ -743,7 +743,7 @@ case "${1:-}" in
     # Only what's set: Caddy takes a variable that's set but empty as empty, not its default.
     for name in SITE_ADDRESS SITE_IP; do
       value="$(setting $name)"
-      [ "$name" = SITE_ADDRESS ] && value="$(with_port "$(without_domain "$value")")"
+      [ "$name" = SITE_ADDRESS ] && value="$(with_port "$(without_app_sites "$value")")"
       if [ -n "$value" ]; then export "$name=$value"; fi
     done
     # A domain on Cloudflare set up in Settings → HTTPS Certificate: the Caddyfile imports the

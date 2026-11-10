@@ -30,7 +30,7 @@ import { clearData, generateSampleData } from './sampleData';
 import { saveBusiness } from './businessDetails';
 import forge from 'node-forge';
 import { checkCertificateExpiry } from './notifications';
-import { siteHost } from './tlsCertificate';
+import { siteHost, writeTlsFiles } from './tlsCertificate';
 
 const NAME = 'Admin';
 const PASSWORD = 'test-password';
@@ -4857,6 +4857,37 @@ describe('HTTPS certificate', () => {
     const res = await upload(pfx(leaf.key, [leaf.cert], 'x'), 'x').expect(200);
     expect(res.body.certificate).toMatchObject({ uncovered: ['localhost', '192.168.1.50'], selfSigned: true });
     expect(['https://crafty.local:8443', '[::1]:8443', '::1', 'Example.COM'].map(siteHost)).toEqual(['crafty.local', '::1', '::1', 'example.com']);
+  });
+
+  it("serves the certificate's names that aren't in SITE_ADDRESS too, while it's in use", async () => {
+    const block = () => path.join(tlsDir, 'custom.caddy');
+    const leaf = certificate({
+      cn: 'crafty.local',
+      names: [{ dns: 'crafty.local' }, { dns: 'Books.Example.co.uk' }, { dns: 'shop.example.co.uk' }, { dns: '*.example.co.uk' }, { ip: '10.0.0.9' }],
+    });
+    const res = await upload(pfx(leaf.key, [leaf.cert], 'x'), 'x').expect(200);
+    // Not crafty.local (in SITE_ADDRESS already), the wildcard or the IP address.
+    expect(res.body.certificate.added).toEqual(['books.example.co.uk', 'shop.example.co.uk']);
+    expect(fs.readFileSync(block(), 'utf8')).toContain(
+      `\nbooks.example.co.uk, shop.example.co.uk {\n\ttls ${path.join(tlsDir, 'cert.pem')} ${path.join(tlsDir, 'key.pem')}\n\timport app\n}\n`,
+    );
+    expect(fs.statSync(block()).mode & 0o777).toBe(0o600);
+
+    // Off port 443 each carries the port, as SITE_ADDRESS does.
+    ctx.config.tls = { ...ctx.config.tls, domainPort: 8443 };
+    await agent.put('/api/tls/method').send({ method: 'internal' }).expect(200);
+    expect(fs.existsSync(block())).toBe(false);
+    await agent.put('/api/tls/method').send({ method: 'custom' }).expect(200);
+    expect(fs.readFileSync(block(), 'utf8')).toContain('\nbooks.example.co.uk:8443, shop.example.co.uk:8443 {\n');
+
+    // Nothing extra while TLS_CUSTOM=off has Caddy ignore the certificate, or once each name is in SITE_ADDRESS.
+    ctx.config.tls = { ...ctx.config.tls, disabled: true };
+    writeTlsFiles(ctx);
+    expect(fs.existsSync(block())).toBe(false);
+    ctx.config.tls = { ...ctx.config.tls, disabled: false, siteAddresses: [...ctx.config.tls.siteAddresses, 'books.example.co.uk', 'https://shop.example.co.uk:8443'] };
+    writeTlsFiles(ctx);
+    expect(fs.existsSync(block())).toBe(false);
+    expect((await agent.get('/api/tls').expect(200)).body.certificate.added).toEqual([]);
   });
 
   it('removes the certificate and its files, and restarts Caddy', async () => {

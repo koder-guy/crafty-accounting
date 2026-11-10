@@ -72,7 +72,7 @@ function UploadForm({ replacing, inUse, onDone, onCancel }: { replacing: boolean
         label={replacing ? 'New certificate file' : 'Certificate file'}
         htmlFor="tls-file"
         error={tooLarge ? "That's too large for a certificate file." : undefined}
-        hint="A .pfx or .p12 file holding the certificate and its private key, with any intermediate certificates."
+        hint="A .pfx or .p12 file holding the certificate and its private key, with any intermediate certificates. Names it's for that aren't in SITE_ADDRESS are served too."
       >
         <div className="flex items-center gap-3">
           <input
@@ -190,6 +190,13 @@ function CertificateCard({ status, canEdit }: { status: TlsStatus; canEdit: bool
         )}
 
         {cert && !inUse && <p className="text-sm text-muted">Saved, but not in use: another method serves the app. Use it again here, with nothing to upload again.</p>}
+        {cert && cert.added.length > 0 && (
+          <Alert tone="info">
+            {inUse ? 'Caddy also serves' : 'In use, Caddy also serves'} {cert.added.join(', ')} with it, as it's for {cert.added.length === 1 ? 'that name' : 'those names'} though{' '}
+            {cert.added.length === 1 ? "it isn't" : "they aren't"} in <code className="font-mono">SITE_ADDRESS</code>. Point {cert.added.length === 1 ? 'it' : 'them'} at this
+            server{status.serverIp ? ` (${status.serverIp})` : ''} in DNS, or on your router, to browse there.
+          </Alert>
+        )}
         {inUse && cert.uncovered.length > 0 && (
           <Alert tone="warning">
             It isn't for {cert.uncovered.join(', ')}, which {cert.uncovered.length === 1 ? 'is' : 'are'} in <code className="font-mono">SITE_ADDRESS</code>. Browsers warn there;

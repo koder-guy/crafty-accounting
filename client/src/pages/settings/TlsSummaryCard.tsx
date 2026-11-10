@@ -155,8 +155,13 @@ export function TlsSummaryCard({ status }: { status: TlsStatus }) {
         {method === 'custom' && cert && (
           <>
             <p className="text-sm text-muted">
-              Caddy serves <Addresses status={status} /> with the certificate you uploaded, for <span className="text-ink">{list(cert.names)}</span>, valid to{' '}
-              {date(cert.validTo)}
+              Caddy serves <Addresses status={status} />
+              {cert.added.length > 0 && (
+                <>
+                  , and <span className="text-ink">{list(cert.added)}</span> (on the certificate, though not in SITE_ADDRESS),
+                </>
+              )}{' '}
+              with the certificate you uploaded, valid to {date(cert.validTo)}
               {days < 0 ? <span className="text-out-soft"> (expired)</span> : days < 30 ? <span className="text-warn"> ({days} days left)</span> : ''}.{' '}
               {cert.selfSigned
                 ? "It's self-signed, so each device has to trust it once: download it, then install it."

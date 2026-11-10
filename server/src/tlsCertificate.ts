@@ -10,7 +10,7 @@ import path from 'node:path';
 import tls from 'node:tls';
 import { spawn } from 'node:child_process';
 import forge from 'node-forge';
-import type { TlsCertificateInfo, TlsMethod, TlsStatus } from '@crafty/shared';
+import { isDomainName, type TlsCertificateInfo, type TlsMethod, type TlsStatus } from '@crafty/shared';
 import type { AppContext } from './context';
 import type { Db } from './db';
 import { HttpError } from './http';
@@ -18,6 +18,8 @@ import { DOMAIN_FILE, domainCaddyfile, savedDomain, savedDomainRow } from './tls
 
 export const CERT_FILE = 'cert.pem';
 export const KEY_FILE = 'key.pem';
+/** The site block for names on the uploaded certificate that aren't in SITE_ADDRESS. */
+export const CUSTOM_FILE = 'custom.caddy';
 
 export interface TlsPem {
   /** The certificate, then its intermediates. */
@@ -153,7 +155,20 @@ export function describeCertificate(certPem: string, siteAddresses: string[]): O
     intermediates: all.length - 1,
     keyType: keyType(leaf),
     uncovered: uncoveredAddresses(leaf, siteAddresses),
+    added: addedNames(leaf, siteAddresses),
   };
+}
+
+/**
+ * The certificate's domain names that SITE_ADDRESS doesn't have, for Caddy to serve too: each is
+ * an address someone could browse to. Not wildcards, which name no one address, or IP addresses,
+ * which browsers don't send as a server name (SITE_IP picks the certificate for those).
+ */
+export function addedNames(cert: crypto.X509Certificate, addresses: string[]): string[] {
+  const have = new Set(addresses.map(siteHost));
+  return names(cert)
+    .map((name) => name.toLowerCase())
+    .filter((name) => !name.includes('*') && !net.isIP(name) && isDomainName(name) && !have.has(name));
 }
 
 const splitPem = (pem: string) => pem.match(/-----BEGIN CERTIFICATE-----[\s\S]+?-----END CERTIFICATE-----/g) ?? [];
@@ -254,10 +269,13 @@ export function writeTlsFiles(ctx: AppContext): void {
   const method = tlsMethod(ctx.db);
   const row = method === 'custom' ? savedRow(ctx.db) : undefined;
   const domain = method === 'cloudflare' ? savedDomainRow(ctx.db) : undefined;
+  // TLS_CUSTOM=off: Caddy ignores the certificate, so it serves no more names with it either.
+  const added = row && !ctx.config.tls.disabled ? describeCertificate(row.cert_pem, servedAddresses(ctx)).added : [];
   const files: [string, string | null][] = [
     [CERT_FILE, row?.cert_pem ?? null],
     [KEY_FILE, row?.key_pem ?? null],
     [DOMAIN_FILE, domain ? domainCaddyfile(ctx, domain) : null],
+    [CUSTOM_FILE, added.length ? customCaddyfile(ctx, dir, added) : null],
   ];
   try {
     if (files.some(([, content]) => content !== null)) fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
@@ -273,6 +291,24 @@ export function writeTlsFiles(ctx: AppContext): void {
   } catch (err) {
     throw new HttpError(500, `The HTTPS settings couldn't be written to ${dir} for Caddy: ${(err as Error).message}`);
   }
+}
+
+/**
+ * The site block for the uploaded certificate's names that aren't in SITE_ADDRESS (Caddy refuses a
+ * name in two blocks), served with it. The app and Caddy see the folder at the same path: the
+ * quick install's caddy/custom, and /tls in both Docker containers.
+ */
+export function customCaddyfile(ctx: AppContext, dir: string, names: string[]): string {
+  const port = ctx.config.tls.domainPort;
+  return [
+    '# Written by Crafty Accounting from Settings → HTTPS Certificate, and again each time it starts:',
+    "# the uploaded certificate's names that aren't in SITE_ADDRESS.",
+    `${names.map((name) => (port ? `${name}:${port}` : name)).join(', ')} {`,
+    `\ttls ${path.join(dir, CERT_FILE)} ${path.join(dir, KEY_FILE)}`,
+    '\timport app',
+    '}',
+    '',
+  ].join('\n');
 }
 
 /** Restarts Caddy so it serves the files now in its folder. Tests replace it. */
