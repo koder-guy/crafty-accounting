@@ -117,7 +117,7 @@ export function TlsSummaryCard({ status }: { status: TlsStatus }) {
       <div className="space-y-4 px-5 pb-6 sm:px-6">
         {switchedOff && (
           <Alert tone="warning">
-            Your uploaded certificate is chosen, but <code className="font-mono">TLS_CUSTOM=off</code> in the install's .env file switches it off, so Caddy uses its own.
+            Your uploaded certificate is chosen, but <code className="font-mono">TLS_CUSTOM=off</code> in the install's .env file switches it off, so the app uses its own.
             Remove that line and restart to use yours.
           </Alert>
         )}
@@ -126,7 +126,7 @@ export function TlsSummaryCard({ status }: { status: TlsStatus }) {
           <CaddyRootDownload
             intro={
               <>
-                Caddy serves <Addresses status={status} /> with a certificate from its own private certificate authority. Download the authority and install it on each
+                The app serves <Addresses status={status} /> with a certificate from its own private certificate authority. Download the authority and install it on each
                 device once, and browsers stop warning about this app.
               </>
             }
@@ -136,14 +136,14 @@ export function TlsSummaryCard({ status }: { status: TlsStatus }) {
         {method === 'cloudflare' && domain && (
           <>
             <p className="text-sm text-muted">
-              Caddy gets a certificate from Let's Encrypt for <span className="text-ink">{domain.domain}</span>, through Cloudflare's DNS. Every browser already trusts
+              The app gets a certificate from Let's Encrypt for <span className="text-ink">{domain.domain}</span>, through Cloudflare's DNS. Every browser already trusts
               it, so there's nothing to install on devices for the domain.
             </p>
             <CertificateState cert={domainCert} domain={domain.domain} />
             <CaddyRootDownload
               intro={
                 <>
-                  Caddy's own certificate authority covers <Addresses status={status} other />
+                  The app's own certificate authority covers <Addresses status={status} other />
                   {domainCert?.state === 'fallback' ? ", and stands in for the domain until Let's Encrypt issues its certificate" : ''}. Devices that open the
                   app there need to trust it once.
                 </>
@@ -155,7 +155,7 @@ export function TlsSummaryCard({ status }: { status: TlsStatus }) {
         {method === 'custom' && cert && (
           <>
             <p className="text-sm text-muted">
-              Caddy serves <Addresses status={status} />
+              The app serves <Addresses status={status} />
               {cert.added.length > 0 && (
                 <>
                   , and <span className="text-ink">{list(cert.added)}</span> (on the certificate, though not in SITE_ADDRESS),

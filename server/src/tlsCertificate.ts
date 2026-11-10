@@ -289,7 +289,7 @@ export function writeTlsFiles(ctx: AppContext): void {
       fs.renameSync(`${file}.new`, file);
     }
   } catch (err) {
-    throw new HttpError(500, `The HTTPS settings couldn't be written to ${dir} for Caddy: ${(err as Error).message}`);
+    throw new HttpError(500, `The HTTPS settings couldn't be written to ${dir}: ${(err as Error).message}`);
   }
 }
 

@@ -163,7 +163,7 @@ export function probeDomain(ctx: AppContext): Promise<TlsDomainCertificate> {
   const row = savedDomainRow(ctx.db);
   if (!row) return Promise.resolve({ state: 'none' });
   const address = ctx.config.tls.caddyAddress;
-  if (!address) return Promise.resolve({ state: 'unreachable', message: "This install doesn't say where Caddy answers, so its certificate can't be checked from here." });
+  if (!address) return Promise.resolve({ state: 'unreachable', message: "This install doesn't say where its web server answers, so the certificate can't be checked from here." });
   return new Promise((resolve) => {
     const socket = tls.connect({ host: address.host, port: address.port, servername: row.domain, rejectUnauthorized: false, timeout: 8000 }, () => {
       const peer = socket.getPeerX509Certificate();
@@ -182,12 +182,12 @@ export function probeDomain(ctx: AppContext): Promise<TlsDomainCertificate> {
     });
     socket.on('timeout', () => {
       socket.destroy();
-      resolve({ state: 'unreachable', message: `Caddy didn't answer at ${address.host}:${address.port}.` });
+      resolve({ state: 'unreachable', message: `The app's web server didn't answer at ${address.host}:${address.port}.` });
     });
     socket.on('error', (err: NodeJS.ErrnoException) => {
       // A TLS alert means Caddy is there but has nothing to offer for the name yet.
       if (/alert|handshake|SSL/i.test(`${err.code ?? ''} ${err.message}`)) return resolve({ state: 'waiting' });
-      resolve({ state: 'unreachable', message: `Caddy didn't answer at ${address.host}:${address.port} (${err.code ?? err.message}).` });
+      resolve({ state: 'unreachable', message: `The app's web server didn't answer at ${address.host}:${address.port} (${err.code ?? err.message}).` });
     });
   });
 }

@@ -3,7 +3,7 @@ import type { TlsMethod } from '@crafty/shared';
 /** The three ways of serving the app over HTTPS, as Settings → HTTPS Certificate names them. */
 export const METHOD_INFO: Record<TlsMethod, { name: string; description: string }> = {
   internal: {
-    name: "Caddy's own certificate",
+    name: "The app's own certificate",
     description:
       "A private certificate authority on this server signs the app's certificate. Works for any address with nothing on the internet, but each device has to trust the authority once.",
   },

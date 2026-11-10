@@ -103,7 +103,7 @@ export function CertificateState({ cert, domain }: { cert: TlsDomainCertificate 
     return (
       <Alert tone="info">
         <span className="flex items-center gap-2">
-          <LoaderCircle className="size-3.5 shrink-0 animate-spin" aria-hidden /> Waiting for Let's Encrypt. Caddy asks for the certificate once it has restarted, which usually takes a minute or two.
+          <LoaderCircle className="size-3.5 shrink-0 animate-spin" aria-hidden /> Waiting for Let's Encrypt. The app asks for the certificate once its web server has restarted, which usually takes a minute or two.
         </span>
       </Alert>
     );
@@ -111,8 +111,8 @@ export function CertificateState({ cert, domain }: { cert: TlsDomainCertificate 
   if (cert.state === 'fallback') {
     return (
       <Alert tone="warning">
-        Let's Encrypt hasn't issued a certificate for {domain} yet, so Caddy serves it with its own meanwhile: devices that trust Caddy's authority (below) can open it
-        without a warning. Caddy asks Let's Encrypt again about every eight hours, and changes over by itself. If this lasts, check{' '}
+        Let's Encrypt hasn't issued a certificate for {domain} yet, so the app serves it with its own meanwhile: devices that trust the app's certificate authority (below) can open it
+        without a warning. The app asks Let's Encrypt again about every eight hours, and changes over by itself. If this lasts, check{' '}
         <code className="font-mono">crafty log</code> on the server: Let's Encrypt allows five certificates a week for one name.
       </Alert>
     );
@@ -121,7 +121,7 @@ export function CertificateState({ cert, domain }: { cert: TlsDomainCertificate 
   if (!cert.trusted) {
     return (
       <Alert tone="warning">
-        Caddy serves {domain} with a certificate from {cert.issuer}, which browsers don't trust (Let's Encrypt's staging authority, set by ACME_CA, is one such).
+        The app serves {domain} with a certificate from {cert.issuer}, which browsers don't trust (Let's Encrypt's staging authority, set by ACME_CA, is one such).
       </Alert>
     );
   }
@@ -129,7 +129,7 @@ export function CertificateState({ cert, domain }: { cert: TlsDomainCertificate 
   return (
     <Alert tone="success">
       {domain} has its certificate from {cert.issuer}, valid to {date(cert.validTo)}
-      {days < 30 ? ` (${days} days left)` : ''}. Caddy renews it by itself before then.
+      {days < 30 ? ` (${days} days left)` : ''}. The app renews it by itself before then.
     </Alert>
   );
 }
@@ -163,8 +163,8 @@ export function TlsDomainCard({ status, canEdit }: { status: TlsStatus; canEdit:
       <div className="space-y-5 px-5 pb-6 sm:px-6">
         {!saved && (
           <p className="text-sm text-muted">
-            Caddy proves the domain is yours through Cloudflare's DNS, so the server needn't be reachable from the internet. While Let's Encrypt's certificate is on
-            its way, Caddy's own stands in for the domain.
+            The app proves the domain is yours through Cloudflare's DNS, so the server needn't be reachable from the internet. While Let's Encrypt's certificate is on
+            its way, the app's own stands in for the domain.
           </p>
         )}
 
@@ -194,7 +194,7 @@ export function TlsDomainCard({ status, canEdit }: { status: TlsStatus; canEdit:
         {setMethod.error && <Alert>{setMethod.error.message}</Alert>}
         {applied && !applied.restarting && status.restartCommand && (
           <Alert tone="info">
-            Caddy changes over once restarted: <code className="font-mono break-all text-ink">{status.restartCommand}</code>
+            The app changes over once its web server is restarted: <code className="font-mono break-all text-ink">{status.restartCommand}</code>
           </Alert>
         )}
         {saved && !editing && (
@@ -250,7 +250,7 @@ export function TlsDomainCard({ status, canEdit }: { status: TlsStatus; canEdit:
         }}
       >
         <p>
-          {inUse ? `Caddy stops serving ${saved?.domain} and goes back to its own certificate, and the API token is forgotten.` : 'The domain and its API token are forgotten.'}{' '}
+          {inUse ? `The app stops serving ${saved?.domain} and goes back to its own certificate, and the API token is forgotten.` : 'The domain and its API token are forgotten.'}{' '}
           Its DNS in Cloudflare is left as it is.
         </p>
       </ConfirmDialog>

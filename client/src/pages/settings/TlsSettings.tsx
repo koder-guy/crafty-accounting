@@ -25,13 +25,13 @@ function Applying({ status, restarting }: { status: TlsStatus; restarting: boole
   if (restarting) {
     return (
       <Alert tone="success">
-        Caddy is restarting to change over. This page reloads in a moment. If the browser then warns about the certificate, it doesn't trust it yet.
+        The app's web server is restarting to change over. This page reloads in a moment. If the browser then warns about the certificate, it doesn't trust it yet.
       </Alert>
     );
   }
   return (
     <Alert tone="info">
-      Caddy changes over once restarted
+      The app changes over once its web server is restarted
       {status.restartCommand ? (
         <>
           : <code className="font-mono break-all text-ink">{status.restartCommand}</code>
@@ -192,7 +192,7 @@ function CertificateCard({ status, canEdit }: { status: TlsStatus; canEdit: bool
         {cert && !inUse && <p className="text-sm text-muted">Saved, but not in use: another method serves the app. Use it again here, with nothing to upload again.</p>}
         {cert && cert.added.length > 0 && (
           <Alert tone="info">
-            {inUse ? 'Caddy also serves' : 'In use, Caddy also serves'} {cert.added.join(', ')} with it, as it's for {cert.added.length === 1 ? 'that name' : 'those names'} though{' '}
+            {inUse ? 'The app also serves' : 'In use, the app also serves'} {cert.added.join(', ')} with it, as it's for {cert.added.length === 1 ? 'that name' : 'those names'} though{' '}
             {cert.added.length === 1 ? "it isn't" : "they aren't"} in <code className="font-mono">SITE_ADDRESS</code>. Point {cert.added.length === 1 ? 'it' : 'them'} at this
             server{status.serverIp ? ` (${status.serverIp})` : ''} in DNS, or on your router, to browse there.
           </Alert>
@@ -203,10 +203,10 @@ function CertificateCard({ status, canEdit }: { status: TlsStatus; canEdit: bool
             browse by one of the names it's for instead.
           </Alert>
         )}
-        {inUse && cert.selfSigned && <Alert tone="info">This certificate is self-signed, so each device has to trust it, as with Caddy's own.</Alert>}
+        {inUse && cert.selfSigned && <Alert tone="info">This certificate is self-signed, so each device has to trust it, as with the app's own.</Alert>}
         {inUse && status.disabled && (
           <Alert tone="warning">
-            <code className="font-mono">TLS_CUSTOM=off</code> in the install's .env file switches it off, so Caddy uses its own. Remove that line and restart to use this one.
+            <code className="font-mono">TLS_CUSTOM=off</code> in the install's .env file switches it off, so the app uses its own. Remove that line and restart to use this one.
           </Alert>
         )}
 
@@ -261,7 +261,7 @@ function CertificateCard({ status, canEdit }: { status: TlsStatus; canEdit: bool
         <p>
           {inUse ? (
             <>
-              Caddy goes back to its own private certificate for the addresses in <code className="font-mono">SITE_ADDRESS</code>. Devices that don't trust it yet will
+              The app goes back to its own private certificate for the addresses in <code className="font-mono">SITE_ADDRESS</code>. Devices that don't trust it yet will
               warn before opening the app.
             </>
           ) : (
@@ -282,10 +282,10 @@ function InternalCard({ status, canEdit }: { status: TlsStatus; canEdit: boolean
   const kept = [status.domain && `the domain ${status.domain.domain}`, status.certificate && 'your uploaded certificate'].filter(Boolean).join(' and ');
   return (
     <Card>
-      <CardHeader icon={<Server className="size-5 text-accent-soft" />} title="Caddy's own certificate" action={inUse ? <Badge tone="ok">In use</Badge> : undefined} />
+      <CardHeader icon={<Server className="size-5 text-accent-soft" />} title="The app's own certificate" action={inUse ? <Badge tone="ok">In use</Badge> : undefined} />
       <div className="space-y-5 px-5 pb-6 sm:px-6">
         <p className="text-sm text-muted">
-          Nothing to set up: Caddy makes its own certificate authority when it first starts, and signs a certificate for each address in{' '}
+          Nothing to set up: the app makes its own certificate authority when it first starts, and signs a certificate for each address in{' '}
           <code className="font-mono text-ink">SITE_ADDRESS</code> with it. Browsers warn until a device trusts the authority, which you can download at the top of this
           page.
         </p>
@@ -294,21 +294,21 @@ function InternalCard({ status, canEdit }: { status: TlsStatus; canEdit: boolean
         {!inUse && canEdit && (
           <div>
             <Button type="button" variant="primary" busy={setMethod.isPending} onClick={() => setConfirm(true)}>
-              Use Caddy's own certificate
+              Use the app's own certificate
             </Button>
           </div>
         )}
       </div>
       <ConfirmDialog
         open={confirm}
-        title="Use Caddy's own certificate?"
+        title="Use the app's own certificate?"
         confirmLabel="Use it"
         tone="send"
         onClose={() => setConfirm(false)}
         onConfirm={async () => setApplied(await setMethod.mutateAsync('internal'))}
       >
         <p>
-          Devices that don't trust Caddy's authority yet will warn before opening the app.{kept ? ` The settings for ${kept} stay saved, to switch back to.` : ''}
+          Devices that don't trust the app's certificate authority yet will warn before opening the app.{kept ? ` The settings for ${kept} stay saved, to switch back to.` : ''}
         </p>
       </ConfirmDialog>
     </Card>
@@ -393,7 +393,7 @@ export function TlsSettings() {
         <Card>
           <CardHeader icon={<LockKeyhole className="size-5 text-accent-soft" />} title="Not available on this install" />
           <p className="px-5 pb-6 text-sm text-muted sm:px-6">
-            Certificates can be set up here on the Linux quick install and the Docker install, which serve HTTPS through Caddy. This copy of the app isn't run
+            Certificates can be set up here on the Linux quick install and the Docker install, which serve HTTPS themselves. This copy of the app isn't run
             by either, so set up HTTPS wherever it's served from.
           </p>
         </Card>

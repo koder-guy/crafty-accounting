@@ -24,7 +24,7 @@ export function tlsRouter(ctx: AppContext): Router {
   const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: MAX_PFX_BYTES, files: 1, fields: 2 } });
 
   const unavailable = () =>
-    new HttpError(409, "This install doesn't serve HTTPS through Caddy, so there's nowhere to use a certificate.");
+    new HttpError(409, "This install doesn't serve HTTPS itself, so there's nowhere to use a certificate.");
 
   router.get('/', (_req, res) => {
     res.json(tlsStatus(ctx));
