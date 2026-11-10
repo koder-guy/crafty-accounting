@@ -4,6 +4,7 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
+import type { Response } from 'express';
 import multer from 'multer';
 import { diskSize, MAX_DOCUMENTS, minimumFreeForUploads } from '@crafty/shared';
 import { listAutoBackups } from './autoBackup';
@@ -87,6 +88,26 @@ export function removeDocumentFile(ctx: AppContext, name: string | null | undefi
   }
 }
 
+/**
+ * Sends a stored file as the response (set its headers first). A file that can't be read ends
+ * the response with an error; a stream's unhandled error would stop the server.
+ */
+export function sendStoredFile(res: Response, file: string): void {
+  const stream = fs.createReadStream(file);
+  stream.on('error', (err) => {
+    console.error(`Could not read ${path.basename(file)}:`, err.message);
+    if (res.headersSent) {
+      res.destroy();
+      return;
+    }
+    // Set for the file; the error is JSON, not a download.
+    res.removeHeader('Content-Type');
+    res.removeHeader('Content-Disposition');
+    res.status(500).json({ error: 'The file could not be read from storage' });
+  });
+  stream.pipe(res);
+}
+
 /** Files uploaded with a transaction (multer puts them on req.files). */
 export const uploadedFiles = (files: unknown): Express.Multer.File[] => (Array.isArray(files) ? files : []);
 
@@ -162,12 +183,17 @@ export function saveWithDocuments<T>(
     }
 
     const result = write(names);
-    // Fingerprinted, so scanning the same file again is noticed.
-    const fingerprint = ctx.db.prepare('UPDATE documents SET sha256 = ? WHERE filename = ? AND sha256 IS NULL');
-    for (const name of names) fingerprint.run(fileFingerprint(documentPath(ctx, name)), name);
+    // Saved: from here the new files belong to the books, so nothing below may take them away again.
+    placed.length = 0;
+    // Fingerprinted, so scanning the same file again is noticed. Rows left without one are filled in when scans are listed.
+    try {
+      const fingerprint = ctx.db.prepare('UPDATE documents SET sha256 = ? WHERE filename = ? AND sha256 IS NULL');
+      for (const name of names) fingerprint.run(fileFingerprint(documentPath(ctx, name)), name);
+    } catch (err) {
+      console.error('Could not fingerprint a saved document:', (err as Error).message);
+    }
     for (const name of change.removing) removeDocumentFile(ctx, name);
     for (const { from } of renaming) removeDocumentFile(ctx, from);
-    placed.length = 0;
     return result;
   } finally {
     // Only still set if something failed after the files were placed.

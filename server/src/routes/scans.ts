@@ -6,7 +6,7 @@ import { Router, type RequestHandler } from 'express';
 import type { ScanList } from '@crafty/shared';
 import type { AppContext } from '../context';
 import { activeReader, getAiSettings } from '../aiSettings';
-import { ALLOWED_EXTENSIONS, createUploader, decodeUploadName, documentPath, ensureSpaceFor, uploadSpace } from '../documents';
+import { ALLOWED_EXTENSIONS, createUploader, decodeUploadName, documentPath, ensureSpaceFor, sendStoredFile, uploadSpace } from '../documents';
 import { HttpError, parseId } from '../http';
 import { syncScansNotification } from '../notifications';
 import { addScan, deleteScan, fillFingerprints, getScan, getScanRow, listScans, scanProblem } from '../scans';
@@ -44,7 +44,7 @@ export function scansRouter(ctx: AppContext): Router {
     if (!fs.existsSync(file)) throw new HttpError(404, 'The file is missing from storage');
     res.setHeader('Content-Type', ALLOWED_EXTENSIONS[path.extname(row.filename)] ?? 'application/octet-stream');
     res.setHeader('Content-Disposition', `inline; filename*=UTF-8''${encodeURIComponent(row.original_name)}`);
-    fs.createReadStream(file).pipe(res);
+    sendStoredFile(res, file);
   });
 
   // One file per request, so the page can show progress and carry on past a file that fails.

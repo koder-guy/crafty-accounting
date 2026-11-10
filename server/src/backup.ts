@@ -135,12 +135,32 @@ export function restoreBackup(ctx: AppContext, sql: string, uploadsFrom?: string
   const keepUsers = ctx.db.prepare('SELECT id, name, password_hash, role, created_at FROM users').all();
   const kept = KEPT_TABLES.map((table) => ({ table, rows: ctx.db.prepare(`SELECT * FROM ${table}`).all() as Record<string, unknown>[] }));
 
-  ctx.db.pragma('wal_checkpoint(TRUNCATE)');
+  // Copied while the database is still open, so a failure here (a full disk, say) changes nothing.
+  const preRestore = path.join(path.dirname(dbFile), 'crafty.pre-restore.db');
+  const removeWal = () => {
+    for (const suffix of ['-wal', '-shm']) fs.rmSync(dbFile + suffix, { force: true });
+  };
+  try {
+    ctx.db.pragma('wal_checkpoint(TRUNCATE)');
+    fs.copyFileSync(dbFile, preRestore);
+  } catch (err) {
+    fs.rmSync(newDbFile, { force: true });
+    throw err;
+  }
   ctx.db.close();
-  fs.copyFileSync(dbFile, path.join(path.dirname(dbFile), 'crafty.pre-restore.db'));
-  for (const suffix of ['-wal', '-shm']) fs.rmSync(dbFile + suffix, { force: true });
-  fs.renameSync(newDbFile, dbFile);
-  ctx.db = openDatabase(dbFile);
+  try {
+    removeWal();
+    fs.renameSync(newDbFile, dbFile);
+    ctx.db = openDatabase(dbFile);
+  } catch (err) {
+    // The books as they were go back, and the server carries on with them: left closed, every request would fail until a restart.
+    if (ctx.db.open) ctx.db.close();
+    fs.rmSync(newDbFile, { force: true });
+    fs.copyFileSync(preRestore, dbFile);
+    removeWal();
+    ctx.db = openDatabase(dbFile);
+    throw err;
+  }
   ctx.db.prepare("DELETE FROM settings WHERE key LIKE 'auto\\_backup\\_%' ESCAPE '\\'").run();
   for (const { key, value } of keepSettings) setSetting(ctx.db, key, value);
   // Tax year ids differ in the restored books, so everyone goes back to the default year.

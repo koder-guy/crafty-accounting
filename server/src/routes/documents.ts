@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { Router } from 'express';
 import type { AppContext } from '../context';
-import { ALLOWED_EXTENSIONS, documentNameProblem, documentPath } from '../documents';
+import { ALLOWED_EXTENSIONS, documentNameProblem, documentPath, sendStoredFile } from '../documents';
 import { HttpError } from '../http';
 import { isDocumentNameInUse } from '../repo';
 
@@ -18,7 +18,7 @@ export function documentsRouter(ctx: AppContext): Router {
     const disposition = req.query.download === '1' ? 'attachment' : 'inline';
     res.setHeader('Content-Type', ALLOWED_EXTENSIONS[path.extname(name).toLowerCase()]);
     res.setHeader('Content-Disposition', `${disposition}; filename*=UTF-8''${encodeURIComponent(name)}`);
-    fs.createReadStream(file).pipe(res);
+    sendStoredFile(res, file);
   });
 
   return router;

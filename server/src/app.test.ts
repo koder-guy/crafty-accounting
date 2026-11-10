@@ -2116,6 +2116,57 @@ describe('backup and restore', () => {
     expect((await agent.get('/api/tax-years')).body.taxYears).toHaveLength(1);
   });
 
+  it('carries on with the books as they were when a restore fails part-way', async () => {
+    const yearId = await createYear();
+    await agent.post('/api/incomes').send(income(yearId)).expect(201);
+    const dump = (await agent.get('/api/backup.sql')).text;
+    await agent.post('/api/incomes').send(income(yearId, { description: 'Added after the backup' })).expect(201);
+
+    // Moving the new database into place fails, after the live one has been closed.
+    const rename = vi.spyOn(fs, 'renameSync').mockImplementationOnce(() => {
+      throw new Error('disk trouble');
+    });
+    try {
+      await agent.post('/api/restore').attach('file', Buffer.from(dump), 'backup.sql').expect(500);
+    } finally {
+      rename.mockRestore();
+    }
+    expect((await agent.get('/api/incomes').query({ taxYearId: yearId }).expect(200)).body).toHaveLength(2);
+    await agent.post('/api/incomes').send(income(yearId, { description: 'Still saving' })).expect(201);
+
+    // And one that fails before anything is touched: no room for the copy of the old database.
+    const copy = vi.spyOn(fs, 'copyFileSync').mockImplementationOnce(() => {
+      throw new Error('no space');
+    });
+    try {
+      await agent.post('/api/restore').attach('file', Buffer.from(dump), 'backup.sql').expect(500);
+    } finally {
+      copy.mockRestore();
+    }
+    expect((await agent.get('/api/incomes').query({ taxYearId: yearId }).expect(200)).body).toHaveLength(3);
+    expect(fs.readdirSync(path.join(dataDir, 'tmp')).filter((name) => name.startsWith('restore-'))).toEqual([]);
+  });
+
+  it('answers with an error, and keeps running, when a document can\'t be read', async () => {
+    const yearId = await createYear();
+    await agent
+      .post('/api/incomes')
+      .field('data', JSON.stringify(income(yearId)))
+      .attach('documents', Buffer.from('%PDF-1.4 test'), 'unreadable.pdf')
+      .expect(201);
+    const file = path.join(dataDir, 'uploads', 'unreadable.pdf');
+    fs.rmSync(file);
+    fs.mkdirSync(file);
+    const quiet = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const res = await agent.get('/api/documents/unreadable.pdf').expect(500);
+      expect(res.body.error).toMatch(/could not be read/);
+    } finally {
+      quiet.mockRestore();
+    }
+    await agent.get('/api/health').expect(200);
+  });
+
   it('keeps everyone signed in through a restore and a reset, without putting passwords in backups', async () => {
     await seed();
     const jo = await addPerson('Jo');

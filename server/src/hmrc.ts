@@ -21,6 +21,8 @@ export const HMRC_SCOPE = 'read:self-assessment write:self-assessment';
 const REFRESH_TOKEN_MONTHS = 18;
 /** Refresh access tokens this long before they expire, so a call doesn't race the expiry. */
 const REFRESH_MARGIN_MS = 60 * 1000;
+/** How long HMRC gets to answer. Without a limit, a refresh that never answers would hold up every call waiting on it. */
+const HMRC_TIMEOUT_MS = 30_000;
 
 export interface HmrcConnectionRow {
   environment: HmrcEnvironment;
@@ -123,6 +125,7 @@ async function requestTokens(ctx: AppContext, fields: Record<string, string>): P
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' },
       body: new URLSearchParams({ client_id: clientId, client_secret: clientSecret, ...fields }).toString(),
+      signal: AbortSignal.timeout(HMRC_TIMEOUT_MS),
     });
   } catch {
     throw new HttpError(502, 'Could not reach HMRC. Check the server is online and try again.');
@@ -260,7 +263,12 @@ export async function callHmrcWithReceipt<T>(
 
   let res: Response;
   try {
-    res = await ctx.fetch(url, { method: call.method ?? 'GET', headers, body: call.body === undefined ? undefined : JSON.stringify(call.body) });
+    res = await ctx.fetch(url, {
+      method: call.method ?? 'GET',
+      headers,
+      body: call.body === undefined ? undefined : JSON.stringify(call.body),
+      signal: AbortSignal.timeout(HMRC_TIMEOUT_MS),
+    });
   } catch {
     throw new HttpError(502, 'Could not reach HMRC. Check the server is online and try again.');
   }
@@ -303,6 +311,7 @@ async function hmrcAppToken(ctx: AppContext): Promise<string> {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' },
       body: new URLSearchParams({ client_id: clientId, client_secret: clientSecret, grant_type: 'client_credentials' }).toString(),
+      signal: AbortSignal.timeout(HMRC_TIMEOUT_MS),
     });
   } catch {
     throw new HttpError(502, 'Could not reach HMRC. Check the server is online and try again.');
@@ -325,6 +334,7 @@ export async function checkFraudHeaders(ctx: AppContext, req: Request): Promise<
         Accept: 'application/vnd.hmrc.1.0+json',
         Authorization: `Bearer ${token}`,
       },
+      signal: AbortSignal.timeout(HMRC_TIMEOUT_MS),
     });
   } catch {
     throw new HttpError(502, 'Could not reach HMRC. Check the server is online and try again.');
