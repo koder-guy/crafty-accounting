@@ -18,4 +18,4 @@ export * from './tlsCertificate';
 export * from './types';
 
 export const APP_NAME = 'Crafty Accounting';
-export const APP_VERSION = '1.10.79';
+export const APP_VERSION = '1.10.80';
