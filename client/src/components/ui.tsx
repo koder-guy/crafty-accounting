@@ -271,10 +271,10 @@ const PAYMENT_STYLES: Record<PaymentMethod, string> = {
 
 /**
  * Payment method label, coloured per method (cash amber, card teal, bank transfer indigo).
- * `lg` (16px text) is for a transaction's own page.
+ * `lg` (14px text) is for a transaction's own page.
  */
 export function PaymentBadge({ method, size = 'sm' }: { method: PaymentMethod; size?: 'sm' | 'lg' }) {
-  const sizing = size === 'lg' ? 'px-2.5 py-0.5 text-base leading-[22px]' : 'px-2 py-0.5 text-xs';
+  const sizing = size === 'lg' ? 'px-2.5 py-0.5 text-sm leading-5' : 'px-2 py-0.5 text-xs';
   return (
     <span className={`inline-flex items-center rounded-md border font-medium whitespace-nowrap ${sizing} ${PAYMENT_STYLES[method]}`}>
       {PAYMENT_METHOD_LABELS[method]}
