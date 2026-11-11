@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
   addDaysIso,
+  discountSummary,
+  parseDiscountAmount,
+  splitDiscount,
   addMonthsIso,
   formatDateInput,
   parseDateInput,
@@ -658,5 +661,40 @@ describe('squareIncomeCategory', () => {
     expect(pick(custom('Square fees', 'EXPENSE', 'financeCharges'))).toBeNull();
     expect(pick(custom('Gift cards'))).toBeNull();
     expect(pick()).toBeNull();
+  });
+});
+
+describe('discounts', () => {
+  const items = [
+    { amountPence: 3000, categoryId: 1, disallowable: false },
+    { amountPence: 1000, categoryId: 2, disallowable: false },
+    { amountPence: 1, categoryId: 3, disallowable: false },
+  ];
+
+  it('splits a discount in proportion, in pence that add up', () => {
+    const shares = splitDiscount(items, 400);
+    expect(shares.reduce((acc, s) => acc + s.amountPence, 0)).toBe(400);
+    expect(shares.map((s) => [s.categoryId, s.amountPence])).toEqual([
+      [1, 300],
+      [2, 100],
+    ]);
+    expect(splitDiscount(items.slice(0, 2), 333).map((s) => s.amountPence)).toEqual([250, 83]);
+  });
+
+  it('reads an amount or a percentage of the items', () => {
+    expect(parseDiscountAmount('4.00', 0)).toBe(400);
+    expect(parseDiscountAmount('-£4', 0)).toBe(400);
+    expect(parseDiscountAmount('10%', 2345)).toBe(235);
+    expect(parseDiscountAmount('10%', 0)).toBeNull();
+    expect(parseDiscountAmount('150%', 1000)).toBeNull();
+    expect(parseDiscountAmount('0', 1000)).toBeNull();
+  });
+
+  it('summarises each discount against its category', () => {
+    const summary = discountSummary([
+      { description: 'Postage', amountPence: 399, categoryId: 2, disallowable: false },
+      { description: 'Free delivery', amountPence: -399, categoryId: 2, disallowable: false },
+    ]);
+    expect(summary).toEqual([{ description: 'Free delivery', amountPence: 399, categoryId: 2, disallowable: false, beforePence: 399, afterPence: 0 }]);
   });
 });

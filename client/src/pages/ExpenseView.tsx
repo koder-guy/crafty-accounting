@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router';
 import { Copy, ListOrdered, Pencil, Trash2 } from 'lucide-react';
 import { displayTaxYear, formatDisplayDate, formatGBP } from '@crafty/shared';
 import { ConfirmDialog } from '../components/ConfirmDialog';
+import { DiscountSummary } from '../components/DiscountSummary';
 import { SubmittedFiguresNotice } from '../components/SubmittedFiguresNotice';
 import { BackLink, recordedBy } from '../components/FormShell';
 import { attachedDocuments, DocumentLinks, tableUrl } from '../components/transactions';
@@ -98,6 +99,11 @@ export function ExpenseView() {
                       <tr key={li.id}>
                         <td className="px-4 py-3 sm:pl-6">
                           {li.description}
+                          {li.amountPence < 0 && (
+                            <span className="ml-2">
+                              <Badge tone="ok">Discount</Badge>
+                            </span>
+                          )}
                           {li.disallowable && (
                             <span className="ml-2">
                               <Badge tone="out">Disallowable</Badge>
@@ -107,7 +113,9 @@ export function ExpenseView() {
                         <td className="px-4 py-3 text-muted">
                           {li.categoryName} <span className="ml-1 font-mono text-xs text-faint">{li.hmrcCode}</span>
                         </td>
-                        <td className="tabular px-4 py-3 text-right sm:pr-6">{formatGBP(li.amountPence)}</td>
+                        <td className={`tabular px-4 py-3 text-right sm:pr-6 ${li.amountPence < 0 ? 'text-ok' : ''}`}>
+                          {li.amountPence < 0 ? `−${formatGBP(-li.amountPence)}` : formatGBP(li.amountPence)}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -119,6 +127,11 @@ export function ExpenseView() {
                   </tfoot>
                 </table>
               </div>
+              <DiscountSummary
+                className="border-t border-line px-4 py-4 sm:px-6"
+                lines={expense.lineItems}
+                categoryName={(categoryId) => expense.lineItems.find((li) => li.categoryId === categoryId)?.categoryName ?? 'Unknown'}
+              />
             </Card>
 
           </>

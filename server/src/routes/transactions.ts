@@ -30,6 +30,7 @@ import {
   getTaxYear,
   insertExpense,
   insertIncome,
+  expenseLineProblems,
   insertLineItem,
   lineItemParams,
   lineItemsTotal,
@@ -63,6 +64,14 @@ function checkCategory(ctx: AppContext, categoryId: number, type: CategoryType):
  * Refuses an edit made from an out-of-date copy, so one person can't silently
  * overwrite another's changes. Forms send the updatedAt they were loaded with.
  */
+/** Refuses (422) discounts not taken off one of the expense's own categories, or taking off more than it cost. */
+function checkDiscounts(ctx: AppContext, lineItems: { amountPence: number; categoryId: number; disallowable: boolean }[]): void {
+  const problems = expenseLineProblems(ctx.db, lineItems);
+  if (problems.length === 0) return;
+  const details = problems.map((p) => ({ path: p.index === null ? 'lineItems' : `lineItems.${p.index}.amountPence`, message: p.message }));
+  throw new HttpError(422, problems[0]!.message, details);
+}
+
 export function checkUnchanged(
   existing: { updatedAt: string; updatedBy: string | null },
   expectedUpdatedAt: string | undefined,
@@ -369,6 +378,7 @@ export function expensesRouter(ctx: AppContext): Router {
     const input = parseWith(expenseInputSchema, readPayload(req));
     checkTaxYearAndDate(ctx, input.taxYearId, input.date);
     input.lineItems.forEach((item) => checkCategory(ctx, item.categoryId, 'EXPENSE'));
+    checkDiscounts(ctx, input.lineItems);
     const files = uploadedFiles(req.files);
     // Checked from a scanned document: the scan goes in the same write, so it can't be saved twice.
     const scan = input.scanId === undefined ? null : getScanRow(ctx.db, input.scanId);
@@ -396,6 +406,7 @@ export function expensesRouter(ctx: AppContext): Router {
     if (input.taxYearId !== existing.taxYearId) throw new HttpError(422, 'A transaction cannot be moved to another tax year');
     checkTaxYearAndDate(ctx, existing.taxYearId, input.date);
     input.lineItems.forEach((item) => checkCategory(ctx, item.categoryId, 'EXPENSE'));
+    checkDiscounts(ctx, input.lineItems);
     const existingIds = new Set(existing.lineItems.map((li) => li.id));
     for (const item of input.lineItems) {
       if (item.id !== undefined && !existingIds.has(item.id)) {

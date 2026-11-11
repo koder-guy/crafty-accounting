@@ -12,8 +12,9 @@ import type {
   TransactionFilters,
   UseOfHomeResponse,
 } from '@crafty/shared';
-import type { ExpenseInput, IncomeInput } from '@crafty/shared';
+import type { DiscountProblem, ExpenseInput, IncomeInput } from '@crafty/shared';
 import {
+  discountProblems,
   isNeverAllowable,
   MILEAGE_HMRC_CODE,
   mileageClaims,
@@ -589,6 +590,22 @@ export function lineItemParams(
     disallowable: item.disallowable || isNeverAllowable(getCategory(db, item.categoryId)!.hmrcCode) ? 1 : 0,
     sortOrder,
   };
+}
+
+/**
+ * Why an expense's discounts can't be saved (see `discountProblems`), checked on the lines as they'll be
+ * stored, entertainment and depreciation being always disallowable. Callers check the categories exist first.
+ */
+export function expenseLineProblems(db: Db, items: { amountPence: number; categoryId: number; disallowable: boolean }[]): DiscountProblem[] {
+  const categories = new Map(listCategories(db).map((c) => [c.id, c]));
+  return discountProblems(
+    items.map((item) => ({
+      amountPence: item.amountPence,
+      categoryId: item.categoryId,
+      disallowable: item.disallowable || isNeverAllowable(categories.get(item.categoryId)?.hmrcCode ?? ''),
+    })),
+    (id) => categories.get(id)?.name ?? 'that category',
+  );
 }
 
 export const insertLineItem = (db: Db, expenseId: number) =>

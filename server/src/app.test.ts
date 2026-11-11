@@ -889,6 +889,87 @@ describe('expenses', () => {
     expect(created.totalPence).toBe(4550);
   });
 
+  describe('discounts', () => {
+    const withDiscount = (yearId: number, discount: Record<string, unknown>) =>
+      expense(yearId, { lineItems: [...expense(yearId).lineItems, { description: 'Promotion: free delivery', amountPence: -550, categoryId: cat('adminCosts'), ...discount }] });
+
+    it('saves a discount as a minus line, taken off its category in every total', async () => {
+      const yearId = await createYear();
+      const created = (await agent.post('/api/expenses').send(withDiscount(yearId, {})).expect(201)).body;
+      expect(created.totalPence).toBe(4000);
+      expect(created.disallowablePence).toBe(1000);
+      expect(created.lineItems.at(-1)).toMatchObject({ description: 'Promotion: free delivery', amountPence: -550 });
+      const quarters = (await agent.get('/api/mtd/quarters').query({ taxYearId: yearId })).body;
+      expect(quarters.quarters[0].period.periodExpenses.adminCosts ?? 0).toBe(0);
+      expect(quarters.quarters[0].period.periodExpenses.costOfGoods).toBe(3000);
+
+      // Editing keeps it, and the JSON export carries it for importing again.
+      const edited = (await agent.put(`/api/expenses/${created.id}`).send(withDiscount(yearId, { amountPence: -200 })).expect(200)).body;
+      expect(edited.totalPence).toBe(4350);
+      const exported = JSON.parse((await agent.get('/api/expenses/export.json').query({ taxYearId: yearId })).text);
+      expect(exported.expenses[0].lineItems.at(-1)).toMatchObject({ amountPence: -200, hmrcCode: 'adminCosts' });
+      await agent.delete(`/api/expenses/${created.id}`).expect(204);
+      await agent.post('/api/expenses/import').send(exported).expect(201);
+      expect((await agent.get('/api/expenses').query({ taxYearId: yearId })).body[0].totalPence).toBe(4350);
+    });
+
+    it('takes a discount only off a category its items use, matching whether they are disallowable', async () => {
+      const yearId = await createYear();
+      const other = await agent.post('/api/expenses').send(withDiscount(yearId, { categoryId: cat('premisesRunningCosts') })).expect(422);
+      expect(other.body.error).toMatch(/same category as one of the items/);
+      expect(other.body.details[0].path).toBe('lineItems.3.amountPence');
+      const standing = await agent.post('/api/expenses').send(withDiscount(yearId, { disallowable: true })).expect(422);
+      expect(standing.body.error).toMatch(/disallowable/);
+      await agent.post('/api/expenses').send(withDiscount(yearId, { categoryId: cat('otherExpenses'), disallowable: true, amountPence: -1000 })).expect(201);
+    });
+
+    it('refuses discounts worth more than their category, or leaving nothing to pay', async () => {
+      const yearId = await createYear();
+      const tooMuch = await agent.post('/api/expenses').send(withDiscount(yearId, { amountPence: -551 })).expect(422);
+      expect(tooMuch.body.error).toMatch(/more than its items cost/);
+      const onlyDiscounts = expense(yearId, { lineItems: [{ description: 'Voucher', amountPence: -100, categoryId: cat('adminCosts') }] });
+      await agent.post('/api/expenses').send(onlyDiscounts).expect(422);
+      const free = expense(yearId, {
+        lineItems: [
+          { description: 'Sample', amountPence: 300, categoryId: cat('costOfGoods') },
+          { description: 'Free sample', amountPence: -300, categoryId: cat('costOfGoods') },
+        ],
+      });
+      expect((await agent.post('/api/expenses').send(free).expect(422)).body.error).toMatch(/more than £0.00/);
+      await agent.post('/api/expenses').send(expense(yearId, { lineItems: [{ description: 'Nothing', amountPence: 0, categoryId: cat('costOfGoods') }] })).expect(400);
+    });
+
+    it('upgrades a backup made before discounts', async () => {
+      const old = new Database(':memory:');
+      old.exec('CREATE TABLE schema_migrations (version INTEGER PRIMARY KEY, applied_at TEXT)');
+      for (const migration of MIGRATIONS.filter((m) => m.version <= 32)) {
+        old.exec(migration.sql);
+        old.prepare('INSERT INTO schema_migrations (version) VALUES (?)').run(migration.version);
+      }
+      seedCategories(old);
+      old.prepare("INSERT INTO tax_years (label, start_date, end_date) VALUES ('2025-26', '2025-04-06', '2026-04-05')").run();
+      old.prepare("INSERT INTO expenses (tax_year_id, date, payee, payment_method, total_pence) VALUES (1, '2025-05-02', 'Bead World', 'card', 550)").run();
+      old.prepare("INSERT INTO expense_line_items (expense_id, description, amount_pence, category_id) VALUES (1, 'Postage', 550, ?)").run(cat('adminCosts'));
+      expect(() => old.prepare("INSERT INTO expense_line_items (expense_id, description, amount_pence, category_id) VALUES (1, 'Off', -1, ?)").run(cat('adminCosts'))).toThrow(/CHECK/);
+      const dump = dumpSql(old);
+      old.close();
+
+      await agent.post('/api/restore').attach('file', Buffer.from(dump), 'backup.sql').expect(200);
+      setUpBusiness(ctx.db);
+      const [kept] = (await agent.get('/api/expenses').query({ taxYearId: 1 })).body;
+      expect(kept.lineItems).toEqual([expect.objectContaining({ description: 'Postage', amountPence: 550 })]);
+      const payload = expense(1, {
+        lineItems: [
+          { id: kept.lineItems[0].id, description: 'Postage', amountPence: 550, categoryId: cat('adminCosts') },
+          { description: 'Promotion', amountPence: -550, categoryId: cat('adminCosts') },
+        ],
+      });
+      await agent.put(`/api/expenses/${kept.id}`).send(payload).expect(422);
+      payload.lineItems[1]!.amountPence = -50;
+      expect((await agent.put(`/api/expenses/${kept.id}`).send(payload).expect(200)).body.totalPence).toBe(500);
+    });
+  });
+
   it('rejects an income category on a line item', async () => {
     const yearId = await createYear();
     const bad = expense(yearId);
@@ -4056,6 +4137,30 @@ describe('reading invoices', () => {
     expect(other.payee).toBe('Bead World');
     expect(other.paymentMethod).toBeNull();
     expect(other.warnings).toEqual([expect.stringMatching(/how it was paid/)]);
+  });
+
+  it('gives discounts as minus lines in the category of the item they come off', () => {
+    const expenseCats = categories.filter((c) => c.type === 'EXPENSE');
+    const items = [
+      { description: 'Glass beads', amount: '30.00', categoryId: String(cat('costOfGoods')) },
+      { description: 'Delivery', amount: '10.00', categoryId: String(cat('adminCosts')) },
+    ];
+    const free = toInvoiceReading(
+      reply({ lineItems: items, discounts: [{ description: 'Promotion: free delivery', amount: '10.00', appliesToLine: 2 }], total: '30.00' }),
+      expenseCats,
+    );
+    expect(free.lineItems.at(-1)).toEqual({ description: 'Promotion: free delivery', amountPence: -1000, categoryId: cat('adminCosts') });
+    expect(free.warnings).toEqual([expect.stringMatching(/right category/)]);
+
+    // Off the whole order: split in proportion; an unknown line goes with the first item.
+    const whole = toInvoiceReading(reply({ lineItems: items, discounts: [{ description: '10% off', amount: '4.00', appliesToLine: null }], total: '36.00' }), expenseCats);
+    expect(whole.lineItems.slice(2)).toEqual([
+      { description: '10% off', amountPence: -300, categoryId: cat('costOfGoods') },
+      { description: '10% off', amountPence: -100, categoryId: cat('adminCosts') },
+    ]);
+    const unknown = toInvoiceReading(reply({ lineItems: [items[0]], discounts: [{ description: 'Voucher', amount: '-5', appliesToLine: 7 }], total: '25.00' }), expenseCats);
+    expect(unknown.lineItems.at(-1)).toEqual({ description: 'Voucher', amountPence: -500, categoryId: cat('costOfGoods') });
+    expect(unknown.warnings).toHaveLength(1);
   });
 
   it('keeps only what fits the form and says what to check', () => {

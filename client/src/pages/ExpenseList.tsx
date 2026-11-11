@@ -382,7 +382,9 @@ function LineItemsTable({ expense }: { expense: ExpenseWithLineItems }) {
               <td className="px-4 py-2 text-muted" title={li.categoryName}>
                 {shortCategoryName(li.categoryName)}
               </td>
-              <td className="tabular px-4 py-2 text-right text-ink">{formatGBP(li.amountPence)}</td>
+              <td className={`tabular px-4 py-2 text-right ${li.amountPence < 0 ? 'text-ok' : 'text-ink'}`}>
+                {li.amountPence < 0 ? `−${formatGBP(-li.amountPence)}` : formatGBP(li.amountPence)}
+              </td>
             </tr>
           ))}
         </tbody>

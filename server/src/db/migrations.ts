@@ -547,6 +547,27 @@ CREATE TABLE tls_addresses (
 ALTER TABLE tls_settings ADD COLUMN imported_addresses TEXT;
 `,
   },
+  // Discounts and promotions: expense lines with a minus amount, so expense_line_items is rebuilt
+  // without its amount_pence > 0 check (nothing refers to its ids). The expense's total stays above zero.
+  {
+    version: 33,
+    sql: `
+CREATE TABLE expense_line_items_new (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  expense_id INTEGER NOT NULL REFERENCES expenses(id) ON DELETE CASCADE,
+  description TEXT NOT NULL,
+  amount_pence INTEGER NOT NULL CHECK (amount_pence <> 0),
+  category_id INTEGER NOT NULL REFERENCES categories(id) ON DELETE RESTRICT,
+  disallowable INTEGER NOT NULL DEFAULT 0 CHECK (disallowable IN (0, 1)),
+  sort_order INTEGER NOT NULL DEFAULT 0
+);
+INSERT INTO expense_line_items_new (id, expense_id, description, amount_pence, category_id, disallowable, sort_order)
+  SELECT id, expense_id, description, amount_pence, category_id, disallowable, sort_order FROM expense_line_items;
+DROP TABLE expense_line_items;
+ALTER TABLE expense_line_items_new RENAME TO expense_line_items;
+CREATE INDEX idx_line_items_expense ON expense_line_items (expense_id);
+`,
+  },
 ];
 
 export const CURRENT_SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;

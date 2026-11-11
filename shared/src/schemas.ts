@@ -20,6 +20,12 @@ const pence = z
   .int('Amount must be in whole pence')
   .positive('Amount must be more than £0.00')
   .max(MAX_PENCE, 'Amount is too large');
+/** An expense line: an item, or a discount or promotion with a minus amount (see discounts.ts). */
+const linePence = z
+  .number()
+  .int('Amount must be in whole pence')
+  .refine((v) => v !== 0, 'Amount must not be £0.00')
+  .refine((v) => Math.abs(v) <= MAX_PENCE, 'Amount is too large');
 const id = z.number().int().positive();
 const optionalText = (max: number) =>
   z
@@ -84,7 +90,7 @@ export type IncomeInput = z.infer<typeof incomeInputSchema>;
 export const lineItemInputSchema = z.object({
   id: id.optional(),
   description: z.string().trim().min(1, 'Line item description is required').max(500),
-  amountPence: pence,
+  amountPence: linePence,
   categoryId: id,
   disallowable: z.boolean().default(false),
 });

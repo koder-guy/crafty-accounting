@@ -3,7 +3,7 @@
 // schema the reply must follow and the checks on it are shared, so both read the same way.
 import path from 'node:path';
 import { z } from 'zod';
-import { AI_PROVIDER_INFO, parsePoundsToPence, PAYMENT_METHODS, type AiModel, type AiProvider, type InvoiceReading } from '@crafty/shared';
+import { AI_PROVIDER_INFO, parsePoundsToPence, PAYMENT_METHODS, splitDiscount, type AiModel, type AiProvider, type InvoiceReading } from '@crafty/shared';
 import { HttpError } from './http';
 
 export type InvoiceMediaType = 'application/pdf' | 'image/jpeg' | 'image/png' | 'image/webp' | 'image/heic' | 'image/heif';
@@ -84,7 +84,8 @@ Read the document and fill in one expense:
 - temuOrder: true when the order was placed on Temu: Temu is named, or the seller is Whaleco (e.g. "Whaleco UK Limited"). Otherwise false.
 - invoiceNumber and orderNumber: as printed, or "" if absent.
 - paymentMethod: "card", "cash" or "bank_transfer" only when the document says how it was paid (a card receipt, "paid by BACS"); otherwise null.
-- lineItems: what was bought, one line per item or group of similar items, with the amount actually paid including any VAT. Put delivery or postage on its own line. Spread a discount over the lines it applies to, so every amount is above zero and the lines add up to the total paid. If the lines can't be read, give one line for the whole total.
+- lineItems: what was bought, one line per item or group of similar items, with its price including any VAT, before any discount or promotion. Put delivery or postage on its own line, at its full price even when a promotion makes it free. If the lines can't be read, give one line for the whole total paid.
+- discounts: each discount, promotion, voucher or saving taken off, described as printed (e.g. "Promotion: free delivery"), with amount the positive amount taken off. appliesToLine: the number of the line in lineItems it's taken off (1 for the first), e.g. a free delivery promotion is taken off the delivery line; null when it's taken off the whole order. [] when there are none. The lines less the discounts add up to the total paid.
 - description: for each line, what was bought, as it would be written in a ledger: about 60 characters at most. A short description stays as printed. Shorten a long one, such as an Amazon product title, to what the item is, the brand if it helps, and the size or quantity; leave out sales wording, lists of uses or compatible models, and colour or style options unless they matter. For example "SUNNYCLUE 1 Box 600Pcs Assorted Glass Beads for Jewellery Making Kit, Mixed Colour Loose Spacer Beads Craft Supplies for Bracelets Necklaces DIY" becomes "SUNNYCLUE assorted glass beads, 600 pcs".
 - categoryId: for each line, the id of the category from the list that fits best, or null if none does. The owner's own categories say which standard category they come under; prefer one of the owner's own when it fits.
 - total: the total paid, or null if the document shows none.
@@ -100,6 +101,7 @@ const replySchema = z.object({
   orderNumber: z.string(),
   paymentMethod: z.enum(PAYMENT_METHODS).nullable(),
   lineItems: z.array(z.object({ description: z.string(), amount: z.string(), categoryId: z.string().nullable() })),
+  discounts: z.array(z.object({ description: z.string(), amount: z.string(), appliesToLine: z.number().int().nullable() })).optional(),
   total: z.string().nullable(),
 });
 
@@ -108,7 +110,7 @@ export function outputSchema(categoryIds: string[]) {
   return {
     type: 'object',
     additionalProperties: false,
-    required: ['date', 'payee', 'amazonOrder', 'temuOrder', 'invoiceNumber', 'orderNumber', 'paymentMethod', 'lineItems', 'total'],
+    required: ['date', 'payee', 'amazonOrder', 'temuOrder', 'invoiceNumber', 'orderNumber', 'paymentMethod', 'lineItems', 'discounts', 'total'],
     properties: {
       date: nullableString,
       payee: { type: 'string' },
@@ -127,6 +129,19 @@ export function outputSchema(categoryIds: string[]) {
             description: { type: 'string' },
             amount: { type: 'string' },
             categoryId: { anyOf: [{ type: 'string', enum: categoryIds }, { type: 'null' }] },
+          },
+        },
+      },
+      discounts: {
+        type: 'array',
+        items: {
+          type: 'object',
+          additionalProperties: false,
+          required: ['description', 'amount', 'appliesToLine'],
+          properties: {
+            description: { type: 'string' },
+            amount: { type: 'string' },
+            appliesToLine: { anyOf: [{ type: 'integer' }, { type: 'null' }] },
           },
         },
       },
@@ -160,16 +175,41 @@ export function toInvoiceReading(reply: unknown, categories: InvoiceInput['categ
   const warnings: string[] = [];
   const known = new Set(categories.map((c) => c.id));
 
-  const lineItems = r.lineItems.flatMap((line) => {
+  // Each item by its number in the reply (1 for the first), for the discounts that say which they're taken off.
+  const byNumber = new Map<number, InvoiceReading['lineItems'][number]>();
+  const items = r.lineItems.flatMap((line, index) => {
     const amountPence = parsePoundsToPence(line.amount);
     if (amountPence === null || amountPence <= 0) {
       warnings.push(`A line couldn't be read ("${line.description}", ${line.amount}), so it was left out.`);
       return [];
     }
     const id = line.categoryId === null ? null : Number(line.categoryId);
-    return [{ description: line.description.trim().slice(0, 500), amountPence, categoryId: id !== null && known.has(id) ? id : null }];
+    const item = { description: line.description.trim().slice(0, 500), amountPence, categoryId: id !== null && known.has(id) ? id : null };
+    byNumber.set(index + 1, item);
+    return [item];
   });
+  // Discounts are lines with minus amounts, each in the category of the item it's taken off. One off the whole
+  // order is split across the items' categories in proportion; failing both, it goes with the first item.
+  const discounts = (r.discounts ?? []).flatMap((discount) => {
+    const description = discount.description.trim().slice(0, 500) || 'Discount';
+    const pence = parsePoundsToPence(discount.amount.replace(/^-/, ''));
+    if (pence === null || pence <= 0 || items.length === 0) {
+      warnings.push(`A discount couldn't be read ("${discount.description}", ${discount.amount}), so it was left out.`);
+      return [];
+    }
+    const target = discount.appliesToLine === null ? undefined : byNumber.get(discount.appliesToLine);
+    if (!target && items.every((i) => i.categoryId !== null)) {
+      const shares = splitDiscount(
+        items.map((i) => ({ amountPence: i.amountPence, categoryId: i.categoryId!, disallowable: false })),
+        pence,
+      );
+      if (shares.length > 1) return shares.map((share) => ({ description, amountPence: -share.amountPence, categoryId: share.categoryId }));
+    }
+    return [{ description, amountPence: -pence, categoryId: (target ?? items[0]!).categoryId }];
+  });
+  const lineItems = [...items, ...discounts];
   if (lineItems.some((l) => l.categoryId === null)) warnings.push('Choose a category for the lines left without one.');
+  if (discounts.length) warnings.push('Check each discount is taken off the right category.');
 
   const totalPence = r.total === null ? null : parsePoundsToPence(r.total);
   const linesPence = lineItems.reduce((sum, l) => sum + l.amountPence, 0);

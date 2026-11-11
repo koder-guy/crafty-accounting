@@ -2,10 +2,14 @@ import { useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Controller, useFieldArray, useForm, useWatch } from 'react-hook-form';
 import { useNavigate, useParams, useSearchParams } from 'react-router';
-import { ExternalLink, Plus, Trash2 } from 'lucide-react';
+import { BadgePercent, ExternalLink, Plus, Split, Trash2 } from 'lucide-react';
 import {
   CASH_BASIS_UNUSED_CODE,
+  discountProblems,
   formatGBP,
+  isPercentage,
+  parseDiscountAmount,
+  splitDiscount,
   displayTaxYear,
   isNeverAllowable,
   formatDisplayDate,
@@ -20,6 +24,7 @@ import {
   type PaymentMethod,
 } from '@crafty/shared';
 import { CategoryOptions } from '../components/CategoryOptions';
+import { DiscountSummary } from '../components/DiscountSummary';
 import { BackLink, ChangedElsewhere, CopiedFrom, dateInYear, duplicateDate, useLeaveGuard, yearRangeHint } from '../components/FormShell';
 import { NoTaxYear } from '../components/NoTaxYear';
 import { ConfirmDialog } from '../components/ConfirmDialog';
@@ -40,6 +45,8 @@ interface LineValues {
   amount: string;
   categoryId: string;
   disallowable: boolean;
+  /** A discount or promotion: `amount` is what's taken off, as an amount or a percentage ("10%"), saved as a minus amount. */
+  discount: boolean;
 }
 
 interface Values {
@@ -52,12 +59,63 @@ interface Values {
   lineItems: LineValues[];
 }
 
-const emptyLine = (categoryId = ''): LineValues => ({ description: '', amount: '', categoryId, disallowable: false });
+const emptyLine = (categoryId = ''): LineValues => ({ description: '', amount: '', categoryId, disallowable: false, discount: false });
+
+/** A saved or read line as the form holds it: discounts show what's taken off. */
+const lineValues = (li: { amountPence: number; categoryId: number | null; description: string; disallowable?: boolean }): LineValues => ({
+  description: li.description,
+  amount: penceToPounds(Math.abs(li.amountPence)),
+  categoryId: li.categoryId === null ? '' : String(li.categoryId),
+  disallowable: li.disallowable ?? false,
+  discount: li.amountPence < 0,
+});
 
 const validAmount = (v: string) => {
   const pence = parsePoundsToPence(v);
   return (pence !== null && pence > 0) || 'Enter an amount above £0.00';
 };
+
+interface PricedLine {
+  description: string;
+  categoryId: string;
+  discount: boolean;
+  /** As it will be saved: always for entertainment and depreciation, and a discount's follows its category's items. */
+  disallowable: boolean;
+  /** A discount whose category has both allowable and disallowable items, so it's chosen. */
+  choosable: boolean;
+  /** Signed: a discount is minus. Null when the amount isn't valid. */
+  pence: number | null;
+}
+
+/**
+ * Each line's amount in pence and how it will be saved. A discount given as a percentage is worked out
+ * from the items in its category (allowable or not, like it), to the nearest penny.
+ */
+function pricedLines(lines: (LineValues | undefined)[], neverAllowable: (categoryId: string | undefined) => boolean): PricedLine[] {
+  const itemDisallowable = (l: LineValues) => !!l.disallowable || neverAllowable(l.categoryId);
+  const items = lines.filter((l): l is LineValues => !!l && !l.discount);
+  const itemPence = (l: LineValues) => {
+    const pence = parsePoundsToPence(l.amount ?? '');
+    return pence !== null && pence > 0 ? pence : null;
+  };
+  return lines.map((l) => {
+    if (!l) return { description: '', categoryId: '', discount: false, disallowable: false, choosable: false, pence: null };
+    const base = { description: l.description ?? '', categoryId: l.categoryId ?? '' };
+    if (!l.discount) return { ...base, discount: false, disallowable: itemDisallowable(l), choosable: false, pence: itemPence(l) };
+    const kinds = new Set(items.filter((i) => i.categoryId === l.categoryId).map(itemDisallowable));
+    const choosable = kinds.size > 1 && !neverAllowable(l.categoryId);
+    const disallowable = neverAllowable(l.categoryId) || (kinds.size === 1 ? [...kinds][0]! : !!l.disallowable);
+    const cost = items
+      .filter((i) => i.categoryId === l.categoryId && itemDisallowable(i) === disallowable)
+      .reduce((acc, i) => acc + (itemPence(i) ?? 0), 0);
+    const off = parseDiscountAmount(l.amount ?? '', cost);
+    return { ...base, discount: true, disallowable, choosable, pence: off === null ? null : -off };
+  });
+}
+
+// Whether it can be read; a percentage of what its items cost is checked when saving.
+const validDiscount = (v: string) =>
+  parseDiscountAmount(v, isPercentage(v) ? 100_000_000 : 0) !== null || 'Enter an amount above £0.00, or a percentage such as 10%';
 
 /** Checking scanned documents moves from one to the next on this page, so each starts afresh. */
 export function ExpenseForm() {
@@ -151,7 +209,7 @@ function ExpenseFormPage() {
       lineItems: [emptyLine()],
     },
   });
-  const { fields, append, remove } = useFieldArray({ control, name: 'lineItems' });
+  const { fields, append, remove, insert } = useFieldArray({ control, name: 'lineItems' });
 
   // The version of the record the form was filled from; saving is refused if it has changed since.
   const [loaded, setLoaded] = useState<ExpenseWithLineItems | null>(null);
@@ -164,13 +222,7 @@ function ExpenseFormPage() {
       orderNumber: record.orderNumber ?? '',
       paymentMethod: record.paymentMethod,
       notes: record.notes ?? '',
-      lineItems: record.lineItems.map((li) => ({
-        lineId: li.id,
-        description: li.description,
-        amount: penceToPounds(li.amountPence),
-        categoryId: String(li.categoryId),
-        disallowable: li.disallowable,
-      })),
+      lineItems: record.lineItems.map((li) => ({ ...lineValues(li), lineId: li.id })),
     });
     setLoaded(record);
     setRemoveIds([]);
@@ -206,12 +258,7 @@ function ExpenseFormPage() {
         orderNumber: '',
         paymentMethod: original.paymentMethod,
         notes: original.notes ?? '',
-        lineItems: original.lineItems.map((li) => ({
-          description: li.description,
-          amount: penceToPounds(li.amountPence),
-          categoryId: String(li.categoryId),
-          disallowable: li.disallowable,
-        })),
+        lineItems: original.lineItems.map(lineValues),
       });
     } else if (!id && !copyId && activeYear && expenseCategories.length) {
       filledFor.current = key;
@@ -259,14 +306,7 @@ function ExpenseFormPage() {
       invoiceNumber: reading.invoiceNumber,
       orderNumber: reading.orderNumber,
       paymentMethod: reading.paymentMethod ?? '',
-      lineItems: reading.lineItems.length
-        ? reading.lineItems.map((li) => ({
-            description: li.description,
-            amount: penceToPounds(li.amountPence),
-            categoryId: li.categoryId === null ? '' : String(li.categoryId),
-            disallowable: false,
-          }))
-        : current.lineItems,
+      lineItems: reading.lineItems.length ? reading.lineItems.map(lineValues) : current.lineItems,
     });
     setFiles((prev) => {
       const others = prev.filter((f) => f !== readFile.current);
@@ -278,15 +318,70 @@ function ExpenseFormPage() {
 
   const watchedLines = useWatch({ control, name: 'lineItems' });
   const watchedDate = useWatch({ control, name: 'date' });
-  const linePence = (watchedLines ?? []).map((li) => parsePoundsToPence(li?.amount ?? ''));
+  const priced = pricedLines(watchedLines ?? [], neverAllowable);
+  const linePence = priced.map((l) => l.pence);
   const lineSum = linePence.reduce<number>((acc, p) => acc + (p ?? 0), 0);
-  const disallowableSum = (watchedLines ?? []).reduce(
-    (acc, li, i) => acc + (li?.disallowable || neverAllowable(li?.categoryId) ? (linePence[i] ?? 0) : 0),
-    0,
+  const disallowableSum = priced.reduce((acc, l) => acc + (l.disallowable ? (l.pence ?? 0) : 0), 0);
+  const categoryName = (categoryId: number) => categories.find((c) => c.id === categoryId)?.name ?? 'that category';
+  // The lines that can be checked: an amount and a category each.
+  const complete = priced.flatMap((l, index) =>
+    l.pence !== null && l.categoryId ? [{ index, amountPence: l.pence, categoryId: Number(l.categoryId), disallowable: l.disallowable, description: l.description }] : [],
   );
+  const hasDiscounts = priced.some((l) => l.discount);
+  const lineProblems = hasDiscounts
+    ? discountProblems(complete, categoryName).map((p) => ({ ...p, index: p.index === null ? null : complete[p.index]!.index }))
+    : [];
+  // The categories a discount can be taken off: those the items use.
+  const itemCategories = [...new Set(priced.filter((l) => !l.discount && l.categoryId).map((l) => l.categoryId))];
+  const discountCategories = (current: string | undefined) =>
+    expenseCategories.filter((c) => itemCategories.includes(String(c.id)) || String(c.id) === current);
+  const itemGroups = new Set(priced.filter((l) => !l.discount && l.categoryId).map((l) => `${l.categoryId}:${l.disallowable}`));
+
+  /** Replaces a discount on several categories with one per category, in proportion to what their items cost. */
+  const splitAt = (index: number) => {
+    const line = getValues(`lineItems.${index}`);
+    const pence = priced[index]?.pence;
+    if (pence === null || pence === undefined) return;
+    // In proportion to what each category has left after its other discounts, so a free delivery isn't taken off again.
+    const left = complete.filter((l) => l.index !== index).map((l) => ({ ...l }));
+    for (const off of left.filter((l) => l.amountPence < 0)) {
+      for (const item of left.filter((l) => l.amountPence > 0 && l.categoryId === off.categoryId && l.disallowable === off.disallowable)) {
+        const taken = Math.min(item.amountPence, -off.amountPence);
+        item.amountPence -= taken;
+        off.amountPence += taken;
+      }
+    }
+    const shares = splitDiscount(left.filter((l) => l.amountPence > 0), -pence);
+    if (shares.length === 0) return;
+    remove(index);
+    insert(
+      index,
+      shares.map((share) => ({
+        description: line.description,
+        amount: penceToPounds(share.amountPence),
+        categoryId: String(share.categoryId),
+        disallowable: share.disallowable,
+        discount: true,
+      })),
+    );
+  };
 
   const onSubmit = handleSubmit((values) => {
     if (!taxYear) return;
+    const lines = pricedLines(values.lineItems, neverAllowable);
+    const unpriced = lines.findIndex((l) => l.pence === null);
+    if (unpriced >= 0) {
+      setError(`lineItems.${unpriced}.amount`, { message: 'Its items cost nothing yet, so there is nothing to take a percentage of' });
+      return;
+    }
+    const problems = discountProblems(
+      lines.map((l) => ({ amountPence: l.pence ?? 0, categoryId: Number(l.categoryId), disallowable: l.disallowable })),
+      categoryName,
+    );
+    if (problems.length) {
+      setError('root.lines', { message: problems[0]!.message });
+      return;
+    }
     const payload = {
       taxYearId: taxYear.id,
       date: values.date,
@@ -299,12 +394,12 @@ function ExpenseFormPage() {
       renameDocuments: renamedDocuments(existing?.documents ?? [], renames),
       expectedUpdatedAt: id ? loaded?.updatedAt : undefined,
       scanId: scanId ?? undefined,
-      lineItems: values.lineItems.map((li) => ({
+      lineItems: values.lineItems.map((li, i) => ({
         id: li.lineId,
         description: li.description,
-        amountPence: parsePoundsToPence(li.amount),
+        amountPence: lines[i]!.pence,
         categoryId: Number(li.categoryId),
-        disallowable: li.disallowable,
+        disallowable: lines[i]!.disallowable,
       })),
     };
     save.mutate(
@@ -319,6 +414,11 @@ function ExpenseFormPage() {
           if (err instanceof ApiError && err.status === 409) refetchExisting();
           if (err instanceof ApiError && err.details?.some((d) => d.path === 'date')) {
             setError('date', { message: err.message });
+          }
+          // A discount the server refused: shown on its line.
+          for (const detail of err instanceof ApiError ? (err.details ?? []) : []) {
+            const line = /^lineItems\.(\d+)\.amountPence$/.exec(detail.path);
+            if (line) setError(`lineItems.${Number(line[1])}.amount`, { message: detail.message });
           }
         },
       },
@@ -511,10 +611,21 @@ function ExpenseFormPage() {
             <CardHeader
               title="Line items"
               action={
-                <Button type="button" onClick={() => append(emptyLine(defaultCategory))}>
-                  <Plus className="size-4" aria-hidden />
-                  Add line item
-                </Button>
+                <div className="flex flex-wrap gap-2">
+                  <Button type="button" onClick={() => append(emptyLine(defaultCategory))}>
+                    <Plus className="size-4" aria-hidden />
+                    Add line item
+                  </Button>
+                  <Button
+                    type="button"
+                    onClick={() =>
+                      append({ ...emptyLine(itemCategories[0] ?? ''), discount: true }, { focusName: `lineItems.${fields.length}.description` })
+                    }
+                  >
+                    <BadgePercent className="size-4" aria-hidden />
+                    Add discount
+                  </Button>
+                </div>
               }
             />
             {/* relative: keeps the table's hidden Delete label inside the scroll area, or the page scrolls sideways. */}
@@ -534,7 +645,7 @@ function ExpenseFormPage() {
                     <th scope="col" className="w-28 px-4 py-3 text-center font-medium" title="Not allowable for tax, e.g. personal use">
                       Disallowable
                     </th>
-                    <th scope="col" className="w-14 px-4 py-3">
+                    <th scope="col" className="w-20 px-4 py-3">
                       <span className="sr-only">Delete</span>
                     </th>
                   </tr>
@@ -542,6 +653,100 @@ function ExpenseFormPage() {
                 <tbody className="divide-y divide-line">
                   {fields.map((field, index) => {
                     const lineErrors = errors.lineItems?.[index];
+                    // Whether it's a discount comes from the field, which has it from the start: the watched values
+                    // catch up a render later, and switching row kinds then would lose the category chosen for it.
+                    if (field.discount) {
+                      const line = priced[index] ?? { discount: true, disallowable: false, choosable: false, pence: null };
+                      const problem = lineProblems.find((p) => p.index === index)?.message;
+                      const splittable = itemGroups.size > 1 && line.pence !== null;
+                      return (
+                        <tr key={field.id} className="align-top bg-ok/5">
+                          <td className="px-4 py-3">
+                            <input
+                              aria-label={`Line ${index + 1} discount description`}
+                              className="field"
+                              placeholder="Promotion or discount"
+                              {...register(`lineItems.${index}.description`, { required: 'Required', maxLength: 500 })}
+                            />
+                            {lineErrors?.description && <p className="mt-1 text-xs text-out-soft">{lineErrors.description.message}</p>}
+                          </td>
+                          <td className="px-4 py-3">
+                            <select
+                              aria-label={`Line ${index + 1} discount category`}
+                              title="The category it's taken off: one the items use"
+                              className="field"
+                              {...register(`lineItems.${index}.categoryId`, { required: 'Choose a category' })}
+                            >
+                              <option value="">Choose…</option>
+                              <CategoryOptions categories={discountCategories(watchedLines?.[index]?.categoryId)} type="EXPENSE" />
+                            </select>
+                            {lineErrors?.categoryId && <p className="mt-1 text-xs text-out-soft">{lineErrors.categoryId.message}</p>}
+                          </td>
+                          <td className="px-4 py-3">
+                            <div className="relative">
+                              <span className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-ok" aria-hidden>
+                                −
+                              </span>
+                              <input
+                                aria-label={`Line ${index + 1} discount amount or percentage`}
+                                inputMode="decimal"
+                                placeholder="0.00 or 10%"
+                                className="field tabular pl-6 text-right text-ok"
+                                {...register(`lineItems.${index}.amount`, { validate: validDiscount })}
+                              />
+                            </div>
+                            {lineErrors?.amount ? (
+                              <p className="mt-1 text-xs text-out-soft">{lineErrors.amount.message}</p>
+                            ) : problem ? (
+                              <p className="mt-1 text-xs text-out-soft">{problem}</p>
+                            ) : (
+                              isPercentage(watchedLines?.[index]?.amount ?? '') &&
+                              line.pence !== null && <p className="tabular mt-1 text-right text-xs text-muted">= −{formatGBP(-line.pence)}</p>
+                            )}
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            {line.choosable ? (
+                              <input
+                                key="chosen"
+                                type="checkbox"
+                                aria-label={`Line ${index + 1} disallowable`}
+                                title="Take it off the disallowable items in this category"
+                                className="mt-2.5 size-4 accent-[var(--color-accent)]"
+                                {...register(`lineItems.${index}.disallowable`)}
+                              />
+                            ) : (
+                              <input
+                                key="follows"
+                                type="checkbox"
+                                aria-label={`Line ${index + 1} disallowable`}
+                                title="Follows the items in its category"
+                                className="mt-2.5 size-4 accent-[var(--color-accent)]"
+                                checked={line.disallowable}
+                                disabled
+                                readOnly
+                              />
+                            )}
+                          </td>
+                          <td className="px-2 py-3">
+                            <div className="flex items-center justify-center gap-1">
+                              {splittable && (
+                                <IconButton
+                                  label={`Split discount ${index + 1} across the items' categories`}
+                                  title="Split across the items' categories, in proportion to what they cost"
+                                  className="mt-1"
+                                  onClick={() => splitAt(index)}
+                                >
+                                  <Split className="size-4" />
+                                </IconButton>
+                              )}
+                              <IconButton label={`Delete line ${index + 1}`} tone="danger" className="mt-1" onClick={() => remove(index)}>
+                                <Trash2 className="size-4" />
+                              </IconButton>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    }
                     return (
                       <tr key={field.id} className="align-top">
                         <td className="px-4 py-3">
@@ -577,6 +782,7 @@ function ExpenseFormPage() {
                         <td className="px-4 py-3 text-center">
                           {neverAllowable(watchedLines?.[index]?.categoryId) ? (
                             <input
+                              key="never"
                               type="checkbox"
                               aria-label={`Line ${index + 1} disallowable`}
                               title="HMRC never allows this category"
@@ -587,6 +793,7 @@ function ExpenseFormPage() {
                             />
                           ) : (
                             <input
+                              key="chosen"
                               type="checkbox"
                               aria-label={`Line ${index + 1} disallowable`}
                               className="mt-2.5 size-4 accent-[var(--color-accent)]"
@@ -599,7 +806,7 @@ function ExpenseFormPage() {
                             label={`Delete line ${index + 1}`}
                             tone="danger"
                             className="mt-1"
-                            disabled={fields.length === 1}
+                            disabled={priced.filter((l) => !l.discount).length === 1}
                             onClick={() => remove(index)}
                           >
                             <Trash2 className="size-4" />
@@ -618,6 +825,16 @@ function ExpenseFormPage() {
               </p>
               <p className="tabular font-semibold text-ink">{formatGBP(lineSum)}</p>
             </div>
+            {(errors.root?.lines || lineProblems.some((p) => p.index === null)) && (
+              <div className="px-5 pb-4 sm:px-6">
+                <Alert>{lineProblems.find((p) => p.index === null)?.message ?? errors.root?.lines?.message}</Alert>
+              </div>
+            )}
+            <DiscountSummary
+              className="border-t border-line px-5 py-4 sm:px-6"
+              lines={complete}
+              categoryName={categoryName}
+            />
           </Card>
 
           <Card className="p-5 sm:p-6">

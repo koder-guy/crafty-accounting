@@ -21,7 +21,7 @@ import {
 import type { z } from 'zod';
 import type { AppContext } from './context';
 import { HttpError } from './http';
-import { insertExpense, insertIncome, lineItemsTotal, listCategories, listExpenses, listIncomes, listTaxYears } from './repo';
+import { expenseLineProblems, insertExpense, insertIncome, lineItemsTotal, listCategories, listExpenses, listIncomes, listTaxYears } from './repo';
 
 export type ImportKind = 'incomes' | 'expenses';
 
@@ -220,6 +220,11 @@ export function importTransactions(ctx: AppContext, req: Request, kind: ImportKi
     const total = lineItemsTotal(row.lineItems);
     if (row.totalPence != null && row.totalPence !== total) {
       problems.add(`${label}: its total, ${formatGBP(row.totalPence)}, isn't the sum of its line items, ${formatGBP(total)}.`);
+      ok = false;
+    }
+    if (!ok) return null;
+    for (const problem of expenseLineProblems(ctx.db, row.lineItems.map((line, i) => ({ ...line, categoryId: ids[i]! })))) {
+      problems.add(`${label}: ${problem.index === null ? '' : `line ${problem.index + 1}: `}${problem.message}.`);
       ok = false;
     }
     if (!ok) return null;
