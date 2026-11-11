@@ -97,7 +97,11 @@ export function SectionLayout({
       <PageHeader title={title} subtitle={subtitle} />
       <PageBody>
         <div className="lg:grid lg:grid-cols-[220px_minmax(0,1fr)] lg:gap-8 print:block">
-          <nav aria-label={title} className="mb-6 flex gap-2 overflow-x-auto lg:mb-0 lg:flex-col lg:gap-1 print:hidden">
+          {/* On desktop the menu stays put below the pinned header while the page scrolls. */}
+          <nav
+            aria-label={title}
+            className="mb-6 flex gap-2 overflow-x-auto lg:sticky lg:top-[calc(var(--page-header-h,0px)+2rem)] lg:mb-0 lg:max-h-[calc(100dvh-var(--page-header-h,0px)-4rem)] lg:flex-col lg:gap-1 lg:self-start lg:overflow-x-visible lg:overflow-y-auto print:hidden"
+          >
             {sections.map(({ to, label, icon: Icon }) => (
               <NavLink
                 key={to}
