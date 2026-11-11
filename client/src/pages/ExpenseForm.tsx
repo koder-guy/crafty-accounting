@@ -197,6 +197,7 @@ function ExpenseFormPage() {
     reset,
     getValues,
     setError,
+    setValue,
     formState: { errors, isDirty },
   } = useForm<Values>({
     defaultValues: {
@@ -335,6 +336,14 @@ function ExpenseFormPage() {
   const itemCategories = [...new Set(priced.filter((l) => !l.discount && l.categoryId).map((l) => l.categoryId))];
   const discountCategories = (current: string | undefined) =>
     expenseCategories.filter((c) => itemCategories.includes(String(c.id)) || String(c.id) === current);
+  // With the items all in one category, every discount is taken off it: one left blank or on another follows it.
+  const onlyCategory = itemCategories.length === 1 ? itemCategories[0]! : null;
+  useEffect(() => {
+    if (!onlyCategory) return;
+    (getValues('lineItems') ?? []).forEach((line, i) => {
+      if (line.discount && line.categoryId !== onlyCategory) setValue(`lineItems.${i}.categoryId`, onlyCategory, { shouldDirty: true });
+    });
+  }, [onlyCategory, priced.filter((l) => l.discount).length]); // eslint-disable-line react-hooks/exhaustive-deps
   const itemGroups = new Set(priced.filter((l) => !l.discount && l.categoryId).map((l) => `${l.categoryId}:${l.disallowable}`));
 
   /** Replaces a discount on several categories with one per category, in proportion to what their items cost. */
@@ -671,15 +680,36 @@ function ExpenseFormPage() {
                             {lineErrors?.description && <p className="mt-1 text-xs text-out-soft">{lineErrors.description.message}</p>}
                           </td>
                           <td className="px-4 py-3">
-                            <select
-                              aria-label={`Line ${index + 1} discount category`}
-                              title="The category it's taken off: one the items use"
-                              className="field"
-                              {...register(`lineItems.${index}.categoryId`, { required: 'Choose a category' })}
-                            >
-                              <option value="">Choose…</option>
-                              <CategoryOptions categories={discountCategories(watchedLines?.[index]?.categoryId)} type="EXPENSE" />
-                            </select>
+                            {/* Controlled, so it shows the category even when it's filled before the items' categories are known.
+                                Only the items' categories, listed plainly: one of the owner's own is a category like any other here. */}
+                            <Controller
+                              control={control}
+                              name={`lineItems.${index}.categoryId`}
+                              rules={{ required: 'Choose a category' }}
+                              render={({ field: select }) => {
+                                const choices = discountCategories(select.value);
+                                return (
+                                  <select
+                                    aria-label={`Line ${index + 1} discount category`}
+                                    title={choices.length === 1 ? "Taken off the items' category" : "The category it's taken off: one the items use"}
+                                    className="field"
+                                    value={select.value}
+                                    onChange={select.onChange}
+                                    onBlur={select.onBlur}
+                                    ref={select.ref}
+                                  >
+                                    {(choices.length === 0 || !select.value) && (
+                                      <option value="">{choices.length === 0 ? 'Choose the items’ categories first' : 'Choose…'}</option>
+                                    )}
+                                    {choices.map((c) => (
+                                      <option key={c.id} value={c.id}>
+                                        {c.name}
+                                      </option>
+                                    ))}
+                                  </select>
+                                );
+                              }}
+                            />
                             {lineErrors?.categoryId && <p className="mt-1 text-xs text-out-soft">{lineErrors.categoryId.message}</p>}
                           </td>
                           <td className="px-4 py-3">
