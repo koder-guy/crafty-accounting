@@ -127,11 +127,19 @@ function ExpenseFormPage() {
   const params = useParams();
   const id = params.id ? Number(params.id) : null;
   const navigate = useNavigate();
-  const { data: existing, isLoading: loadingExisting, error: loadError, refetch: refetchExisting } = useExpense(id);
+  // The form fills once, so it waits for the record as it is now, not one kept from earlier (say, from before
+  // its category was deleted, when it would show no category).
+  const {
+    data: existing,
+    isLoading: loadingExisting,
+    isFetchedAfterMount: existingFresh,
+    error: loadError,
+    refetch: refetchExisting,
+  } = useExpense(id);
   // Duplicating: /expenses/new?copy=<id> fills the new form from that transaction.
   const [searchParams] = useSearchParams();
   const copyId = id ? null : Number(searchParams.get('copy')) || null;
-  const { data: original, isLoading: loadingOriginal, error: originalError } = useExpense(copyId);
+  const { data: original, isLoading: loadingOriginal, isFetchedAfterMount: originalFresh, error: originalError } = useExpense(copyId);
   // Checking a scanned document: /expenses/new?scan=<id> fills the new form from what the AI read.
   const scanId = id || copyId ? null : Number(searchParams.get('scan')) || null;
   const { data: scanList, isLoading: loadingScans, error: scansError } = useScans(scanId !== null);
@@ -246,10 +254,10 @@ function ExpenseFormPage() {
       return;
     }
     // Wait for the categories every time, or the category menus can't show the choices.
-    if (id && existing && expenseCategories.length) {
+    if (id && existing && existingFresh && expenseCategories.length) {
       filledFor.current = key;
       fillFrom(existing);
-    } else if (copyId && original && activeYear && expenseCategories.length) {
+    } else if (copyId && original && originalFresh && activeYear && expenseCategories.length) {
       // Invoice and order numbers and the document belong to the original, so they aren't copied.
       filledFor.current = key;
       reset({
@@ -275,7 +283,7 @@ function ExpenseFormPage() {
       });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id, existing, copyId, original, activeYear?.id, expenseCategories.length, scan?.id, scanFile, taxYear?.id]);
+  }, [id, existing, existingFresh, copyId, original, originalFresh, activeYear?.id, expenseCategories.length, scan?.id, scanFile, taxYear?.id]);
 
   // Fills the form from what the AI read from a scanned document. The reading becomes what the form was loaded with,
   // as the document stays to be checked if you leave, so only changes made here count.
@@ -447,7 +455,7 @@ function ExpenseFormPage() {
     onCancel: () => navigate(backTo),
   });
 
-  if (yearLoading || loadingCategories || (id && loadingExisting) || (copyId && loadingOriginal) || (scanId && loadingScans)) {
+  if (yearLoading || loadingCategories || (id && (loadingExisting || !existingFresh)) || (copyId && (loadingOriginal || !originalFresh)) || (scanId && loadingScans)) {
     return (
       <>
         <PageHeader title={title} />

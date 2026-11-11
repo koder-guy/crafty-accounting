@@ -27,11 +27,19 @@ export function IncomeForm() {
   const params = useParams();
   const id = params.id ? Number(params.id) : null;
   const navigate = useNavigate();
-  const { data: existing, isLoading: loadingExisting, error: loadError, refetch: refetchExisting } = useIncome(id);
+  // The form fills once, so it waits for the record as it is now, not one kept from earlier (say, from before
+  // its category was deleted, when it would show no category).
+  const {
+    data: existing,
+    isLoading: loadingExisting,
+    isFetchedAfterMount: existingFresh,
+    error: loadError,
+    refetch: refetchExisting,
+  } = useIncome(id);
   // Duplicating: /income/new?copy=<id> fills the new form from that transaction.
   const [searchParams] = useSearchParams();
   const copyId = id ? null : Number(searchParams.get('copy')) || null;
-  const { data: original, isLoading: loadingOriginal, error: originalError } = useIncome(copyId);
+  const { data: original, isLoading: loadingOriginal, isFetchedAfterMount: originalFresh, error: originalError } = useIncome(copyId);
   const { data: years } = useTaxYears();
   const { taxYear: activeYear, isLoading: yearLoading } = useActiveTaxYear();
   const { data: categories = [], isLoading: loadingCategories, error: categoriesError } = useCategories();
@@ -91,10 +99,10 @@ export function IncomeForm() {
     const key = id ? `edit-${id}` : `new-${activeYear?.id}-${copyId}`;
     if (filledFor.current === key) return;
     // Wait for the categories every time, or the category menu can't show the choice.
-    if (id && existing && incomeCategories.length) {
+    if (id && existing && existingFresh && incomeCategories.length) {
       filledFor.current = key;
       fillFrom(existing);
-    } else if (copyId && original && activeYear && incomeCategories.length) {
+    } else if (copyId && original && originalFresh && activeYear && incomeCategories.length) {
       // The reference and document belong to the original, so they aren't copied.
       filledFor.current = key;
       reset({
@@ -120,7 +128,7 @@ export function IncomeForm() {
       });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id, existing, copyId, original, activeYear?.id, incomeCategories.length]);
+  }, [id, existing, existingFresh, copyId, original, originalFresh, activeYear?.id, incomeCategories.length]);
 
   const onSubmit = handleSubmit((values) => {
     if (!taxYear) return;
@@ -164,7 +172,7 @@ export function IncomeForm() {
     onCancel: () => navigate(backTo),
   });
 
-  if (yearLoading || loadingCategories || (id && loadingExisting) || (copyId && loadingOriginal)) {
+  if (yearLoading || loadingCategories || (id && (loadingExisting || !existingFresh)) || (copyId && (loadingOriginal || !originalFresh))) {
     return (
       <>
         <PageHeader title={title} />
