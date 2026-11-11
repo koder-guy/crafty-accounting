@@ -60,7 +60,7 @@ export function IncomeView() {
                     </>
                   )}
                 </div>
-                <PaymentBadge method={income.paymentMethod} />
+                <PaymentBadge method={income.paymentMethod} size="lg" />
               </div>
               <dl className="divide-y divide-line">
                 <DetailRow label="Date">{formatDisplayDate(income.date)}</DetailRow>
