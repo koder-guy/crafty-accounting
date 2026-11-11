@@ -289,6 +289,8 @@ function useInvalidateTransactions(kind: Kind | 'mileage' | 'use-of-home') {
   const qc = useQueryClient();
   return () => {
     qc.invalidateQueries({ queryKey: [kind] });
+    // Each category says how often it's used (Settings → Custom Categories), which a transaction changes.
+    qc.invalidateQueries({ queryKey: ['categories'] });
     qc.invalidateQueries({ queryKey: ['dashboard'] });
     qc.invalidateQueries({ queryKey: ['mtd'] });
     qc.invalidateQueries({ queryKey: ['reports'] });
