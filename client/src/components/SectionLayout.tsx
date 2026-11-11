@@ -107,15 +107,23 @@ export function SectionLayout({
                 key={to}
                 to={to}
                 className={({ isActive }) =>
-                  `flex shrink-0 items-center gap-2.5 rounded-lg border px-3 py-2 text-sm whitespace-nowrap transition-colors ${
+                  `group flex shrink-0 items-center rounded-lg border px-3 py-2 text-sm whitespace-nowrap transition-colors ${
                     isActive
                       ? 'border-accent/40 bg-accent-bg font-medium text-accent-soft'
-                      : 'border-transparent text-muted hover:bg-surface hover:text-ink'
+                      : 'border-transparent text-ink/90 hover:bg-surface hover:text-white'
                   }`
                 }
               >
-                <Icon className="size-4" aria-hidden />
-                {label}
+                {({ isActive }) => (
+                  // The same hover as the main sidebar: the label slides across and its icon brightens.
+                  <span className="flex items-center gap-2.5 transition-transform group-hover:translate-x-1">
+                    <Icon
+                      className={`size-4 transition-colors ${isActive ? 'text-accent-soft' : 'text-muted group-hover:text-ink'}`}
+                      aria-hidden
+                    />
+                    {label}
+                  </span>
+                )}
               </NavLink>
             ))}
           </nav>
