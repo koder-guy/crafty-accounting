@@ -561,6 +561,15 @@ function ExpenseFormPage() {
                   </Button>
                 </div>
               </div>
+              {activeYear && taxYear.id !== activeYear.id && (
+                <div className="mt-4">
+                  <Alert>
+                    This invoice is dated {formatDisplayDate(scanDate!)}, so it goes into tax year {displayTaxYear(taxYear.label)}, not{' '}
+                    {displayTaxYear(activeYear.label)}, the year you have selected. Once it's added, you'll find it under Expenses for{' '}
+                    {displayTaxYear(taxYear.label)}.
+                  </Alert>
+                </div>
+              )}
               <DuplicateNotice duplicates={scan.duplicates} />
               <ScanProblems reading={scan.reading} error={scan.error} />
               {save.error && (
