@@ -110,7 +110,7 @@ export function SectionLayout({
                   `group flex shrink-0 items-center rounded-lg border px-3 py-2 text-sm whitespace-nowrap transition-colors ${
                     isActive
                       ? 'border-accent/40 bg-accent-bg font-medium text-accent-soft'
-                      : 'border-transparent text-ink/90 hover:bg-surface hover:text-white'
+                      : 'border-transparent text-muted hover:bg-surface hover:text-white'
                   }`
                 }
               >
